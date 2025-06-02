@@ -1,0 +1,90 @@
+version: '3.9'
+
+services:
+  # Northbound Components
+  # ros2_component:
+  #   image: tariromukute/ros2-component:${TAG:-latest}
+  #   build:
+  #     context: ./northbound/ros2_component
+  #     dockerfile: Dockerfile
+
+  # sfc_component:
+  #   image: tariromukute/sfc-component:${TAG:-latest}
+  #   build:
+  #     context: ./northbound/sfc_component
+  #     dockerfile: Dockerfile
+
+  api_component:
+    image: tariromukute/api-component:${TAG:-latest}
+    build:
+      context: ./northbound/api_component
+      dockerfile: Dockerfile
+
+  # # AF Core
+  # af_core:
+  #   image: tariromukute/af-core:${TAG:-latest}
+  #   build:
+  #     context: ./af_core
+  #     dockerfile: Dockerfile
+
+  # # Southbound Handlers
+  # pcf_handler:
+  #   image: tariromukute/pcf-handler:${TAG:-latest}
+  #   build:
+  #     context: ./southbound/pcf_handler
+  #     dockerfile: Dockerfile
+
+  # nef_handler:
+  #   image: tariromukute/nef-handler:${TAG:-latest}
+  #   build:
+  #     context: ./southbound/nef_handler
+  #     dockerfile: Dockerfile
+
+  # tsctsf_handler:
+  #   image: tariromukute/tsctsf-handler:${TAG:-latest}
+  #   build:
+  #     context: ./southbound/tsctsf_handler
+  #     dockerfile: Dockerfile
+
+  # bsf_handler:
+  #   image: tariromukute/bsf-handler:${TAG:-latest}
+  #   build:
+  #     context: ./southbound/bsf_handler
+  #     dockerfile: Dockerfile
+
+  # nwdaf_handler:
+  #   image: tariromukute/nwdaf-handler:${TAG:-latest}
+  #   build:
+  #     context: ./southbound/nwdaf_handler
+  #     dockerfile: Dockerfile
+
+  # smf_handler:
+  #   image: tariromukute/smf-handler:${TAG:-latest}
+  #   build:
+  #     context: ./southbound/smf_handler
+  #     dockerfile: Dockerfile
+
+  # pin_handler:
+  #   image: tariromukute/pin-handler:${TAG:-latest}
+  #   build:
+  #     context: ./southbound/pin_handler
+  #     dockerfile: Dockerfile
+
+  # naf_prose_handler:
+  #   image: tariromukute/naf-prose-handler:${TAG:-latest}
+  #   build:
+  #     context: ./southbound/naf_prose_handler
+  #     dockerfile: Dockerfile
+
+  # Data Management
+  # data_service:
+  #   image: tariromukute/data-service:${TAG:-latest}
+  #   build:
+  #     context: ./data_management
+  #     dockerfile: Dockerfile
+
+  # database_service:
+  #   image: tariromukute/database-service:${TAG:-latest}
+  #   build:
+  #     context: ./data_management/database # Assumes Dockerfile is in data_management/database/
+  #     dockerfile: Dockerfile

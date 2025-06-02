@@ -1,0 +1,60 @@
+# Compiled object files
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Compiled Static libraries
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+*.elf
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+build-*/
+
+# Qt
+*.moc
+*.qrc
+*.pro.user
+*.pro.user.*
+*.autosave
+
+# Visual Studio Code
+.vscode/
+
+# CLion
+.idea/
+
+# Other
+*.log
+*.swp
+*.swo
+*.bak
+*.tmp
+*.cache
+
+# Test output
+test_output/
+Testing/

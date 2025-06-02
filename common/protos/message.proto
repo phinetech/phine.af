@@ -1,0 +1,34 @@
+/**
+ * @file message.proto
+ * @brief Protobuf definition for internal AF communication messages
+ * 
+ * This file defines the protobuf messages and services used for internal
+ * communication between AF microservices. It provides a generic message
+ * format with message_type, correlation_id, and payload fields, along with
+ * metadata for additional context.
+ * 
+ * The InternalCommunication service defines methods for sending individual
+ * messages and streaming messages between AF components.
+ * 
+ * This protocol is central to the AF's microservice architecture, enabling
+ * different components to communicate in a standardized way regardless of
+ * their specific functionality.
+ */
+
+syntax = "proto3";
+
+package af.proto;
+
+// Generic message for internal AF communication
+message InternalMessage {
+  string message_type = 1;
+  string correlation_id = 2;
+  bytes payload = 3;
+  map<string, string> metadata = 4;
+}
+
+// Service for internal communication
+service InternalCommunication {
+  rpc SendMessage(InternalMessage) returns (InternalMessage);
+  rpc StreamMessages(stream InternalMessage) returns (stream InternalMessage);
+}

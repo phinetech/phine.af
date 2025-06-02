@@ -1,0 +1,19 @@
+api_component:
+  # PCF connection details
+  pcf_base_url: "http://pcf:80/npcf-policyauthorization/v1"
+  use_tls: false
+  api_version: "v1"
+  
+  # Logging configuration
+  logging:
+    level: "info"
+    console_output: true
+    file_output: true
+    file_path: "/app/logs/api_component.log"
+    
+  # Communication configuration
+  communication:
+    server_address: "0.0.0.0"
+    server_port: "50061"
+    core_address: "af-core"
+    core_port: "50051"

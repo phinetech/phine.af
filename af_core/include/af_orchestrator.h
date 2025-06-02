@@ -1,0 +1,137 @@
+/**
+ * @file af_orchestrator.h
+ * @brief Main orchestrator for the 5G Application Function core
+ *
+ * This class coordinates all functionality within the AF Core, managing
+ * communication with northbound and southbound interfaces, policy decisions,
+ * subscriptions, and overall state management.
+ */
+
+#pragma once
+
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include "request_router.h"
+#include "policy_manager.h"
+#include "subscription_manager.h"
+#include "../../common/component/include/af_component.h"
+#include "../../common/communication/include/communication_interface.h"
+
+namespace af {
+namespace core {
+
+/**
+ * @brief Main orchestrator for the AF core functionality
+ */
+class AfOrchestrator : public af::common::AfComponent {
+public:
+    /**
+     * @brief Constructor
+     * @param config_path Path to the configuration file
+     */
+    AfOrchestrator(const std::string& config_path);
+    
+    /**
+     * @brief Destructor
+     */
+    ~AfOrchestrator();
+    
+    /**
+     * @brief Initialize the orchestrator and its subcomponents
+     */
+    void initialize() override;
+    
+    /**
+     * @brief Start the orchestrator and its services
+     */
+    void start() override;
+    
+    /**
+     * @brief Stop the orchestrator and its services
+     */
+    void stop() override;
+    
+    /**
+     * @brief Process a message from any source
+     * @param message The incoming message
+     * @return Response message
+     */
+    af::communication::MessagePtr process_message(
+        const af::communication::MessagePtr& message);
+    
+    /**
+     * @brief Get the RequestRouter instance
+     * @return Shared pointer to RequestRouter
+     */
+    std::shared_ptr<RequestRouter> get_request_router() const { return request_router_; }
+    
+    /**
+     * @brief Get the PolicyManager instance
+     * @return Shared pointer to PolicyManager
+     */
+    std::shared_ptr<PolicyManager> get_policy_manager() const { return policy_manager_; }
+    
+    /**
+     * @brief Get the SubscriptionManager instance
+     * @return Shared pointer to SubscriptionManager
+     */
+    std::shared_ptr<SubscriptionManager> get_subscription_manager() const { return subscription_manager_; }
+
+    /**
+     * @brief Get the communication services map
+     * @return Map of communication service names to instances
+     */
+    const std::unordered_map<std::string, std::shared_ptr<af::communication::CommunicationService>>&
+    get_communication_services() const {
+        return communication_services_;
+    }
+
+    /**
+     * @brief Initialize the component's logger
+     * @param log_level The log level to use
+     */
+    void initializeLogger(spdlog::level::level_enum log_level = spdlog::level::info);
+
+private:
+    // Configuration
+    std::string config_path_;
+    
+    // Component instances
+    std::shared_ptr<RequestRouter> request_router_;
+    std::shared_ptr<PolicyManager> policy_manager_;
+    std::shared_ptr<SubscriptionManager> subscription_manager_;
+    
+    // Communication services for northbound and southbound interfaces
+    std::unordered_map<std::string, std::shared_ptr<af::communication::CommunicationService>> communication_services_;
+    
+    // Message handler for incoming messages
+    class OrchestratorMessageHandler;
+    std::shared_ptr<OrchestratorMessageHandler> message_handler_;
+    
+    // Logger
+    std::shared_ptr<spdlog::logger> logger_;
+    
+    /**
+     * @brief Load configuration from file
+     */
+    void load_config();
+    
+    /**
+     * @brief Initialize communication interfaces
+     */
+    void initialize_communication();
+    
+    /**
+     * @brief Register message handlers
+     */
+    void register_handlers();
+    
+    /**
+     * @brief Configure subcomponents
+     */
+    void configure_components();
+};
+
+} // namespace core
+} // namespace af

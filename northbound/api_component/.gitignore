@@ -1,0 +1,53 @@
+# .gitignore
+# Build artifacts
+/build/
+/cmake-build-*/
+
+# Editor-specific files
+.idea/
+.vscode/
+*.swp
+*~
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Generated documentation
+/docs/generated/
+
+# Logs
+*.log
+*.log.*
+
+# Configuration files with secrets
+*secrets.yaml
+*private.yaml
+
+# Docker volume data
+/data/
+
+# Operating system files
+.DS_Store
