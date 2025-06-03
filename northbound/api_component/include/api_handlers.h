@@ -8,7 +8,7 @@
 #include <functional>
 #include <nghttp2/asio_http2_server.h>
 #include <spdlog/spdlog.h>
-#include "../../common/communication/include/communication_interface.h"
+#include "../common/communication/include/communication_interface.h"
 
 namespace af::northbound {
 

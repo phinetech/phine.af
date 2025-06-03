@@ -15,10 +15,14 @@ services:
   #     dockerfile: Dockerfile
 
   api_component:
-    image: tariromukute/api-component:${TAG:-latest}
+    image: tariromukute/af-api:${TAG:-latest}
+    container_name: af-north-api
     build:
       context: ./northbound/api_component
       dockerfile: Dockerfile
+    networks:
+      af_net:
+        ipv4_address: 192.168.73.130
 
   # # AF Core
   # af_core:
@@ -88,3 +92,13 @@ services:
   #   build:
   #     context: ./data_management/database # Assumes Dockerfile is in data_management/database/
   #     dockerfile: Dockerfile
+
+networks:
+  af_net:
+    driver: bridge
+    name: phine-af-net
+    ipam:
+      config:
+        - subnet: "192.168.73.128/26"
+    driver_opts:
+      com.docker.network.bridge.name: phine-af-net

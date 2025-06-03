@@ -7,7 +7,7 @@
 #include <yaml-cpp/yaml.h>
 #include <fstream>
 #include <boost/asio/signal_set.hpp>
-#include "../../common/communication/include/communication_factory.h"
+#include "../common/communication/include/communication_factory.h"
 
 namespace af::northbound {
 

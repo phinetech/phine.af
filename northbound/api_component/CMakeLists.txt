@@ -2,12 +2,25 @@
 cmake_minimum_required(VERSION 3.10)
 project(api_component VERSION 1.0.0 LANGUAGES CXX)
 
-# Add custom module path for FindNGHTTP2.cmake
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/build/cmake")
-
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Common compilation flags
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
+
+# Output directories
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+# Add CMake modules path
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/build/cmake)
+
+# Include custom CMake modules
+include(Protobuf)
 
 # Source files
 set(SOURCES
@@ -33,11 +46,22 @@ find_package(spdlog REQUIRED)
 find_package(nlohmann_json REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(NGHTTP2 REQUIRED)
+# Find nghttp2_asio
+# find_package(nghttp2_asio REQUIRED)
+# Find gRPC
+find_package(gRPC REQUIRED)
+# FInd protobuf
+find_package(Protobuf REQUIRED)
+
 
 # Include the nghttp2_asio headers
 # target_include_directories(api_component PRIVATE ${NGHTTP2_INCLUDE_DIRS})
 # Print nghttp2 include directories
 message(STATUS "NGHTTP2 include directories: ${NGHTTP2_INCLUDE_DIRS}")
+message(STATUS "gRPC include directories: ${gRPC_INCLUDE_DIRS}")
+
+# Components to build
+add_subdirectory(common)
 
 # Create library
 add_library(api_component SHARED

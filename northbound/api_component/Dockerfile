@@ -1,4 +1,4 @@
-FROM ubuntu:22.04 AS builder
+FROM debian:bullseye-slim AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV IS_DOCKERFILE=1
@@ -19,14 +19,19 @@ COPY ./build/scripts /northbound-api-component/build/scripts/
 # COPY ./build/common-build /northbound-api-component/build/common-build/
 COPY ./CMakeLists.txt /northbound-api-component/CMakeLists.txt
 COPY ./build/cmake /northbound-api-component/build/cmake/
+# Copy the .proto files
+COPY ./common /northbound-api-component/common
+COPY ./src /northbound-api-component/src/
+COPY ./config /northbound-api-component/config/
+COPY ./include /northbound-api-component/include/
 
 WORKDIR /northbound-api-component/build/scripts
 RUN chmod +x build_api.sh
-RUN ./build_api.sh --clean --deps
+RUN ./build_api.sh --clean --deps --force-deps
 
 
 # Runtime image
-FROM ubuntu:22.04
+FROM debian:bullseye-slim
 
 # Copy necessary runtime dependencies from the builder image
 COPY --from=builder /usr/local/lib/libnghttp2* /usr/local/lib/
@@ -38,17 +43,23 @@ COPY --from=builder /usr/local/lib/libboost* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libssl* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libcrypto* /usr/local/lib/
 
+# Copy the libraries built in the builder stage
+COPY --from=builder /northbound-api-component/build-output/lib/libaf_common* /usr/local/lib/
+COPY --from=builder /northbound-api-component/build-output/lib/libapi_component.so* /usr/local/lib/
+
 RUN ldconfig
 
 # Copy build artifacts
-COPY --from=builder /app/build/northbound/api_component/api_server /usr/local/bin/
-COPY --from=builder /app/config/api_adapter.yaml /etc/oai/af/api_adapter.yaml
+COPY --from=builder /northbound-api-component/build-output/bin/api_server /usr/local/bin/
+COPY --from=builder /northbound-api-component/config/api_adapter.yaml /etc/oai/af/api_adapter.yaml
 
 # Set working directory
 WORKDIR /usr/local/bin
+
+RUN chmod +x ./api_server
 
 # Expose API port
 EXPOSE 8080
 
 # Command to run
-ENTRYPOINT ["/usr/local/bin/api_server", "--config", "/etc/oai/af/api_adapter.yaml"]
+CMD ["/usr/local/bin/api_server", "--config", "/etc/oai/af/api_adapter.yaml"]

@@ -1,0 +1,792 @@
+#!/bin/bash
+
+# file build_helper.af
+# brief Helper script to install dependencies for AF microservice
+# author Tariro Mukute, phine.tech
+
+################################
+# include helper functions
+################################
+SCRIPT=$(readlink -f ${BASH_SOURCE})
+THIS_SCRIPT_PATH=`dirname $SCRIPT`
+
+# Determine the OS distribution
+OS_DISTRO=$(grep "^ID=" /etc/os-release | sed "s/ID=//" | sed "s/\"//g")
+OS_RELEASE=$(grep "^VERSION_ID=" /etc/os-release | sed "s/VERSION_ID=//" | sed "s/\"//g")
+OS_BASEDISTRO=$(grep -e "^ID_LIKE=" /etc/os-release | sed "s/ID_LIKE=//" | sed "s/\"//g" | cut -d ' ' -f1)
+
+# Check if running in a container
+IS_CONTAINER=0
+if [ -f /.dockerenv ] || grep -q 'container=lxc' /proc/1/environ || grep -q 'container=podman' /proc/1/environ; then
+    IS_CONTAINER=1
+fi
+
+# Set the appropriate installer command
+if [[ $OS_DISTRO == "ubuntu" ]]; then
+    INSTALLER="apt-get"
+    CMAKE="cmake"
+elif [[ "$OS_BASEDISTRO" == "fedora" ]]; then
+    INSTALLER="dnf"
+    CMAKE="cmake"
+else
+    INSTALLER="apt-get"
+    CMAKE="cmake"
+fi
+
+IS_DOCKERBUILD=${IS_DOCKERFILE:-0}
+
+if [ $IS_CONTAINER -eq 0 ] && [ $IS_DOCKERBUILD -eq 0 ]
+then
+  SUDO='sudo -S -E'
+else
+  SUDO=''
+  IS_CONTAINER=1
+fi
+
+# Check if command failed
+check_command_failure() {
+    if [ $? -ne 0 ]; then
+        echo -e "\e[31mCommand failed: $1\e[0m"
+        exit 1
+    else
+        echo -e "\e[32mCommand succeeded: $1\e[0m"
+    fi
+}
+
+# Get distribution release
+get_distribution_release() {
+    if [[ ! -z "$OS_DISTRO$OS_RELEASE" ]]; then
+        echo "$OS_DISTRO$OS_RELEASE"
+    else
+        echo "Unknown"
+    fi
+}
+
+# Check if distribution is supported
+check_supported_distribution() {
+    local distribution=$(get_distribution_release)
+    case "$distribution" in
+        "ubuntu20.04" | "ubuntu22.04")
+            echo "Distribution $distribution is supported"
+            return 0
+            ;;
+        "debian11" | "debian12")
+            echo "Distribution $distribution is supported"
+            return 0
+            ;;
+        "rhel8" | "centos8" | "fedora")
+            echo "Distribution $distribution is supported"
+            return 0
+            ;;
+        *)
+            echo "Distribution $distribution is not supported"
+            return 1
+            ;;
+    esac
+}
+
+# Update package database
+update_package_db() {
+    if [[ $OS_DISTRO == "ubuntu" ]]; then
+        $SUDO $INSTALLER update -y
+    elif [[ "$OS_BASEDISTRO" == "fedora" ]]; then
+        $SUDO $INSTALLER update -y
+    elif [[ $OS_DISTRO == "debian" ]]; then
+        $SUDO $INSTALLER update -y
+    fi
+    check_command_failure "Updating package database"
+}
+
+# Enable EPEL repositories for RHEL/CentOS
+check_enable_epel_repos() {
+    if [[ "$OS_BASEDISTRO" == "fedora" ]]; then
+        if [[ $OS_DISTRO == "rhel" ]] || [[ $OS_DISTRO == "centos" ]]; then
+            $SUDO $INSTALLER install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
+            check_command_failure "Installing EPEL repository"
+        fi
+    fi
+}
+
+# Install Protobuf from source
+install_protobuf_from_git() {
+    local force=$1
+    local debug=$2
+    
+    echo "Installing Protocol Buffers from source"
+    
+    # Check if protobuf is already installed
+    if [ $force -eq 0 ]; then
+        if [ -d "/usr/local/include/google/protobuf" ] && [ -f "/usr/local/bin/protoc" ]; then
+            echo "Protocol Buffers already installed"
+            return 0
+        fi
+    fi
+    
+    # Install dependencies
+    if [[ $OS_DISTRO == "ubuntu" ]]; then
+        $SUDO $INSTALLER install -y autoconf automake libtool curl make g++ unzip
+    elif [[ "$OS_BASEDISTRO" == "fedora" ]]; then
+        $SUDO $INSTALLER install -y autoconf automake libtool curl make gcc-c++ unzip
+    fi
+    check_command_failure "Installing Protobuf dependencies"
+    
+    # Create a temporary directory
+    local tmp_dir=$(mktemp -d)
+    cd $tmp_dir
+    
+    # Clone the repository
+    git clone https://github.com/protocolbuffers/protobuf.git
+    check_command_failure "Cloning Protobuf repository"
+    
+    cd protobuf
+    git checkout v3.19.4
+    
+    # Build and install
+    ./autogen.sh
+    check_command_failure "Running autogen.sh for Protobuf"
+    
+    ./configure
+    check_command_failure "Configuring Protobuf"
+    
+    make -j$(nproc)
+    check_command_failure "Building Protobuf"
+    
+    $SUDO make install
+    check_command_failure "Installing Protobuf"
+    
+    $SUDO ldconfig
+    
+    # Clean up
+    cd $THIS_SCRIPT_PATH
+    rm -rf $tmp_dir
+    
+    echo "Protocol Buffers installation complete"
+    return 0
+}
+
+# Install gRPC from source
+install_grpc_from_git() {
+    local force=$1
+    local debug=$2
+    
+    echo "------------------------------ Installing gRPC from source"
+    
+    # Check if gRPC is already installed
+    if [ $force -eq 0 ]; then
+        if [ -d "/usr/local/include/grpc" ] && [ -f "/usr/local/bin/grpc_cpp_plugin" ]; then
+            echo "gRPC already installed"
+            return 0
+        fi
+    fi
+    
+    # Install dependencies
+    if [[ $OS_DISTRO == "ubuntu" ]]; then
+        $SUDO $INSTALLER install -y build-essential autoconf libtool pkg-config libssl-dev
+    elif [[ "$OS_BASEDISTRO" == "fedora" ]]; then
+        $SUDO $INSTALLER install -y gcc-c++ autoconf libtool pkgconfig openssl-devel
+    fi
+    check_command_failure "Installing gRPC dependencies"
+    
+    # Create a temporary directory
+    local tmp_dir=$(mktemp -d)
+    cd $tmp_dir
+    
+    # Clone the repository
+    git clone --recurse-submodules -b v1.46.3 https://github.com/grpc/grpc
+    check_command_failure "Cloning gRPC repository"
+    
+    cd grpc
+    
+    # Build and install
+    mkdir -p cmake/build
+    cd cmake/build
+    
+    cmake -DgRPC_INSTALL=ON \
+          -DgRPC_BUILD_TESTS=OFF \
+          -DCMAKE_INSTALL_PREFIX=/usr/local \
+          -DCMAKE_BUILD_TYPE=Release \
+          ../..
+    check_command_failure "Configuring gRPC"
+    
+    make -j$(nproc)
+    check_command_failure "Building gRPC"
+    
+    $SUDO make install
+    check_command_failure "Installing gRPC"
+    
+    $SUDO ldconfig
+    
+    # Clean up
+    cd $THIS_SCRIPT_PATH
+    rm -rf $tmp_dir
+    
+    echo "gRPC installation complete"
+    return 0
+}
+
+# Install yaml-cpp from source
+install_yaml_cpp_from_git() {
+    local force=$1
+    local debug=$2
+    
+    echo "Installing yaml-cpp from source"
+    
+    # Check if yaml-cpp is already installed
+    if [ $force -eq 0 ]; then
+        if [ -d "/usr/local/include/yaml-cpp" ]; then
+            echo "yaml-cpp already installed"
+            return 0
+        fi
+    fi
+    
+    # Create a temporary directory
+    local tmp_dir=$(mktemp -d)
+    cd $tmp_dir
+    
+    # Clone the repository
+    git clone https://github.com/jbeder/yaml-cpp.git
+    check_command_failure "Cloning yaml-cpp repository"
+    
+    cd yaml-cpp
+    git checkout yaml-cpp-0.7.0
+    
+    # Build and install
+    mkdir -p build
+    cd build
+    
+    cmake -DYAML_BUILD_SHARED_LIBS=ON \
+          -DCMAKE_INSTALL_PREFIX=/usr/local \
+          ..
+    check_command_failure "Configuring yaml-cpp"
+    
+    make -j$(nproc)
+    check_command_failure "Building yaml-cpp"
+    
+    $SUDO make install
+    check_command_failure "Installing yaml-cpp"
+    
+    $SUDO ldconfig
+    
+    # Clean up
+    cd $THIS_SCRIPT_PATH
+    rm -rf $tmp_dir
+    
+    echo "yaml-cpp installation complete"
+    return 0
+}
+
+# Install nlohmann/json from source
+install_nlohmann_json_from_git() {
+    local force=$1
+    local debug=$2
+    
+    echo "Installing nlohmann/json from source"
+    
+    # Check if nlohmann/json is already installed
+    if [ $force -eq 0 ]; then
+        if [ -d "/usr/local/include/nlohmann" ]; then
+            echo "nlohmann/json already installed"
+            return 0
+        fi
+    fi
+    
+    # Create a temporary directory
+    local tmp_dir=$(mktemp -d)
+    cd $tmp_dir
+    
+    # Clone the repository
+    git clone https://github.com/nlohmann/json.git
+    check_command_failure "Cloning nlohmann/json repository"
+    
+    cd json
+    
+    # Build and install
+    mkdir -p build
+    cd build
+    
+    cmake -DJSON_BuildTests=OFF \
+          -DCMAKE_INSTALL_PREFIX=/usr/local \
+          ..
+    check_command_failure "Configuring nlohmann/json"
+    
+    make -j$(nproc)
+    check_command_failure "Building nlohmann/json"
+    
+    $SUDO make install
+    check_command_failure "Installing nlohmann/json"
+    
+    # Clean up
+    cd $THIS_SCRIPT_PATH
+    rm -rf $tmp_dir
+    
+    echo "nlohmann/json installation complete"
+    return 0
+}
+
+# Install spdlog from source
+install_spdlog_from_git() {
+    local force=$1
+    local debug=$2
+    
+    echo "Installing spdlog from source"
+    
+    # Check if spdlog is already installed
+    if [ $force -eq 0 ]; then
+        if [ -d "/usr/local/include/spdlog" ]; then
+            echo "spdlog already installed"
+            return 0
+        fi
+    fi
+    
+    # Create a temporary directory
+    local tmp_dir=$(mktemp -d)
+    cd $tmp_dir
+    
+    # Clone the repository
+    git clone https://github.com/gabime/spdlog.git
+    check_command_failure "Cloning spdlog repository"
+    
+    cd spdlog
+    git checkout v1.10.0
+    
+    # Build and install
+    mkdir -p build
+    cd build
+    
+    # TODO: Disable DCMAKE_POSITION_INDEPENDENT_CODE when we move logger to common
+    cmake -DSPDLOG_BUILD_EXAMPLES=OFF \
+          -DSPDLOG_BUILD_TESTS=OFF \
+          -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+          -DCMAKE_INSTALL_PREFIX=/usr/local \
+          ..
+    check_command_failure "Configuring spdlog"
+    
+    make -j$(nproc)
+    check_command_failure "Building spdlog"
+    
+    $SUDO make install
+    check_command_failure "Installing spdlog"
+    
+    $SUDO ldconfig
+    
+    # Clean up
+    cd $THIS_SCRIPT_PATH
+    rm -rf $tmp_dir
+    
+    echo "spdlog installation complete"
+    return 0
+}
+
+# Install OpenSSL from packages or source if needed
+install_openssl() {
+    local force=$1
+    local debug=$2
+    
+    echo "Installing OpenSSL development libraries"
+    
+    if [[ $OS_DISTRO == "ubuntu" ]]; then
+        # First remove any existing OpenSSL dev packages to ensure clean installation
+        if [ $force -eq 1 ]; then
+            $SUDO $INSTALLER remove -y --purge libssl-dev
+            $SUDO $INSTALLER autoremove -y
+        fi
+        
+        # Install OpenSSL development packages
+        $SUDO $INSTALLER install -y libssl-dev
+        check_command_failure "Installing OpenSSL development libraries"
+        
+        # Check OpenSSL version
+        OPENSSL_VERSION=$(openssl version | awk '{print $2}')
+        echo "Installed OpenSSL version: $OPENSSL_VERSION"
+        
+        # Create symbolic links if needed
+        if [ ! -f "/usr/lib/libcrypto.so" ] && [ -f "/usr/lib/x86_64-linux-gnu/libcrypto.so" ]; then
+            echo "Creating symbolic links for OpenSSL libraries"
+            $SUDO ln -sf /usr/lib/x86_64-linux-gnu/libcrypto.so /usr/lib/libcrypto.so
+            $SUDO ln -sf /usr/lib/x86_64-linux-gnu/libssl.so /usr/lib/libssl.so
+        fi
+        
+    elif [[ "$OS_BASEDISTRO" == "fedora" ]]; then
+        # Remove existing OpenSSL dev packages if forced
+        if [ $force -eq 1 ]; then
+            $SUDO $INSTALLER remove -y openssl-devel
+        fi
+        
+        # Install OpenSSL development packages
+        $SUDO $INSTALLER install -y openssl-devel
+        check_command_failure "Installing OpenSSL development libraries"
+        
+        # Check OpenSSL version
+        OPENSSL_VERSION=$(openssl version | awk '{print $2}')
+        echo "Installed OpenSSL version: $OPENSSL_VERSION"
+    fi
+    
+    # Make sure pkg-config can find OpenSSL
+    if [ ! -f "/usr/lib/pkgconfig/openssl.pc" ] && [ -f "/usr/lib/x86_64-linux-gnu/pkgconfig/openssl.pc" ]; then
+        echo "Creating pkg-config symlinks for OpenSSL"
+        $SUDO mkdir -p /usr/lib/pkgconfig/
+        $SUDO ln -sf /usr/lib/x86_64-linux-gnu/pkgconfig/openssl.pc /usr/lib/pkgconfig/openssl.pc
+        $SUDO ln -sf /usr/lib/x86_64-linux-gnu/pkgconfig/libssl.pc /usr/lib/pkgconfig/libssl.pc
+        $SUDO ln -sf /usr/lib/x86_64-linux-gnu/pkgconfig/libcrypto.pc /usr/lib/pkgconfig/libcrypto.pc
+    fi
+    
+    # Update the dynamic linker cache
+    $SUDO ldconfig
+    
+    echo "OpenSSL installation complete"
+    return 0
+}
+
+# Install nghttp2 with ASIO bindings from source
+# Install nghttp2 with ASIO bindings from source
+install_nghttp2_from_git() {
+    local force=$1
+    local debug=$2
+    
+    echo "Installing nghttp2 with ASIO bindings from source"
+    
+    # Always force rebuild for this run
+    force=1
+    
+    # Check if nghttp2 is already installed and we're not forcing
+    if [ $force -eq 0 ]; then
+        if [ -d "/usr/local/include/nghttp2" ] && [ -f "/usr/local/lib/libnghttp2_asio.so" ]; then
+            echo "nghttp2 with ASIO bindings already installed"
+            return 0
+        fi
+    fi
+    
+    # Install dependencies
+    if [[ $OS_DISTRO == "ubuntu" ]]; then
+        $SUDO $INSTALLER install -y g++ make binutils autoconf automake autotools-dev libtool pkg-config \
+                                  zlib1g-dev libcunit1-dev libssl-dev libxml2-dev libev-dev libevent-dev libjansson-dev \
+                                  libc-ares-dev libboost-dev libboost-system-dev libboost-thread-dev
+    elif [[ "$OS_BASEDISTRO" == "fedora" ]]; then
+        $SUDO $INSTALLER install -y gcc-c++ make binutils autoconf automake libtool pkgconfig \
+                                  zlib-devel CUnit-devel openssl-devel libxml2-devel libev-devel libevent-devel jansson-devel \
+                                  c-ares-devel boost-devel
+    fi
+    check_command_failure "Installing nghttp2 dependencies"
+    
+    # Get OpenSSL installation path
+    OPENSSL_ROOT_DIR=$(dirname $(dirname $(which openssl)))
+    if [ -z "$OPENSSL_ROOT_DIR" ]; then
+        OPENSSL_ROOT_DIR="/usr"
+    fi
+    echo "Using OpenSSL from: $OPENSSL_ROOT_DIR"
+    
+    # Create a temporary directory
+    local tmp_dir=$(mktemp -d)
+    cd $tmp_dir
+    
+    # Clone the repository
+    git clone https://github.com/nghttp2/nghttp2.git
+    check_command_failure "Cloning nghttp2 repository"
+    
+    cd nghttp2
+    git checkout v1.65.0
+    
+    # Clean up any previous build artifacts
+    if [ -d "build" ]; then
+        rm -rf build
+    fi
+    
+    # Build and install
+    autoreconf -i
+    check_command_failure "Running autoreconf for nghttp2"
+    
+    # Configure with explicit OpenSSL paths
+    PKG_CONFIG_PATH="$OPENSSL_ROOT_DIR/lib/pkgconfig:$PKG_CONFIG_PATH" \
+    CPPFLAGS="-I$OPENSSL_ROOT_DIR/include" \
+    LDFLAGS="-L$OPENSSL_ROOT_DIR/lib -Wl,-rpath,$OPENSSL_ROOT_DIR/lib" \
+    # ./configure --enable-asio-lib --with-boost=/usr --with-openssl=$OPENSSL_ROOT_DIR --enable-lib-only
+    ./configure --enable-lib-only
+    check_command_failure "Configuring nghttp2"
+    
+    make -j$(nproc)
+    check_command_failure "Building nghttp2"
+    
+    # First uninstall any previous version
+    $SUDO make uninstall || true
+    
+    $SUDO make install
+    check_command_failure "Installing nghttp2"
+    
+    $SUDO ldconfig
+    
+    # Create symlinks if needed
+    if [ ! -f "/usr/lib/libnghttp2.so" ] && [ -f "/usr/local/lib/libnghttp2.so" ]; then
+        echo "Creating symlinks for nghttp2 libraries"
+        $SUDO ln -sf /usr/local/lib/libnghttp2.so /usr/lib/libnghttp2.so
+        # $SUDO ln -sf /usr/local/lib/libnghttp2_asio.so /usr/lib/libnghttp2_asio.so
+    fi
+    
+    # Clean up
+    cd $THIS_SCRIPT_PATH
+    echo "================= Cleaning up temporary directory $tmp_dir"
+    rm -rf $tmp_dir
+    
+    echo "nghttp2 with ASIO bindings installation complete"
+    return 0
+}
+
+install_nghttp2_asio_from_git() {
+    local force=$1
+    local debug=$2
+    
+    echo "Installing nghttp2 with ASIO bindings from source"
+    
+    # Always force rebuild for this run
+    force=1
+    
+    # Check if nghttp2 is already installed and we're not forcing
+    if [ $force -eq 0 ]; then
+        if [ -d "/usr/local/include/nghttp2" ] && [ -f "/usr/local/lib/libnghttp2_asio.so" ]; then
+            echo "nghttp2 with ASIO bindings already installed"
+            return 0
+        fi
+    fi
+    
+    # Install dependencies
+    if [[ $OS_DISTRO == "ubuntu" ]]; then
+        $SUDO $INSTALLER install -y g++ make binutils autoconf automake autotools-dev libtool pkg-config \
+                                  zlib1g-dev libcunit1-dev libssl-dev libxml2-dev libev-dev libevent-dev libjansson-dev \
+                                  libc-ares-dev libboost-dev libboost-system-dev libboost-thread-dev
+    elif [[ "$OS_BASEDISTRO" == "fedora" ]]; then
+        $SUDO $INSTALLER install -y gcc-c++ make binutils autoconf automake libtool pkgconfig \
+                                  zlib-devel CUnit-devel openssl-devel libxml2-devel libev-devel libevent-devel jansson-devel \
+                                  c-ares-devel boost-devel
+    fi
+    check_command_failure "Installing nghttp2 dependencies"
+    
+    # Get OpenSSL installation path
+    OPENSSL_ROOT_DIR=$(dirname $(dirname $(which openssl)))
+    if [ -z "$OPENSSL_ROOT_DIR" ]; then
+        OPENSSL_ROOT_DIR="/usr"
+    fi
+    echo "Using OpenSSL from: $OPENSSL_ROOT_DIR"
+    
+    # Create a temporary directory
+    local tmp_dir=$(mktemp -d)
+    cd $tmp_dir
+    
+    # Clone the repository
+    git clone https://github.com/nghttp2/nghttp2-asio.git
+    check_command_failure "Cloning nghttp2-asio repository"
+    cd nghttp2-asio
+
+    # Clean up any previous build artifacts
+    if [ -d "build" ]; then
+        rm -rf build
+    fi
+    # Build and install
+    mkdir -p build
+    cd build
+    cmake  ..
+    check_command_failure "Configuring nghttp2-asio"
+    make -j$(nproc)
+    check_command_failure "Building nghttp2-asio"
+    # First uninstall any previous version
+    $SUDO make uninstall || true
+    $SUDO make install
+    check_command_failure "Installing nghttp2-asio"
+    $SUDO ldconfig
+    # Create symlinks if needed
+    if [ ! -f "/usr/lib/libnghttp2_asio.so" ] && [ -f "/usr/local/lib/libnghttp2_asio.so" ]; then
+        echo "Creating symlinks for nghttp2-asio libraries"
+        $SUDO ln -sf /usr/local/lib/libnghttp2_asio.so /usr/lib/libnghttp2_asio.so
+    fi
+    # Clean up
+    cd $THIS_SCRIPT_PATH
+    echo "================= Cleaning up temporary directory $tmp_dir"
+    rm -rf $tmp_dir
+    echo "nghttp2 with ASIO bindings installation complete"
+    return 0
+}
+
+# Generate Protocol Buffer and gRPC code
+generate_proto_code() {
+    local force=$1
+    
+    echo "Generating Protocol Buffer and gRPC code"
+    
+    # Check for protoc
+    PROTOC=$(which protoc 2>/dev/null || echo "")
+    if [ -z "${PROTOC}" ]; then
+    echo "Error: protoc not found. Please install Protocol Buffers."
+    exit 1
+    fi
+
+    # Check for grpc_cpp_plugin
+    GRPC_CPP_PLUGIN=$(which grpc_cpp_plugin 2>/dev/null || echo "")
+    if [ -z "${GRPC_CPP_PLUGIN}" ]; then
+        echo "Warning: grpc_cpp_plugin not found. Will generate protobuf code only."
+        GENERATE_GRPC=0
+    else
+        GENERATE_GRPC=1
+    fi
+    
+    # Determine project root directory
+    local PROJECT_ROOT="$(cd "${THIS_SCRIPT_PATH}/../.." && pwd)"
+    echo "Project root directory: ${PROJECT_ROOT}"
+
+    PROTO_DIR="${PROJECT_ROOT}/common/protos"
+
+    if [ -d "$PROJECT_ROOT/common/protos" ]; then
+        echo "Found protos directory at $PROJECT_ROOT/common/protos"
+    else
+        echo "Error: Could not find protos directory at $PROJECT_ROOT/common/protos"
+        return 1
+    fi
+    
+    # Create output directory for generated files
+    DEFAULT_OUTPUT_DIR="${PROJECT_ROOT}/build-output/generated"
+    # Create output directory if it doesn't exist
+    OUTPUT_DIR="${DEFAULT_OUTPUT_DIR}"
+    mkdir -p "${OUTPUT_DIR}"
+    echo "Output directory for generated code: ${OUTPUT_DIR}"
+
+    # Generate code for all .proto files
+    for PROTO_FILE in "$PROJECT_ROOT/common/protos"/*.proto; do
+        if [ -f "$PROTO_FILE" ]; then
+            echo "Generating code for $PROTO_FILE"
+            
+            # # Extract filename without path and extension
+            local PROTO_NAME=$(basename "$PROTO_FILE" .proto)
+            
+            # Run protoc to generate C++ code
+            if [ $GENERATE_GRPC -eq 1 ]; then
+                ${PROTOC} --cpp_out="${OUTPUT_DIR}" \
+                        --grpc_out="${OUTPUT_DIR}" \
+                        --plugin=protoc-gen-grpc="${GRPC_CPP_PLUGIN}" \
+                        -I"$(dirname "${PROTO_FILE}")" \
+                        "${PROTO_FILE}"
+            else
+                ${PROTOC} --cpp_out="${OUTPUT_DIR}" \
+                        -I"$(dirname "${PROTO_FILE}")" \
+                        "${PROTO_FILE}"
+            fi
+            check_command_failure "Generating Protocol Buffer code for $PROTO_NAME"
+        fi
+    done
+    
+    echo "Protocol Buffer and gRPC code generation complete"
+    return 0
+}
+
+# Main function to check and install dependencies
+# arg1 is force (0 or 1) (no interactive script)
+# arg2 is debug (0 or 1) (install debug libraries)
+check_install_af_deps() {
+    local force=$1
+    local debug=$2
+    
+    if [ $force -gt 0 ]; then
+        OPTION="-y"
+    else
+        OPTION="-y"
+    fi
+    
+    echo "Checking supported distribution"
+    check_supported_distribution
+    [[ $? -ne 0 ]] && return $?
+    
+    # Prevent lock on package manager
+    if [[ $OS_DISTRO == "ubuntu" ]]; then
+        if [ $IS_CONTAINER -eq 0 ]; then
+            $SUDO sed -i 's/1/0/g' /etc/apt/apt.conf.d/10periodic
+        fi
+    fi
+    
+    update_package_db
+    
+    check_enable_epel_repos
+    
+    # Install basic build tools
+    if [[ $OS_DISTRO == "ubuntu" ]]; then
+        PACKAGE_LIST="\
+            autoconf \
+            automake \
+            build-essential \
+            $CMAKE \
+            curl \
+            git \
+            libtool \
+            pkg-config \
+            libssl-dev \
+            libboost-all-dev"
+    elif [[ "$OS_BASEDISTRO" == "fedora" ]]; then
+        PACKAGE_LIST="\
+            autoconf \
+            automake \
+            gcc-c++ \
+            $CMAKE \
+            make \
+            git \
+            libtool \
+            pkgconfig \
+            openssl-devel \
+            boost-devel"
+    elif [[ "$OS_DISTRO" == "debian" ]]; then
+        PACKAGE_LIST="\
+            autoconf \
+            automake \
+            build-essential \
+            $CMAKE \
+            curl \
+            git \
+            libtool \
+            pkg-config \
+            libssl-dev \
+            libboost-all-dev"
+    else
+        echo "Error: $OS_DISTRO is not a supported distribution."
+        return 1
+    fi
+    
+    echo "Installing build tools"
+    $SUDO $INSTALLER install $OPTION $PACKAGE_LIST
+    ret=$?; [[ $ret -ne 0 ]] && return $ret
+    
+    # Install Protocol Buffers
+    install_protobuf_from_git $force $debug
+    ret=$?; [[ $ret -ne 0 ]] && return $ret
+    
+    # Install gRPC (optional)
+    if [ $force -gt 0 ]; then
+        # When force is enabled, install gRPC
+        install_grpc_from_git $force $debug
+        ret=$?; [[ $ret -ne 0 ]] && return $ret
+    else
+        echo "gRPC installation is optional. To install it, run this script with --force"
+    fi
+    
+    # Install yaml-cpp
+    install_yaml_cpp_from_git $force $debug
+    ret=$?; [[ $ret -ne 0 ]] && return $ret
+    
+    # Install nlohmann/json
+    install_nlohmann_json_from_git $force $debug
+    ret=$?; [[ $ret -ne 0 ]] && return $ret
+    
+    # Install spdlog
+    install_spdlog_from_git $force $debug
+    ret=$?; [[ $ret -ne 0 ]] && return $ret
+
+    # Install OpenSSL
+    install_openssl $force $debug
+    ret=$?; [[ $ret -ne 0 ]] && return $ret
+    
+    # Install nghttp2 with ASIO bindings
+    install_nghttp2_from_git $force $debug
+    ret=$?; [[ $ret -ne 0 ]] && return $ret
+
+    install_nghttp2_asio_from_git $force $debug
+    ret=$?; [[ $ret -ne 0 ]] && return $ret
+
+
+    $SUDO ldconfig
+    
+    echo "All dependencies installed successfully"
+    return 0
+}

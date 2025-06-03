@@ -1,6 +1,5 @@
 # .gitignore
 # Build artifacts
-/build/
 /cmake-build-*/
 
 # Editor-specific files

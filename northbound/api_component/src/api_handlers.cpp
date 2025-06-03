@@ -3,7 +3,7 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <nlohmann/json.hpp>
-#include "../../common/communication/include/message.h"
+#include "../common/communication/include/message.h"
 
 namespace af::northbound {
 
