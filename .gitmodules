@@ -1,0 +1,3 @@
+[submodule "northbound/api_component/common"]
+	path = northbound/api_component/common
+	url = https://github.com/hub-phine-tech/oai-cn5g-common.git
