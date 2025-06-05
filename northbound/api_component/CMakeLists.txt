@@ -104,13 +104,13 @@ install(DIRECTORY include/
 add_executable(api_server src/main.cpp)
 target_link_libraries(api_server 
     PRIVATE
+        api_component
         ${NGHTTP2_LIBRARIES}
         Boost::system
         Boost::thread
-        api_component
         nghttp2_asio
-        OpenSSL::SSL  # Explicitly link OpenSSL SSL library
-        OpenSSL::Crypto  # Explicitly link OpenSSL Crypto library
+        ssl
+        crypto
 )
 
 # Installation for the executable
