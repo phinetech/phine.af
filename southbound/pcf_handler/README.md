@@ -187,6 +187,51 @@ sequenceDiagram
     PH-->>AF: App Session Deleted
 ```
 
+## PCF Handler Message Types
+
+| Message Type | Protocol | Direction | Description |
+|--------------|----------|-----------|-------------|
+| `pcf_create_app_session` | gRPC | AF Core→PCF Handler | Request to create a new application session with PCF |
+| `pcf_app_session_created` | gRPC | PCF Handler→AF Core | Confirmation of successful application session creation |
+| `pcf_update_app_session` | gRPC | AF Core→PCF Handler | Request to update an existing application session |
+| `pcf_app_session_updated` | gRPC | PCF Handler→AF Core | Confirmation of successful application session update |
+| `pcf_delete_app_session` | gRPC | AF Core→PCF Handler | Request to delete an application session |
+| `pcf_app_session_deleted` | gRPC | PCF Handler→AF Core | Confirmation of successful application session deletion |
+| `pcf_get_app_session` | gRPC | AF Core→PCF Handler | Request to retrieve application session information |
+| `pcf_app_session_info` | gRPC | PCF Handler→AF Core | Response containing application session details |
+| `pcf_notification` | gRPC | PCF Handler→AF Core | Event notification from PCF (forwarded to AF Core) |
+| `pcf_notification_ack` | gRPC | AF Core→PCF Handler | Acknowledgment of notification receipt |
+| `pcf_error` | gRPC | PCF Handler→AF Core | Error response for any failed operation |
+| `POST /app-sessions` | HTTP/2 | PCF Handler→PCF | Create new application session (Npcf_PolicyAuthorization API) |
+| `PATCH /app-sessions/{appSessionId}` | HTTP/2 | PCF Handler→PCF | Update existing application session |
+| `DELETE /app-sessions/{appSessionId}` | HTTP/2 | PCF Handler→PCF | Delete application session |
+| `GET /app-sessions/{appSessionId}` | HTTP/2 | PCF Handler→PCF | Retrieve application session information |
+| `POST /notification` | HTTP/2 | PCF→PCF Handler | Notification of policy or network events from PCF |
+
+The PCF Handler acts as a translation layer between the AF Core service (using gRPC) and the 5G Core PCF function (using HTTP/2), handling QoS requirements, traffic steering policies, and application session management.
+
+
+## Testing Northbound Endpoints
+
+We will use grpcurl running inside a docker container to simplify setup. Assuming the IP address for the af_core is `192.168.73.131`
+
+```bash
+docker run --network host -v ./common/protos:/var/protos/ fullstorydev/grpcurl -plaintext \
+  -proto message.proto \
+  -import-path /var/protos \
+  -d '{
+    "message_type": "pcf_create_app_session",
+    "correlation_id": "12345",
+    "payload": "'$(echo '{"ue_ipv4":"12.0.0.2"}' | base64)'",
+    "metadata": {
+      "source": "command_line",
+      "priority": "high"
+    }
+  }' \
+  192.168.73.132:50055 \
+  af.proto.InternalCommunication/SendMessage
+```
+
 ## Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to submit pull requests, report issues, and suggest features.

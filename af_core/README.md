@@ -225,3 +225,24 @@ sequenceDiagram
 | `network_event` | Southbound→Core | Network event notification |
 
 This architecture enables the AF to effectively bridge between applications and the 5G core network, providing dynamic QoS management, network event notifications, and other advanced features.
+
+## Testing Northbound Endpoints
+
+We will use grpcurl running inside a docker container to simplify setup. Assuming the IP address for the af_core is `192.168.73.131`
+
+```bash
+docker run --network host -v ./common/protos:/var/protos/ fullstorydev/grpcurl -plaintext \
+  -proto message.proto \
+  -import-path /var/protos \
+  -d '{
+    "message_type": "qos_request",
+    "correlation_id": "12345",
+    "payload": "'$(echo '{"ue_ipv4":"12.0.0.2"}' | base64)'",
+    "metadata": {
+      "source": "command_line",
+      "priority": "high"
+    }
+  }' \
+  192.168.73.131:50051 \
+  af.proto.InternalCommunication/SendMessage
+```
