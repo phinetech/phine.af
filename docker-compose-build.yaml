@@ -24,12 +24,15 @@ services:
       af_net:
         ipv4_address: 192.168.73.130
 
-  # # AF Core
-  # af_core:
-  #   image: tariromukute/af-core:${TAG:-latest}
-  #   build:
-  #     context: ./af_core
-  #     dockerfile: Dockerfile
+  # AF Core
+  af_core:
+    image: tariromukute/af-core:${TAG:-latest}
+    build:
+      context: ./af_core
+      dockerfile: Dockerfile
+    networks:
+      af_net:
+        ipv4_address: 192.168.73.131
 
   # Southbound Handlers
   pcf_handler:
@@ -39,7 +42,7 @@ services:
       dockerfile: ./pcf_handler/Dockerfile
     networks:
       af_net:
-        ipv4_address: 192.168.73.131
+        ipv4_address: 192.168.73.132
 
   # nef_handler:
   #   image: tariromukute/nef-handler:${TAG:-latest}

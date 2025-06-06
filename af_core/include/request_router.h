@@ -13,7 +13,7 @@
 #include <unordered_map>
 #include <functional>
 #include <spdlog/spdlog.h>
-#include "../../common/communication/include/message.h"
+#include "../common/communication/include/message.h"
 
 namespace af {
 namespace core {

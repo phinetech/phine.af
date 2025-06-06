@@ -15,8 +15,8 @@
 #include "request_router.h"
 #include "policy_manager.h"
 #include "subscription_manager.h"
-#include "../../common/component/include/af_component.h"
-#include "../../common/communication/include/communication_interface.h"
+#include "../common/component/include/af_component.h"
+#include "../common/communication/include/communication_interface.h"
 
 namespace af {
 namespace core {

@@ -10,8 +10,15 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Add compile options
-add_compile_options(-Wall -Wextra -Wpedantic)
+# Common compilation flags
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
+
+# Output directories
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # Find dependencies
 find_package(spdlog REQUIRED)
@@ -39,6 +46,9 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/common/models
     ${CMAKE_SOURCE_DIR}/common/di/include
 )
+
+# Components to build
+add_subdirectory(common)
 
 # Create shared library
 add_library(af_core_lib SHARED ${SOURCES})

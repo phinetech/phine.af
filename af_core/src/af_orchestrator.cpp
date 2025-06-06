@@ -7,7 +7,7 @@
 #include <yaml-cpp/yaml.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
-#include "../../common/communication/include/communication_factory.h"
+#include "../common/communication/include/communication_factory.h"
 
 namespace af {
 namespace core {
@@ -91,6 +91,7 @@ void AfOrchestrator::initialize_communication() {
         
         // Create main communication service for inbound communication
         std::unordered_map<std::string, std::string> main_comm_config;
+        // TODO: Load specific configuration values for main communication service
         main_comm_config["server_address"] = "0.0.0.0";
         main_comm_config["server_port"] = "50051";  // Use a fixed port for the core
         

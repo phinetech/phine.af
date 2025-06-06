@@ -16,7 +16,7 @@
 #include <mutex>
 #include <chrono>
 #include <spdlog/spdlog.h>
-#include "../../common/communication/include/message.h"
+#include "../common/communication/include/message.h"
 #include <nlohmann/json.hpp>
 
 namespace af {
