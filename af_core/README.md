@@ -219,9 +219,9 @@ sequenceDiagram
 | `delete_subscription` | Northbound→Core | Delete a subscription |
 | `subscription_deleted` | Core→Northbound | Subscription successfully deleted |
 | `event_notification` | Core→Northbound | Event notification to subscriber |
-| `pcf_policy_create` | Core→Southbound | Create policy in PCF |
-| `pcf_policy_update` | Core→Southbound | Update policy in PCF |
-| `pcf_policy_delete` | Core→Southbound | Delete policy in PCF |
+| `pcf_create_app_session` | Core→Southbound | Create policy in PCF |
+| `pcf_update_app_session` | Core→Southbound | Update policy in PCF |
+| `pcf_delete_app_session` | Core→Southbound | Delete policy in PCF |
 | `network_event` | Southbound→Core | Network event notification |
 
 This architecture enables the AF to effectively bridge between applications and the 5G core network, providing dynamic QoS management, network event notifications, and other advanced features.
