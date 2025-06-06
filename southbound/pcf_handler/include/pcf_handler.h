@@ -15,8 +15,8 @@
 #include <vector>
 #include <mutex>
 #include <spdlog/spdlog.h>
-#include "../../common/component/include/af_component.h"
-#include "../../common/communication/include/communication_interface.h"
+#include "../common/component/include/af_component.h"
+#include "../common/communication/include/communication_interface.h"
 #include "pcc_rule_manager.h"
 #include "pcf_client_wrapper.h"
 

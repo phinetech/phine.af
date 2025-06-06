@@ -8,7 +8,7 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <nlohmann/json.hpp>
-#include "../../common/communication/include/communication_factory.h"
+#include "../common/communication/include/communication_factory.h"
 
 namespace af {
 namespace southbound {

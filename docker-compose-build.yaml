@@ -31,12 +31,15 @@ services:
   #     context: ./af_core
   #     dockerfile: Dockerfile
 
-  # # Southbound Handlers
-  # pcf_handler:
-  #   image: tariromukute/pcf-handler:${TAG:-latest}
-  #   build:
-  #     context: ./southbound/pcf_handler
-  #     dockerfile: Dockerfile
+  # Southbound Handlers
+  pcf_handler:
+    image: tariromukute/pcf-handler:${TAG:-latest}
+    build:
+      context: ./southbound/
+      dockerfile: ./pcf_handler/Dockerfile
+    networks:
+      af_net:
+        ipv4_address: 192.168.73.131
 
   # nef_handler:
   #   image: tariromukute/nef-handler:${TAG:-latest}

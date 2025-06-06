@@ -10,8 +10,21 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Add compile options
-add_compile_options(-Wall -Wextra -Wpedantic)
+# Common compilation flags
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
+
+# Output directories
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+# Add CMake modules path
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/build/cmake)
+
+# Include custom CMake modules
+include(Protobuf)
 
 # Find dependencies
 find_package(spdlog REQUIRED)
@@ -41,11 +54,15 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/common/di/include
 )
 
+
+# Components to build
+add_subdirectory(common)
+
 # Create shared library
-add_library(pcf_handler_lib SHARED ${SOURCES})
+add_library(pcf_handler SHARED ${SOURCES})
 
 # Link dependencies
-target_link_libraries(pcf_handler_lib
+target_link_libraries(pcf_handler
     PUBLIC
         spdlog::spdlog
         nlohmann_json::nlohmann_json
@@ -57,27 +74,39 @@ target_link_libraries(pcf_handler_lib
         gRPC::grpc++
         af_common_component
         af_communication
-        OpenSSL::SSL
-        OpenSSL::Crypto
+        # ssl
+        # crypto
 )
 
 # Create executable
-add_executable(pcf_handler src/main.cpp)
+add_executable(pcf_server src/main.cpp)
 
 # Link library to executable
-target_link_libraries(pcf_handler
+target_link_libraries(pcf_server
     PRIVATE
-        pcf_handler_lib
+        pcf_handler
+        ${NGHTTP2_LIBRARIES}
+        Boost::system
+        Boost::thread
+        nghttp2_asio
+        ssl
+        crypto
 )
 
 # Install targets
-install(TARGETS pcf_handler_lib
+install(TARGETS pcf_handler
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
     RUNTIME DESTINATION bin
 )
 
-install(TARGETS pcf_handler
+# Install headers
+install(DIRECTORY include/
+    DESTINATION include/oai/af/southbound
+    FILES_MATCHING PATTERN "*.h*"
+)
+
+install(TARGETS pcf_server
     RUNTIME DESTINATION bin
 )
 
