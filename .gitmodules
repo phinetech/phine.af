@@ -4,3 +4,6 @@
 [submodule "southbound/common"]
 	path = southbound/common
 	url = https://github.com/hub-phine-tech/oai-cn5g-common.git
+[submodule "af_core/common"]
+	path = af_core/common
+	url = https://github.com/hub-phine-tech/oai-cn5g-common.git
