@@ -13,7 +13,7 @@ namespace core {
 
 RequestRouter::RequestRouter() {
     // Setup logger
-    initializeLogger();
+    initializeLogger(spdlog::level::debug);
     
     logger_->info("Request Router created");
     

@@ -1,0 +1,13 @@
+steering-rule-primary:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+  precedence: 10
+  refTcData:
+    - steering-scenario-primary
+
+steering-rule-secondary:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+  precedence: 10
+  refTcData:
+    - steering-scenario-secondary

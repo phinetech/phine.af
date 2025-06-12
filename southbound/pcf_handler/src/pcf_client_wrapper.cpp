@@ -23,7 +23,7 @@ PcfClientWrapper::PcfClientWrapper(const std::string& base_url,
       session_(nullptr), socket_(io_context_), connected_(false) {
     
     // Setup logger
-    initializeLogger();
+    initializeLogger(spdlog::level::debug);
     
     logger_->info("PCF Client Wrapper created");
     
@@ -138,7 +138,7 @@ bool PcfClientWrapper::connect() {
         return true;
     }
     
-    logger_->debug("Connecting to {}:{}", host_, port_);
+    logger_->debug("Connecting to {}:{} with HTTP/2 prior knowledge", host_, port_);
     
     try {
         // Resolve the host
@@ -148,27 +148,77 @@ bool PcfClientWrapper::connect() {
         // Connect to the host
         boost::asio::connect(socket_, endpoints);
         
-        // Perform HTTP/2 handshake
-        const char* client_connection_header = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
-        boost::asio::write(socket_, 
-                         boost::asio::buffer(client_connection_header, 
-                                           strlen(client_connection_header)));
+        // Configure proper HTTP/2 settings
+        nghttp2_settings_entry iv[] = {
+            {NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100},
+            {NGHTTP2_SETTINGS_ENABLE_PUSH, 0},            // Disable server push
+            {NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, 65535} // Default window size
+        };
         
-        // Send initial SETTINGS frame
+        nghttp2_submit_settings(session_, NGHTTP2_FLAG_NONE, iv, 
+                               sizeof(iv) / sizeof(iv[0]));
+        
+        // Send the SETTINGS frame
         std::vector<uint8_t> buffer(16384);
-        const uint8_t* data_ptr = buffer.data();
+        const uint8_t* data_ptr;
         ssize_t serlen = nghttp2_session_mem_send(session_, &data_ptr);
         
         if (serlen > 0) {
-            boost::asio::write(socket_, boost::asio::buffer(buffer.data(), serlen));
+            boost::asio::write(socket_, boost::asio::buffer(data_ptr, serlen));
         }
         
-        // Receive server's SETTINGS frame
-        size_t readlen = socket_.read_some(boost::asio::buffer(buffer));
-        process_data(buffer.data(), readlen);
+        // Exchange frames to complete the handshake
+        bool handshake_complete = false;
+        int attempt = 0;
+        
+        while (!handshake_complete && attempt < 5) {
+            attempt++;
+            
+            try {
+                // Read from socket
+                buffer.resize(16384);
+                size_t readlen = socket_.read_some(boost::asio::buffer(buffer));
+                
+                if (readlen > 0) {
+                    
+                    // Process the data
+                    ssize_t processlen = nghttp2_session_mem_recv(session_, buffer.data(), readlen);
+                    
+                    if (processlen < 0) {
+                        logger_->error("Error processing received data: {}", 
+                                       nghttp2_strerror((int)processlen));
+                        return false;
+                    }
+                    
+                    // Debug the received frames
+                    logger_->debug("Processed {} bytes of HTTP/2 frames", processlen);
+                }
+                
+                // Send any pending data
+                while ((serlen = nghttp2_session_mem_send(session_, &data_ptr)) > 0) {
+                    boost::asio::write(socket_, boost::asio::buffer(data_ptr, serlen));
+                }
+                
+                // If we've successfully exchanged SETTINGS frames, consider handshake complete
+                if (attempt >= 2) {
+                    handshake_complete = true;
+                }
+            }
+            catch (const boost::system::system_error& e) {
+                if (e.code() == boost::asio::error::eof) {
+                    logger_->error("Server closed connection during handshake");
+                    return false;
+                }
+                throw;
+            }
+        }
         
         connected_ = true;
-        logger_->info("Connected to PCF server");
+        logger_->info("HTTP/2 connection established successfully");
+        
+        // Initialize response map for future requests
+        responses_.clear();
+        
         return true;
     }
     catch (const std::exception& e) {
@@ -254,6 +304,8 @@ std::pair<bool, nlohmann::json> PcfClientWrapper::perform_request(
         request_body = request_data.dump();
         headers["content-length"] = std::to_string(request_body.length());
     }
+
+    logger_->debug("Request body: {}", request_body);
     
     // Submit the request
     int32_t stream_id = submit_request(method, full_path, headers, request_body);
@@ -262,13 +314,13 @@ std::pair<bool, nlohmann::json> PcfClientWrapper::perform_request(
         logger_->error("Failed to submit request");
         return {false, {{"error", "request_submission_failed"}}};
     }
-    
+
     // Wait for response
     if (!wait_for_response(stream_id)) {
         logger_->error("Request timed out");
         return {false, {{"error", "request_timeout"}}};
     }
-    
+
     // Get response
     std::lock_guard<std::mutex> lock(responses_mutex_);
     auto it = responses_.find(stream_id);
@@ -314,6 +366,12 @@ std::pair<bool, nlohmann::json> PcfClientWrapper::perform_request(
     }
 }
 
+// Define a struct to hold stream-specific data
+struct StreamData {
+    std::shared_ptr<std::string> body;
+    size_t body_offset = 0; // store how much we've already sent
+};
+
 int32_t PcfClientWrapper::submit_request(
     const std::string& method,
     const std::string& path,
@@ -333,76 +391,92 @@ int32_t PcfClientWrapper::submit_request(
         nv.flags = NGHTTP2_NV_FLAG_NONE;
         nvs.push_back(nv);
     }
+
+    // Check if session is initialized
+    if (!session_) {
+        logger_->error("nghttp2 session is not initialized");
+        return -1;
+    }
+
+    // Setup data provider for body
+    nghttp2_data_provider2 data_provider;
     
+    if (!body.empty()) {
+        // Non-empty body, set up data provider
+        auto stream_data = new StreamData();
+        stream_data->body = std::make_shared<std::string>(body);
+        data_provider.source.ptr = stream_data;
+
+        data_provider.read_callback = [](nghttp2_session *session, int32_t stream_id,
+                                    uint8_t *buf, size_t length,
+                                    uint32_t *data_flags,
+                                    nghttp2_data_source *source,
+                                    void *user_data) -> ssize_t {
+            
+            auto* sd = static_cast<StreamData*>(source->ptr);
+            size_t remaining = sd->body->size() - sd->body_offset;
+            size_t copylen = std::min(length, remaining);
+
+            if (copylen > 0) {
+                memcpy(buf, sd->body->data() + sd->body_offset, copylen);
+                sd->body_offset += copylen;
+            }
+
+            if (sd->body_offset == sd->body->size()) {
+                *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+            }
+
+            return copylen;
+        };
+    } else {
+        // Empty body
+        data_provider.source.ptr = nullptr;
+        data_provider.read_callback = [](nghttp2_session *session, int32_t stream_id,
+                                    uint8_t *buf, size_t length,
+                                    uint32_t *data_flags,
+                                    nghttp2_data_source *source,
+                                    void *user_data) -> ssize_t {
+            *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+            return 0;
+        };
+    }
+
     // Submit the request headers
     std::lock_guard<std::mutex> lock(session_mutex_);
-    int32_t stream_id = nghttp2_submit_request(session_, nullptr, nvs.data(), 
-                                              nvs.size(), nullptr, this);
+    int32_t stream_id = nghttp2_submit_request2(session_, nullptr, nvs.data(), 
+                                            nvs.size(), 
+                                            body.empty() ? nullptr : &data_provider, 
+                                            this);
     
-    if (stream_id < 0) {
+    if (stream_id <= 0) {
         logger_->error("Failed to submit request headers: {}", 
-                      nghttp2_strerror((int)stream_id));
+                    nghttp2_strerror((int)stream_id));
         return -1;
     }
     
-    // Submit request body if available
-    if (!body.empty()) {
-        nghttp2_data_provider data_provider;
-        data_provider.source.ptr = (void*)body.c_str();
-        data_provider.read_callback = [](nghttp2_session *session, int32_t stream_id,
-                                        uint8_t *buf, size_t length,
-                                        uint32_t *data_flags,
-                                        nghttp2_data_source *source,
-                                        void *user_data) -> ssize_t {
-            const char *data = (const char*)source->ptr;
-            size_t datalen = strlen(data);
-            
-            if (length < datalen) {
-                memcpy(buf, data, length);
-                source->ptr = (void*)(data + length);
-                return length;
-            }
-            
-            memcpy(buf, data, datalen);
-            *data_flags |= NGHTTP2_DATA_FLAG_EOF;
-            return datalen;
-        };
-        
-        int result = nghttp2_submit_data(session_, NGHTTP2_FLAG_END_STREAM, 
-                                        stream_id, &data_provider);
-        
-        if (result != 0) {
-            logger_->error("Failed to submit request body: {}", 
-                          nghttp2_strerror(result));
-            return -1;
-        }
+    // Initialize response data structure
+    {
+        std::lock_guard<std::mutex> lock(responses_mutex_);
+        responses_[stream_id] = ResponseData();
     }
     
     // Send the request
-    std::vector<uint8_t> buffer(16384);
-    const uint8_t* data_ptr = buffer.data();
-    ssize_t serlen = nghttp2_session_mem_send(session_,&data_ptr);
+    const uint8_t* data_ptr;
+    ssize_t serlen;
     
-    if (serlen < 0) {
-        logger_->error("Failed to serialize request: {}", 
-                      nghttp2_strerror((int)serlen));
-        return -1;
-    }
-    
-    if (serlen > 0) {
+    while ((serlen = nghttp2_session_mem_send(session_, &data_ptr)) > 0) {
         try {
-            boost::asio::write(socket_, boost::asio::buffer(buffer.data(), serlen));
-        }
-        catch (const std::exception& e) {
-            logger_->error("Failed to send request: {}", e.what());
+            boost::asio::write(socket_, boost::asio::buffer(data_ptr, serlen));
+        } catch (const std::exception& e) {
+            logger_->error("Failed to send request data: {}", e.what());
             return -1;
         }
     }
     
-    // Initialize response data
-    {
-        std::lock_guard<std::mutex> response_lock(responses_mutex_);
-        responses_[stream_id] = ResponseData{0, {}, "", false};
+    if (serlen < 0) {
+        logger_->error("nghttp2_session_mem_send failed: {}", 
+                    nghttp2_strerror((int)serlen));
+        return -1;
     }
     
     return stream_id;
@@ -432,15 +506,18 @@ bool PcfClientWrapper::wait_for_response(int32_t stream_id, int timeout_ms) {
             return false;
         }
         
+        logger_->debug("Elapsed time: {} ms, waiting for more data", elapsed);
         // Read more data
         std::vector<uint8_t> buffer(16384);
         
         try {
             size_t readlen = socket_.read_some(boost::asio::buffer(buffer));
-            
+
             if (readlen > 0) {
                 process_data(buffer.data(), readlen);
             }
+
+            return true; // Data read successfully
         }
         catch (const boost::system::system_error& e) {
             if (e.code() == boost::asio::error::eof) {
@@ -471,20 +548,33 @@ bool PcfClientWrapper::wait_for_response(int32_t stream_id, int timeout_ms) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     
+    logger_->error("Unexpected exit from wait_for_response loop for stream ID: {}", stream_id);
     return false;
 }
 
 ssize_t PcfClientWrapper::process_data(const uint8_t* data, size_t length) {
-    std::lock_guard<std::mutex> lock(session_mutex_);
-    ssize_t processlen = nghttp2_session_mem_recv(session_, data, length);
-    
-    if (processlen < 0) {
-        logger_->error("Failed to process received data: {}", 
-                      nghttp2_strerror((int)processlen));
+    if (!session_) {
+        logger_->error("nghttp2 session is not initialized");
         return -1;
     }
+    try {
+        logger_->debug("Processing {} bytes of data", length);
+        std::lock_guard<std::mutex> lock(session_mutex_);
+        ssize_t processlen = nghttp2_session_mem_recv(session_, data, length);
+        
+        if (processlen < 0) {
+            logger_->error("Failed to process received data: {}", 
+                          nghttp2_strerror((int)processlen));
+            return -1;
+        }
     
-    return processlen;
+        logger_->debug("Processed {} bytes of data", processlen);
+        
+        return processlen;
+    } catch (const std::exception& e) {
+        logger_->error("Error logging data processing: {}", e.what());
+        return -1;
+    }
 }
 
 int PcfClientWrapper::on_frame_recv_callback(nghttp2_session *session,
@@ -563,6 +653,14 @@ int PcfClientWrapper::on_stream_close_callback(nghttp2_session *session,
     PcfClientWrapper* client = static_cast<PcfClientWrapper*>(user_data);
     
     std::lock_guard<std::mutex> lock(client->responses_mutex_);
+    void *stream_userdata = nghttp2_session_get_stream_user_data(session, stream_id);
+    if (stream_userdata) {
+        client->logger_->debug("Cleaning up stream data for stream {}", 
+                             stream_id);
+        auto* sd = static_cast<StreamData*>(stream_userdata);
+        delete sd;  // cleanup here
+    }
+
     auto it = client->responses_.find(stream_id);
     
     if (it != client->responses_.end()) {
@@ -575,6 +673,8 @@ int PcfClientWrapper::on_stream_close_callback(nghttp2_session *session,
             client->logger_->debug("Stream {} completed successfully", stream_id);
         }
     }
+
+    client->logger_->debug("Stream {} closed", stream_id);
     
     return 0;
 }

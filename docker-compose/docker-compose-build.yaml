@@ -18,31 +18,31 @@ services:
     image: tariromukute/af-api:${TAG:-latest}
     container_name: af-north-api
     build:
-      context: ./northbound/api_component
+      context: ../northbound/api_component
       dockerfile: Dockerfile
     networks:
       af_net:
-        ipv4_address: 192.168.73.130
+        ipv4_address: 192.168.70.142
 
   # AF Core
   af_core:
     image: tariromukute/af-core:${TAG:-latest}
     build:
-      context: ./af_core
+      context: ../af_core
       dockerfile: Dockerfile
     networks:
       af_net:
-        ipv4_address: 192.168.73.131
+        ipv4_address: 192.168.70.141
 
   # Southbound Handlers
   pcf_handler:
     image: tariromukute/pcf-handler:${TAG:-latest}
     build:
-      context: ./southbound/
+      context: ../southbound/
       dockerfile: ./pcf_handler/Dockerfile
     networks:
       af_net:
-        ipv4_address: 192.168.73.132
+        ipv4_address: 192.168.70.140
 
   # nef_handler:
   #   image: tariromukute/nef-handler:${TAG:-latest}
@@ -105,6 +105,6 @@ networks:
     name: phine-af-net
     ipam:
       config:
-        - subnet: "192.168.73.128/26"
+        - subnet: "192.168.70.128/26"
     driver_opts:
       com.docker.network.bridge.name: phine-af-net

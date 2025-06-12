@@ -1,0 +1,32 @@
+decision_supi1:
+  supi_imsi: "208950000000031"
+  pcc_rules: 
+    - internet-rule
+    - edge-rule-restricted
+
+decision_supi2:
+  supi_imsi: "208950000000032"
+  pcc_rules:
+    - edge-rule-all
+
+decision_supi3:
+  supi_imsi: "208950000000033"
+  pcc_rules:
+    - internet-rule
+
+decision_dnn:
+  dnn: default
+  pcc_rules:
+    - internet-rule
+
+decision_default:
+  default: true
+  pcc_rules:
+    - internet-rule
+
+decision_slice:
+  slice: 
+    sst: 222
+    sd: "00007B"
+  pcc_rules:
+    - internet-rule

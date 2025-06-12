@@ -13,7 +13,7 @@ using namespace nghttp2::asio_http2::server;
 
 ApiHandlers::ApiHandlers() {
     // Setup logger
-    initializeLogger();
+    initializeLogger(spdlog::level::debug);
     
     logger_->info("API Handlers initialized");
 }

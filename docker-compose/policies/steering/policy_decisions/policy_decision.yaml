@@ -1,0 +1,9 @@
+decision_supi1:
+  supi_imsi: "208950000000032"
+  pcc_rules: 
+    - steering-rule-primary
+
+decision_supi2:
+  supi_imsi: "208950000000033"
+  pcc_rules: 
+    - steering-rule-secondary

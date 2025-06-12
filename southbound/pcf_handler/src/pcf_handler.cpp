@@ -60,7 +60,7 @@ PcfHandler::PcfHandler(const std::string& config_path)
     : AfComponent("pcf_handler"), config_path_(config_path) {
     
     // Setup logger
-    initializeLogger();
+    initializeLogger(spdlog::level::debug);
     
     logger_->info("Initializing PCF Handler");
     
@@ -356,71 +356,72 @@ af::communication::MessagePtr PcfHandler::create_app_session(
         }
         
         // Call PCF client to create the app session
-        // auto pcf_response = pcf_client_->create_app_session(app_session_context);
+        logger_->debug("Sending app session creation request to PCF: {}", app_session_context.dump());
+        auto pcf_response = pcf_client_->create_app_session(app_session_context);
         
-        // if (pcf_response.first) {
-        //     // Success
-        //     auto& session_data = pcf_response.second;
-        //     logger_->info("App session created successfully");
+        if (pcf_response.first) {
+            // Success
+            auto& session_data = pcf_response.second;
+            logger_->info("App session created successfully");
             
-        //     // Store session information
-        //     AppSessionInfo session_info;
-        //     session_info.app_session_id = session_data["appSessionId"];
-        //     session_info.app_session_context = session_data.dump();
+            // Store session information
+            AppSessionInfo session_info;
+            session_info.app_session_id = session_data["appSessionId"];
+            session_info.app_session_context = session_data.dump();
             
-        //     if (request_data.contains("ue_ipv4")) {
-        //         session_info.ipv4_address = request_data["ue_ipv4"];
-        //     }
+            if (request_data.contains("ue_ipv4")) {
+                session_info.ipv4_address = request_data["ue_ipv4"];
+            }
             
-        //     if (request_data.contains("ue_ipv6")) {
-        //         session_info.ipv6_prefix = request_data["ue_ipv6"];
-        //     }
+            if (request_data.contains("ue_ipv6")) {
+                session_info.ipv6_prefix = request_data["ue_ipv6"];
+            }
             
-        //     // Extract media component IDs
-        //     if (session_data.contains("medComponents") && 
-        //         session_data["medComponents"].is_object()) {
+            // Extract media component IDs
+            if (session_data.contains("medComponents") && 
+                session_data["medComponents"].is_object()) {
                 
-        //         for (auto& [media_id, _] : session_data["medComponents"].items()) {
-        //             session_info.media_components.push_back(media_id);
-        //         }
-        //     }
+                for (auto& [media_id, _] : session_data["medComponents"].items()) {
+                    session_info.media_components.push_back(media_id);
+                }
+            }
             
-        //     session_info.active = true;
+            session_info.active = true;
             
-        //     store_app_session(session_info.app_session_id, session_info);
+            store_app_session(session_info.app_session_id, session_info);
             
-        //     // Create success response
-        //     response->message_type = "pcf_app_session_created";
+            // Create success response
+            response->message_type = "pcf_app_session_created";
             
-        //     nlohmann::json result = {
-        //         {"app_session_id", session_info.app_session_id},
-        //         {"status", "active"}
-        //     };
+            nlohmann::json result = {
+                {"app_session_id", session_info.app_session_id},
+                {"status", "active"}
+            };
             
-        //     // Add PCC rules if available
-        //     if (session_data.contains("pccRules") && 
-        //         session_data["pccRules"].is_object()) {
+            // Add PCC rules if available
+            if (session_data.contains("pccRules") && 
+                session_data["pccRules"].is_object()) {
                 
-        //         result["pcc_rules"] = session_data["pccRules"];
-        //     }
+                result["pcc_rules"] = session_data["pccRules"];
+            }
             
-        //     std::string result_str = result.dump();
-        //     response->payload.assign(result_str.begin(), result_str.end());
-        // }
-        // else {
-        //     // Error
-        //     logger_->error("Failed to create app session: {}", pcf_response.second.dump());
+            std::string result_str = result.dump();
+            response->payload.assign(result_str.begin(), result_str.end());
+        }
+        else {
+            // Error
+            logger_->error("Failed to create app session: {}", pcf_response.second.dump());
             
-        //     response->message_type = "pcf_error";
+            response->message_type = "pcf_error";
             
-        //     nlohmann::json error = {
-        //         {"error", "app_session_creation_failed"},
-        //         {"message", pcf_response.second.dump()}
-        //     };
+            nlohmann::json error = {
+                {"error", "app_session_creation_failed"},
+                {"message", pcf_response.second.dump()}
+            };
             
-        //     std::string error_str = error.dump();
-        //     response->payload.assign(error_str.begin(), error_str.end());
-        // }
+            std::string error_str = error.dump();
+            response->payload.assign(error_str.begin(), error_str.end());
+        }
     }
     catch (const std::exception& e) {
         logger_->error("Error creating app session: {}", e.what());
@@ -435,8 +436,7 @@ af::communication::MessagePtr PcfHandler::create_app_session(
         std::string error_str = error.dump();
         response->payload.assign(error_str.begin(), error_str.end());
     }
-    
-    return nullptr;
+    return response;
 }
 
 af::communication::MessagePtr PcfHandler::update_app_session(

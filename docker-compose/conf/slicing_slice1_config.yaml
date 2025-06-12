@@ -1,0 +1,124 @@
+################################################################################
+# Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The OpenAirInterface Software Alliance licenses this file to You under
+# the OAI Public License, Version 1.1  (the "License"); you may not use this file
+# except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.openairinterface.org/?page_id=698
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#-------------------------------------------------------------------------------
+# For more information about the OpenAirInterface (OAI) Software Alliance:
+#      contact@openairinterface.org
+################################################################################
+
+# OAI CN Configuration File
+### This file can be used by all OAI NFs
+### Some fields are specific to an NF and will be ignored by other NFs
+
+## NOTE ON YAML ANCHORS ##
+# We use YAML anchors to ease the configuration and to avoid duplicating parts of the configuration.
+# This is especially true for the SNSSAIs, as we have to define them for multiple NFs.
+# Please note that the use of anchors is not mandatory, and you can define the SNSSAI in each NF yourself.
+# You can read more about anchors here: https://yaml.org/spec/1.2.2/#anchors-and-aliases
+
+############# Common configuration
+
+# This file is only used by the SMF and NRF of slice 1, non-SMF configuration is omitted
+
+# Log level for all the NFs
+log_level:
+  general: debug
+
+# If you enable registration, the other NFs will use the NRF discovery mechanism
+register_nf:
+  general: yes
+
+http_version: 2
+
+############## SBI Interfaces
+nfs:
+  smf:
+    host: oai-smf-slice1
+    sbi:
+      port: 8080
+      api_version: v1
+      interface_name: eth0
+    n4:
+      interface_name: eth0
+      port: 8805
+  nrf:
+    host: oai-nrf-slice12
+    sbi:
+      port: 8080
+      api_version: v1
+      interface_name: eth0
+  upf:
+    host: oai-upf
+    sbi:
+      port: 8080
+      api_version: v1
+      interface_name: eth0
+    n3:
+      interface_name: eth0
+      port: 2152
+    n4:
+      interface_name: eth0
+      port: 8805
+    n6:
+      interface_name: eth0
+    n9:
+      interface_name: eth0
+      port: 2152
+
+# anchor is set to re-use slice config in SMF
+snssais:
+  - &slice1
+    sst: 128
+    sd: 000080 # in hex
+
+smf:
+  support_features:
+    use_local_subscription_info: yes # Use infos from local_subscription_info or from UDM
+    use_local_pcc_rules: yes # Use infos from local_pcc_rules or from PCF
+  ue_dns:
+    primary_ipv4: "172.21.3.100"
+    secondary_ipv4: "8.8.8.8"
+  # the DNN you configure here should be configured in "dnns"
+  # follows the SmfInfo datatype from 3GPP TS 29.510
+  smf_info:
+    sNssaiSmfInfoList:
+      - sNssai: *slice1
+        dnnSmfInfoList:
+          - dnn: "default"
+  local_subscription_infos:
+    - single_nssai: *slice1
+      dnn: "default"
+      qos_profile:
+        5qi: 5
+        session_ambr_ul: "50Mbps"
+        session_ambr_dl: "100Mbps"
+
+upf:
+  support_features:
+    enable_bpf_datapath: no    # If "on": BPF is used as datapath else simpleswitch is used, DEFAULT= off
+    enable_snat: yes           # If "on": Source natting is done for UE, DEFAULT= off
+  remote_n6_gw: localhost      # Dummy host since simple-switch does not use N6 GW
+  upf_info:
+    sNssaiUpfInfoList:
+      - sNssai: *slice1
+        dnnUpfInfoList:
+          - dnn: "default"
+
+## DNN configuration
+dnns:
+  - dnn: "default"
+    pdu_session_type: "IPV4"
+    ipv4_subnet: "12.2.1.0/25"

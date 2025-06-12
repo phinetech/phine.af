@@ -15,7 +15,7 @@ namespace core {
 
 SubscriptionManager::SubscriptionManager() {
     // Setup logger
-    initializeLogger();
+    initializeLogger(spdlog::level::debug);
     
     logger_->info("Subscription Manager created");
 }

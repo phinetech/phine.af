@@ -1,6 +1,6 @@
 pcf_handler:
   # PCF connection details
-  pcf_base_url: "http://pcf:80/npcf-policyauthorization/v1"
+  pcf_base_url: "http://192.168.70.139:8080/npcf-policyauthorization/v1"
   use_tls: false
   api_version: "v1"
   

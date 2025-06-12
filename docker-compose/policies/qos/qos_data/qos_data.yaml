@@ -1,0 +1,300 @@
+###############################################################
+#                            NON-GBR                          #
+###############################################################
+non-gbr-qos-5qi-5:
+  5qi: 5
+  arp:
+    priorityLevel: 8
+    preemptCap: NOT_PREEMPT
+    preemptVuln: PREEMPTABLE
+  priorityLevel: 10
+
+non-gbr-qos-5qi-6:
+  5qi: 6
+  arp:
+    priorityLevel: 9
+    preemptCap: NOT_PREEMPT
+    preemptVuln: PREEMPTABLE
+  priorityLevel: 60
+
+non-gbr-qos-5qi-7:
+  5qi: 7
+  arp:
+    priorityLevel: 9
+    preemptCap: NOT_PREEMPT
+    preemptVuln: PREEMPTABLE
+  priorityLevel: 70
+
+non-gbr-qos-5qi-8:
+  5qi: 8
+  arp:
+    priorityLevel: 9
+    preemptCap: NOT_PREEMPT
+    preemptVuln: PREEMPTABLE
+  priorityLevel: 80
+
+non-gbr-qos-5qi-9:
+  5qi: 9
+  arp:
+    priorityLevel: 7
+    preemptCap: NOT_PREEMPT
+    preemptVuln: PREEMPTABLE
+  priorityLevel: 90
+
+non-gbr-qos-5qi-69:
+  5qi: 69
+  arp:
+    priorityLevel: 7
+    preemptCap: NOT_PREEMPT
+    preemptVuln: PREEMPTABLE
+  priorityLevel: 5
+
+non-gbr-qos-5qi-70:
+  5qi: 70
+  arp:
+    priorityLevel: 7
+    preemptCap: NOT_PREEMPT
+    preemptVuln: PREEMPTABLE
+  priorityLevel: 55
+
+non-gbr-qos-5qi-79:
+  5qi: 79
+  arp:
+    priorityLevel: 7
+    preemptCap: NOT_PREEMPT
+    preemptVuln: PREEMPTABLE
+  priorityLevel: 65
+
+non-gbr-qos-5qi-80:
+  5qi: 80
+  arp:
+    priorityLevel: 7
+    preemptCap: NOT_PREEMPT
+    preemptVuln: PREEMPTABLE
+  priorityLevel: 68
+
+
+###############################################################
+#                            GBR                              #
+###############################################################
+gbr-qos-5qi-1:
+  5qi: 1
+  maxbrUl: 3 Mbps
+  maxbrDl: 3 Mbps
+  gbrUl: 512 Kbps
+  gbrDl: 512 Kbps
+  arp:
+    priorityLevel: 1
+    preemptCap: MAY_PREEMPT
+    preemptVuln: NOT_PREEMPTABLE
+  priorityLevel: 20
+  
+gbr-qos-5qi-2:
+  5qi: 2
+  maxbrUl: 25 Mbps
+  maxbrDl: 25 Mbps
+  gbrUl: 8 Mbps
+  gbrDl: 8 Mbps
+  arp:
+    priorityLevel: 2
+    preemptCap: MAY_PREEMPT
+    preemptVuln: NOT_PREEMPTABLE
+  priorityLevel: 40
+  
+gbr-qos-5qi-3:
+  5qi: 3
+  maxbrUl: 100 Mbps
+  maxbrDl: 100 Mbps
+  gbrUl: 3 Mbps
+  gbrDl: 25 Mbps
+  arp:
+    priorityLevel: 2
+    preemptCap: MAY_PREEMPT
+    preemptVuln: NOT_PREEMPTABLE
+  priorityLevel: 30 
+
+gbr-qos-5qi-4:
+  5qi: 4
+  maxbrUl: 300 Mbps
+  maxbrDl: 300 Mbps
+  gbrUl: 2 Mbps
+  gbrDl: 10 Mbps
+  arp:
+    priorityLevel: 3
+    preemptCap: MAY_PREEMPT
+    preemptVuln: NOT_PREEMPTABLE
+  priorityLevel: 50
+
+gbr-qos-5qi-65:
+  5qi: 65
+  maxbrUl: 50 Mbps
+  maxbrDl: 50 Mbps
+  gbrUl: 10 Mbps
+  gbrDl: 10 Mbps
+  arp:
+    priorityLevel: 3
+    preemptCap: MAY_PREEMPT
+    preemptVuln: NOT_PREEMPTABLE
+  priorityLevel: 7
+
+gbr-qos-5qi-66:
+  5qi: 66
+  maxbrUl: 5 Mbps
+  maxbrDl: 5 Mbps
+  gbrUl: 2 Mbps
+  gbrDl: 2 Mbps
+  arp:
+    priorityLevel: 4
+    preemptCap: MAY_PREEMPT
+    preemptVuln: NOT_PREEMPTABLE
+  priorityLevel: 20
+
+gbr-qos-5qi-67:
+  5qi: 67
+  maxbrUl: 100 Mbps
+  maxbrDl: 100 Mbps
+  gbrUl: 20 Mbps
+  gbrDl: 20 Mbps
+  arp:
+    priorityLevel: 5
+    preemptCap: MAY_PREEMPT
+    preemptVuln: NOT_PREEMPTABLE
+  priorityLevel: 15
+
+gbr-qos-5qi-75:
+  5qi: 75
+  maxbrUl: 200 Mbps
+  maxbrDl: 200 Mbps
+  gbrUl: 50 Mbps
+  gbrDl: 50 Mbps
+  arp:
+    priorityLevel: 6
+    preemptCap: MAY_PREEMPT
+    preemptVuln: NOT_PREEMPTABLE
+  priorityLevel: 56
+
+gbr-qos-5qi-71:
+  5qi: 71
+  maxbrUl: 10 Mbps
+  maxbrDl: 10 Mbps
+  gbrUl: 2 Mbps
+  gbrDl: 2 Mbps
+  arp:
+    priorityLevel: 6
+    preemptCap: MAY_PREEMPT
+    preemptVuln: NOT_PREEMPTABLE
+  priorityLevel: 56
+
+gbr-qos-5qi-72:
+  5qi: 72
+  maxbrUl: 50 Mbps
+  maxbrDl: 50 Mbps
+  gbrUl: 10 Mbps
+  gbrDl: 10 Mbps
+  arp:
+    priorityLevel: 5
+    preemptCap: MAY_PREEMPT
+    preemptVuln: NOT_PREEMPTABLE
+  priorityLevel: 56
+
+gbr-qos-5qi-73:
+  5qi: 73
+  maxbrUl: 100 Mbps
+  maxbrDl: 100 Mbps
+  gbrUl: 20 Mbps
+  gbrDl: 20 Mbps
+  arp:
+    priorityLevel: 4
+    preemptCap: MAY_PREEMPT
+    preemptVuln: NOT_PREEMPTABLE
+  priorityLevel: 56
+
+gbr-qos-5qi-74:
+  5qi: 74
+  maxbrUl: 500 Mbps
+  maxbrDl: 500 Mbps
+  gbrUl: 100 Mbps
+  gbrDl: 100 Mbps
+  arp:
+    priorityLevel: 3
+    preemptCap: MAY_PREEMPT
+    preemptVuln: NOT_PREEMPTABLE
+  priorityLevel: 56
+
+gbr-qos-5qi-76:
+  5qi: 76
+  maxbrUl: 10 Mbps
+  maxbrDl: 10 Mbps
+  gbrUl: 5 Mbps
+  gbrDl: 5 Mbps
+  arp:
+    priorityLevel: 6
+    preemptCap: MAY_PREEMPT
+    preemptVuln: NOT_PREEMPTABLE
+  priorityLevel: 56
+
+
+###############################################################
+#                    DELAY-CRITICAL-GBR                       #
+###############################################################
+delay-critical_gbr-qos-5qi-82:
+  5qi: 82
+  maxbrUl: 50 Mbps
+  maxbrDl: 50 Mbps
+  gbrUl: 10 Mbps
+  gbrDl: 10 Mbps
+  arp:
+    priorityLevel: 1
+    preemptCap: MAY_PREEMPT
+    preemptVuln: NOT_PREEMPTABLE
+  priorityLevel: 19
+
+delay-critical_gbr-qos-5qi-83:
+  5qi: 83
+  maxbrUl: 75 Mbps
+  maxbrDl: 75 Mbps
+  gbrUl: 15 Mbps
+  gbrDl: 15 Mbps
+  arp:
+    priorityLevel: 2
+    preemptCap: MAY_PREEMPT
+    preemptVuln: NOT_PREEMPTABLE
+  priorityLevel: 22
+
+delay-critical_gbr-qos-5qi-84:
+  5qi: 84
+  maxbrUl: 150 Mbps
+  maxbrDl: 150 Mbps
+  gbrUl: 30 Mbps
+  gbrDl: 30 Mbps
+  arp:
+    priorityLevel: 3
+    preemptCap: MAY_PREEMPT
+    preemptVuln: NOT_PREEMPTABLE
+  priorityLevel: 24
+
+delay-critical_gbr-qos-5qi-85:
+  5qi: 85
+  maxbrUl: 200 Mbps
+  maxbrDl: 200 Mbps
+  gbrUl: 40 Mbps
+  gbrDl: 40 Mbps
+  arp:
+    priorityLevel: 4
+    preemptCap: MAY_PREEMPT
+    preemptVuln: NOT_PREEMPTABLE
+  priorityLevel: 21
+
+delay-critical_gbr-qos-5qi-86:
+  5qi: 86
+  maxbrUl: 500 Mbps
+  maxbrDl: 500 Mbps
+  gbrUl: 100 Mbps
+  gbrDl: 100 Mbps
+  arp:
+    priorityLevel: 5
+    preemptCap: MAY_PREEMPT
+    preemptVuln: NOT_PREEMPTABLE
+  priorityLevel: 18
+
+ 

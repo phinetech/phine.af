@@ -15,7 +15,7 @@ namespace core {
 
 PolicyManager::PolicyManager() {
     // Setup logger
-    initializeLogger();
+    initializeLogger(spdlog::level::debug);
     
     logger_->info("Policy Manager created");
 }
@@ -572,7 +572,9 @@ bool PolicyManager::apply_policy(QoSPolicy& policy) {
         
         // Send request to PCF Handler
         logger_->debug("Sending policy to PCF Handler: {}", payload);
-        auto response = pcf_comm->send_request("pcf_handler", msg);
+        // TODO: Get the correct PCF Handler address from orchestrator
+        // For now, using a hardcoded address for demonstration
+        auto response = pcf_comm->send_request("192.168.70.140:50055", msg);
         
         // Process response
         if (response) {

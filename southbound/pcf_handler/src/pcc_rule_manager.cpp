@@ -14,7 +14,7 @@ namespace southbound {
 
 PccRuleManager::PccRuleManager() {
     // Setup logger
-    initializeLogger();
+    initializeLogger(spdlog::level::debug);
     
     logger_->info("PCC Rule Manager created");
 }

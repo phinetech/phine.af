@@ -30,7 +30,7 @@ private:
 AfOrchestrator::AfOrchestrator(const std::string& config_path)
     : AfComponent("af_orchestrator"), config_path_(config_path) {
     // Setup logger
-    initializeLogger();
+    initializeLogger(spdlog::level::debug);
     
     logger_->info("Initializing AF Core Orchestrator");
     
@@ -109,6 +109,9 @@ void AfOrchestrator::initialize_communication() {
         
         // PCF interface
         std::unordered_map<std::string, std::string> pcf_comm_config;
+        pcf_comm_config["client_only"] = "true";
+        pcf_comm_config["server_address"] = "192.168.70.140";  // Example address
+        pcf_comm_config["server_port"] = "50052";  // Example port for PCF
         auto pcf_comm = af::communication::CommunicationFactory::create_service(
             "grpc", "af_core_pcf", pcf_comm_config);
         

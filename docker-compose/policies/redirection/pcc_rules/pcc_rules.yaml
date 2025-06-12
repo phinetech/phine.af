@@ -1,0 +1,6 @@
+redirection-rule:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+  precedence: 10
+  refTcData:
+    - redirection-scenario

@@ -228,21 +228,21 @@ This architecture enables the AF to effectively bridge between applications and 
 
 ## Testing Northbound Endpoints
 
-We will use grpcurl running inside a docker container to simplify setup. Assuming the IP address for the af_core is `192.168.73.131`
+We will use grpcurl running inside a docker container to simplify setup. Assuming the IP address for the af_core is `192.168.73.131`. The UERANSIM in the docker compose sets up a UE that has a static UE IP of 12.1.1.10.
 
 ```bash
-docker run --network host -v ./common/protos:/var/protos/ fullstorydev/grpcurl -plaintext \
+docker run --rm --network host -v ./common/protos:/var/protos/ fullstorydev/grpcurl -plaintext \
   -proto message.proto \
   -import-path /var/protos \
   -d '{
     "message_type": "qos_request",
     "correlation_id": "12345",
-    "payload": "'$(echo '{"ue_ipv4":"12.0.0.2"}' | base64)'",
+    "payload": "'$(echo '{"ue_ipv4":"12.1.1.4"}' | base64)'",
     "metadata": {
       "source": "command_line",
       "priority": "high"
     }
   }' \
-  192.168.73.131:50051 \
+  192.168.70.141:50051 \
   af.proto.InternalCommunication/SendMessage
 ```

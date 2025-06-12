@@ -1,0 +1,8 @@
+redirection-scenario:
+  redirectInfo:
+    redirectEnabled: true
+    redirectAddressType: URL
+    redirectServerAddress: facebook.com
+  routeToLocs:
+    - dnai: access
+    - dnai: internet

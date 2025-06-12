@@ -1,0 +1,574 @@
+openapi: 3.0.1
+info:
+  title: PCC Rule, QoS Data, Traffic Control Data and Policy Decisions API
+  version: 1.0.0
+paths:
+  /pccRules:
+    get:
+      summary: List all PCC rules
+      tags: 
+        - PCC Rules
+      responses:
+        '200':
+          description: A list of PCC rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PccRule'
+  /pccRule:
+    post:
+      summary: Create a new PCC rule
+      tags: 
+        - PCC Rules
+      requestBody:
+        description: PCC rule to create
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PccRule'
+      responses:
+        '201':
+          description: PCC rule created successfully
+  /pccRule/{pccRuleId}:
+    get:
+      summary: Get a PCC rule by ID
+      tags: 
+        - PCC Rules
+      parameters:
+        - name: pccRuleId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A single PCC rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PccRule'
+    put:
+      summary: Update a PCC rule by ID
+      tags: 
+        - PCC Rules
+      parameters:
+        - name: pccRuleId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: PCC rule to update
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PccRule'
+      responses:
+        '200':
+          description: PCC rule updated successfully
+    delete:
+      summary: Delete a PCC rule by ID
+      tags: 
+        - PCC Rules
+      parameters:
+        - name: pccRuleId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: PCC rule deleted successfully
+
+  /qosData:
+    get:
+      summary: List all QoS data
+      tags: 
+        - QOS Rules
+      responses:
+        '200':
+          description: A list of QoS data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/QosData'
+    post:
+      summary: Create a new QoS data entry
+      tags: 
+        - QOS Rules
+      requestBody:
+        description: QoS data to create
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QosData'
+      responses:
+        '201':
+          description: QoS data created successfully
+  /qosData/{qosId}:
+    get:
+      summary: Get QoS data by ID
+      tags: 
+        - QOS Rules
+      parameters:
+        - name: qosId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A single QoS data entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QosData'
+    put:
+      summary: Update QoS data by ID
+      tags: 
+        - QOS Rules
+      parameters:
+        - name: qosId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: QoS data to update
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QosData'
+      responses:
+        '200':
+          description: QoS data updated successfully
+    delete:
+      summary: Delete QoS data by ID
+      tags: 
+        - QOS Rules
+      parameters:
+        - name: qosId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: QoS data deleted successfully
+
+  /trafficControlData:
+    get:
+      summary: List all traffic control data
+      tags: 
+        - Traffic Control Data
+      responses:
+        '200':
+          description: A list of traffic control data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TrafficControlData'
+    post:
+      summary: Create a new traffic control data entry
+      tags: 
+        - Traffic Control Data
+      requestBody:
+        description: Traffic control data to create
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrafficControlData'
+      responses:
+        '201':
+          description: Traffic control data created successfully
+  /trafficControlData/{tcId}:
+    get:
+      summary: Get traffic control data by ID
+      tags: 
+        - Traffic Control Data
+      parameters:
+        - name: tcId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A single traffic control data entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrafficControlData'
+    put:
+      summary: Update traffic control data by ID
+      tags: 
+        - Traffic Control Data
+      parameters:
+        - name: tcId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: Traffic control data to update
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrafficControlData'
+      responses:
+        '200':
+          description: Traffic control data updated successfully
+    delete:
+      summary: Delete traffic control data by ID
+      tags: 
+        - Traffic Control Data
+      parameters:
+        - name: tcId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Traffic control data deleted successfully
+
+  /supiPolicyDecisions:
+    get:
+      summary: List all SUPI policy decisions
+      tags: 
+        - Supi Policy Decisions
+      responses:
+        '200':
+          description: A list of SUPI policy decisions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SupiPolicyDecision'
+  /supiPolicyDecision:
+    post:
+      summary: Create a new SUPI policy decision
+      tags: 
+        - Supi Policy Decisions
+      requestBody:
+        description: SUPI policy decision to create
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupiPolicyDecision'
+      responses:
+        '201':
+          description: SUPI policy decision created successfully
+  /supiPolicyDecision/{supi}:
+    get:
+      summary: Get a SUPI policy decision by SUPI
+      tags: 
+        - Supi Policy Decisions
+      parameters:
+        - name: supi
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A single SUPI policy decision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupiPolicyDecision'
+    put:
+      summary: Update a SUPI policy decision by SUPI
+      tags: 
+        - Supi Policy Decisions
+      parameters:
+        - name: supi
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: SUPI policy decision to update
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupiPolicyDecision'
+      responses:
+        '200':
+          description: SUPI policy decision updated successfully
+    delete:
+      summary: Delete a SUPI policy decision by SUPI
+      tags: 
+        - Supi Policy Decisions
+      parameters:
+        - name: supi
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: SUPI policy decision deleted successfully
+
+  /dnnPolicyDecisions:
+    get:
+      summary: List all DNN policy decisions
+      tags: 
+        - DNN Policy Decisions
+      responses:
+        '200':
+          description: A list of DNN policy decisions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DnnPolicyDecision'
+  /dnnPolicyDecision:
+    post:
+      summary: Create a new DNN policy decision
+      tags: 
+        - DNN Policy Decisions
+      requestBody:
+        description: DNN policy decision to create
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DnnPolicyDecision'
+      responses:
+        '201':
+          description: DNN policy decision created successfully
+  /dnnPolicyDecision/{dnn}:
+    get:
+      summary: Get a DNN policy decision by DNN
+      tags: 
+        - DNN Policy Decisions
+      parameters:
+        - name: dnn
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A single DNN policy decision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DnnPolicyDecision'
+    put:
+      summary: Update a DNN policy decision by DNN
+      tags: 
+        - DNN Policy Decisions
+      parameters:
+        - name: dnn
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: DNN policy decision to update
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DnnPolicyDecision'
+      responses:
+        '200':
+          description: DNN policy decision updated successfully
+    delete:
+      summary: Delete a DNN policy decision by DNN
+      tags: 
+        - DNN Policy Decisions
+      parameters:
+        - name: dnn
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: DNN policy decision deleted successfully
+
+  /slicePolicyDecisions:
+    get:
+      summary: List all slice policy decisions
+      tags: 
+        - Slice Policy Decisions
+      responses:
+        '200':
+          description: A list of slice policy decisions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SlicePolicyDecision'
+  /slicePolicyDecision:
+    post:
+      summary: Create a new slice policy decision
+      tags: 
+        - Slice Policy Decisions
+      requestBody:
+        description: Slice policy decision to create
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SlicePolicyDecision'
+      responses:
+        '201':
+          description: Slice policy decision created successfully
+    get:
+      summary: Get a slice policy decision by SNSSAI
+      tags: 
+        - Slice Policy Decisions
+      parameters:
+        - name: sst
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: sd
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A single slice policy decision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlicePolicyDecision'
+    put:
+      summary: Update a slice policy decision by SNSSAI
+      tags: 
+        - Slice Policy Decisions
+      parameters:
+        - name: sst
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: sd
+          in: query
+          required: false
+          schema:
+            type: string
+      requestBody:
+        description: Slice policy decision to update
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SlicePolicyDecision'
+      responses:
+        '200':
+          description: Slice policy decision updated successfully
+    delete:
+      summary: Delete a slice policy decision by SNSSAI
+      tags: 
+        - Slice Policy Decisions
+      parameters:
+        - name: sst
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: sd
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Slice policy decision deleted successfully
+
+  /defaultDecision:
+    get:
+      summary: Get the default policy decision
+      tags: 
+        - Default Policy Decisions
+      responses:
+        '200':
+          description: The default policy decision
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+    put:
+      summary: Update the default policy decision
+      tags: 
+        - Default Policy Decisions
+      requestBody:
+        description: Default policy decision to update
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: string
+      responses:
+        '200':
+          description: Default policy decision updated successfully
+components:
+  schemas:
+    # Get the referenced files from https://forge.3gpp.org/rep/all/5G_APIs
+    PccRule:
+      $ref: 'TS29512_Npcf_SMPolicyControl.yaml#/components/schemas/PccRule'
+    QosData:
+      $ref: 'TS29512_Npcf_SMPolicyControl.yaml#/components/schemas/QosData'
+    TrafficControlData:
+      $ref: 'TS29512_Npcf_SMPolicyControl.yaml#/components/schemas/TrafficControlData'
+    SupiPolicyDecision:
+      type: object
+      properties:
+        supi:
+          type: string
+        pccRuleIds:
+          type: array
+          items:
+            type: string
+    DnnPolicyDecision:
+      type: object
+      properties:
+        dnn:
+          type: string
+        pccRuleIds:
+          type: array
+          items:
+            type: string
+    SlicePolicyDecision:
+      type: object
+      properties:
+        snssai:
+          type: object
+          properties:
+            sst:
+              type: integer
+            sd:
+              type: string
+        pccRuleIds:
+          type: array
+          items:
+            type: string

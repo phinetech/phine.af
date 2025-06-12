@@ -7,7 +7,7 @@ namespace af::common {
 AfComponent::AfComponent(const std::string& name)
     : name_(name), running_(false), status_("INITIALIZED") {
     // Initialize the logger with the component name
-    initializeLogger();
+    initializeLogger(spdlog::level::debug);
     
     logger_->info("Component '{}' created", name_);
 }

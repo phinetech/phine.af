@@ -1,0 +1,4 @@
+decision_supi1:
+  supi_imsi: "208950000000031"
+  pcc_rules: 
+    - redirection-rule

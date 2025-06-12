@@ -16,7 +16,7 @@ using namespace nghttp2::asio_http2::server;
 
 ApiAdapter::ApiAdapter(const std::string& config_path) 
     : AfComponent("api_adapter") {
-    initializeLogger();
+    initializeLogger(spdlog::level::debug);
     
     logger_->info("Initializing API Adapter");
     

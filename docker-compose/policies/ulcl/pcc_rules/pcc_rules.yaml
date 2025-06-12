@@ -1,0 +1,20 @@
+internet-rule:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+  precedence: 10
+  refTcData:
+    - internet-scenario
+
+edge-rule-restricted:
+  flowInfos:
+    - flowDescription: permit out ip from 192.168.76.160 to assigned
+  precedence: 9
+  refTcData:
+    - edge-scenario
+
+edge-rule-all:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+  precedence: 10
+  refTcData:
+    - edge-scenario

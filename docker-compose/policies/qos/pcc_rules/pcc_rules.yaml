@@ -1,0 +1,227 @@
+#######################################################################
+# Non-GBR QoS Rules
+#######################################################################
+non-gbr-rule-5qi-5:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 20
+  refQosData:
+    - non-gbr-qos-5qi-5
+
+non-gbr-rule-5qi-6:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 21
+  refQosData:
+    - non-gbr-qos-5qi-6
+
+non-gbr-rule-5qi-7:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 22
+  refQosData:
+    - non-gbr-qos-5qi-7
+
+non-gbr-rule-5qi-8:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 23
+  refQosData:
+    - non-gbr-qos-5qi-8
+
+non-gbr-rule-5qi-9:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 24
+  refQosData:
+    - non-gbr-qos-5qi-9
+    
+non-gbr-rule-5qi-69:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 25
+  refQosData:
+    - non-gbr-qos-5qi-69
+
+non-gbr-rule-5qi-70:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 26
+  refQosData:
+    - non-gbr-qos-5qi-70
+
+non-gbr-rule-5qi-79:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 27
+  refQosData:
+    - non-gbr-qos-5qi-79
+
+non-gbr-rule-5qi-80:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 28
+  refQosData:
+    - non-gbr-qos-5qi-80
+
+
+#######################################################################
+# GBR QoS Rules
+#######################################################################
+
+gbr-rule-5qi-1:
+  flowInfos:
+    - flowDescription: permit out ip from any to any
+      packetFilterUsage: true
+  precedence: 7
+  refQosData:
+    - gbr-qos-5qi-1
+
+gbr-rule-5qi-2:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 8
+  refQosData:
+    - gbr-qos-5qi-2
+
+gbr-rule-5qi-3:
+  flowInfos:
+ #  - flowDescription: permit out ip from any to assigned
+    - flowDescription: permit out ip from any to any
+      packetFilterUsage: true
+  precedence: 9
+  refQosData:
+    - gbr-qos-5qi-3
+gbr-rule-5qi-4:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 10
+  refQosData:
+    - gbr-qos-5qi-4
+
+gbr-rule-5qi-65:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 11
+  refQosData:
+    - gbr-qos-5qi-65
+
+gbr-rule-5qi-66:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 12
+  refQosData:
+    - gbr-qos-5qi-66
+
+gbr-rule-5qi-67:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 13
+  refQosData:
+    - gbr-qos-5qi-67
+
+gbr-rule-5qi-75:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 14
+  refQosData:
+    - gbr-qos-5qi-75
+
+gbr-rule-5qi-71:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 15
+  refQosData:
+    - gbr-qos-5qi-71
+
+gbr-rule-5qi-72:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 16
+  refQosData:
+    - gbr-qos-5qi-72
+
+gbr-rule-5qi-73:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 17
+  refQosData:
+    - gbr-qos-5qi-73
+
+gbr-rule-5qi-74:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 18
+  refQosData:
+    - gbr-qos-5qi-74
+
+gbr-rule-5qi-76:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 19
+  refQosData:
+    - gbr-qos-5qi-76
+
+#######################################################################
+# Delay Critical GBR QoS Rules
+#######################################################################
+delay-critical-gbr-rule-5qi-82:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 2
+  refQosData:
+    - delay-critical-gbr-qos-5qi-82
+
+delay-critical-gbr-rule-5qi-83:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 3
+  refQosData:
+    - delay-critical-gbr-qos-5qi-83
+
+delay-critical-gbr-rule-5qi-84:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 4
+  refQosData:
+    - delay-critical-gbr-qos-5qi-84
+
+delay-critical-gbr-rule-5qi-85:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 5
+  refQosData:
+    - delay-critical-gbr-qos-5qi-85
+
+delay-critical-gbr-rule-5qi-86:
+  flowInfos:
+    - flowDescription: permit out ip from any to assigned
+      packetFilterUsage: true
+  precedence: 6
+  refQosData:
+    - delay-critical-gbr-qos-5qi-86
+    

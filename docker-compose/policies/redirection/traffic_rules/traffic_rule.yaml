@@ -1,0 +1,9 @@
+steering-scenario-primary:
+  routeToLocs:
+    - dnai: access
+    - dnai: internet-primary
+
+steering-scenario-secondary:
+  routeToLocs:
+    - dnai: access
+    - dnai: internet-secondary
