@@ -7,3 +7,6 @@
 [submodule "af_core/common"]
 	path = af_core/common
 	url = https://github.com/hub-phine-tech/oai-cn5g-common.git
+[submodule "southbound/oai-cn5g-common-src"]
+	path = southbound/oai-cn5g-common-src
+	url = https://gitlab.eurecom.fr/oai/cn5g/oai-cn5g-common-src.git
