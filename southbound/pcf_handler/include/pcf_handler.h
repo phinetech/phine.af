@@ -20,6 +20,10 @@
 #include "pcc_rule_manager.h"
 #include "pcf_client_wrapper.h"
 
+#include "AppSessionContext.h"
+#include "AppSessionContextReqData.h"
+#include "MediaComponent.h"
+
 namespace af {
 namespace southbound {
 

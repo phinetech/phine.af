@@ -19,6 +19,7 @@ source "${PROJECT_ROOT}/common/build/scripts/build_helper.nghttp2"
 source "${PROJECT_ROOT}/common/build/scripts/build_helper.nlohmann"
 source "${PROJECT_ROOT}/common/build/scripts/build_helper.spdlog"
 source "${PROJECT_ROOT}/common/build/scripts/build_helper.yamlcpp"
+source "${PROJECT_ROOT}/common/build/scripts/build_helper.fmt"
 
 # Determine the OS distribution
 OS_DISTRO=$(grep "^ID=" /etc/os-release | sed "s/ID=//" | sed "s/\"//g")
@@ -227,7 +228,9 @@ check_install_af_deps() {
     install_nghttp2_asio_from_git $force $debug
     ret=$?; [[ $ret -ne 0 ]] && return $ret
 
-
+    install_fmt_from_git $force $debug
+    ret=$?; [[ $ret -ne 0 ]] && return $ret
+    
     $SUDO ldconfig
     
     echo "All dependencies installed successfully"

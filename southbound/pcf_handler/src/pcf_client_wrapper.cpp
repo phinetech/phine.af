@@ -7,6 +7,7 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <string>
+#include <thread>
 #include <chrono>
 #include <regex>
 #include <boost/asio/connect.hpp>

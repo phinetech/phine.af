@@ -10,6 +10,7 @@
 #include <nlohmann/json.hpp>
 #include "../common/communication/include/communication_factory.h"
 
+using namespace oai::model::pcf;
 namespace af {
 namespace southbound {
 
@@ -226,19 +227,24 @@ af::communication::MessagePtr PcfHandler::create_app_session(
         
         // Prepare application session context
         nlohmann::json app_session_context;
-        
+
+        oai::model::pcf::AppSessionContext app_session = {};
+        oai::model::pcf::AppSessionContextReqData app_session_req_data = {};
         // Required fields
         if (request_data.contains("af_app_id")) {
             app_session_context["afAppId"] = request_data["af_app_id"];
+            app_session_req_data.setAfAppId(request_data["af_app_id"]);
         }
         
         // Add UE information if available
         if (request_data.contains("ue_ipv4")) {
             nlohmann::json ue_info;
             ue_info["ipv4Addr"] = request_data["ue_ipv4"];
-            
+            app_session_req_data.setUeIpv4(request_data["ue_ipv4"]);
+
             if (request_data.contains("ue_ipv6")) {
                 ue_info["ipv6Addr"] = request_data["ue_ipv6"];
+                app_session_req_data.setUeIpv6(request_data["ue_ipv6"]);
             }
             
             app_session_context["ueIpv4"] = request_data["ue_ipv4"];
@@ -253,37 +259,24 @@ af::communication::MessagePtr PcfHandler::create_app_session(
             request_data["media_components"].is_array()) {
             
             nlohmann::json media_components;
-            
+            std::map<std::string, oai::model::pcf::MediaComponent> media_component_map;
+
             for (const auto& component : request_data["media_components"]) {
+                oai::model::pcf::MediaComponent media_component_;
+        
                 std::string media_component_id = component["media_component_id"];
+                media_component_.setAfAppId(request_data["af_app_id"]);
                 
                 nlohmann::json media_component;
                 
                 // Set media type
                 if (component.contains("media_type")) {
                     media_component["medType"] = component["media_type"];
+                    media_component_.setMedType(component["media_type"]);
                 }
                 
-                // Set flow information if available
-                if (component.contains("flows") && component["flows"].is_array()) {
-                    nlohmann::json flows = nlohmann::json::array();
-                    
-                    for (const auto& flow : component["flows"]) {
-                        nlohmann::json flow_info;
-                        
-                        if (flow.contains("flow_id")) {
-                            flow_info["flowId"] = flow["flow_id"];
-                        }
-                        
-                        if (flow.contains("flow_descriptions") && flow["flow_descriptions"].is_array()) {
-                            flow_info["flowDescriptions"] = flow["flow_descriptions"];
-                        }
-                        
-                        flows.push_back(flow_info);
-                    }
-                    
-                    media_component["fDescs"] = flows;
-                }
+                // TODO: handle flow infomation
+        
                 
                 // Set QoS information if available
                 if (component.contains("qos_info")) {
@@ -291,73 +284,52 @@ af::communication::MessagePtr PcfHandler::create_app_session(
                     
                     if (component["qos_info"].contains("max_bw_ul")) {
                         qos_info["maxbrUl"] = component["qos_info"]["max_bw_ul"];
+                        media_component_.setMaxSuppBwUl(component["qos_info"]["max_bw_ul"]);
                     }
                     
                     if (component["qos_info"].contains("max_bw_dl")) {
                         qos_info["maxbrDl"] = component["qos_info"]["max_bw_dl"];
+                        media_component_.setMaxSuppBwDl(component["qos_info"]["max_bw_dl"]);
                     }
                     
                     if (component["qos_info"].contains("min_bw_ul")) {
                         qos_info["minbrUl"] = component["qos_info"]["min_bw_ul"];
+                        media_component_.setMinDesBwUl(component["qos_info"]["min_bw_ul"]);
                     }
                     
                     if (component["qos_info"].contains("min_bw_dl")) {
                         qos_info["minbrDl"] = component["qos_info"]["min_bw_dl"];
+                        media_component_.setMinDesBwDl(component["qos_info"]["min_bw_dl"]);
                     }
                     
-                    media_component["medQoS"] = qos_info;
                 }
                 
                 media_components[media_component_id] = media_component;
+                media_component_map[media_component_id] = media_component_;
             }
             
             app_session_context["medComponents"] = media_components;
+            app_session_req_data.setMedComponents(media_component_map);
         }
         
-        // Add subscription information if available
-        if (request_data.contains("subscription_info") && 
-            request_data["subscription_info"].is_object()) {
-            
-            nlohmann::json subscription_info;
-            
-            if (request_data["subscription_info"].contains("notification_uri")) {
-                subscription_info["notifUri"] = 
-                    request_data["subscription_info"]["notification_uri"];
-            }
-            
-            if (request_data["subscription_info"].contains("events") && 
-                request_data["subscription_info"]["events"].is_array()) {
-                
-                nlohmann::json events = nlohmann::json::array();
-                
-                for (const auto& event : request_data["subscription_info"]["events"]) {
-                    nlohmann::json event_info;
-                    
-                    if (event.contains("event")) {
-                        event_info["event"] = event["event"];
-                    }
-                    
-                    if (event.contains("notification_method")) {
-                        event_info["notifMethod"] = event["notification_method"];
-                    }
-                    
-                    events.push_back(event_info);
-                }
-                
-                subscription_info["events"] = events;
-            }
-            
-            app_session_context["evSubsc"] = subscription_info;
-        }
+        // TODO: handle event subscription information
         
         // Add additional parameters if needed
         if (request_data.contains("supp_features")) {
             app_session_context["suppFeat"] = request_data["supp_features"];
+            app_session_req_data.setSuppFeat(request_data["supp_features"]);
         }
+
+        // Set the application session context
+        app_session.setAscReqData(app_session_req_data);
         
+        nlohmann::json json_data;
+        to_json(json_data, app_session);
+
         // Call PCF client to create the app session
         logger_->debug("Sending app session creation request to PCF: {}", app_session_context.dump());
-        auto pcf_response = pcf_client_->create_app_session(app_session_context);
+        logger_->debug("App session request data: {}", json_data);
+        auto pcf_response = pcf_client_->create_app_session(json_data);
         
         if (pcf_response.first) {
             // Success

@@ -21,7 +21,7 @@ services:
                 ipv4_address: 192.168.70.131
     oai-udr:
         container_name: "oai-udr"
-        image: oaisoftwarealliance/oai-udr:v2.1.0
+        image: oaisoftwarealliance/oai-udr:v2.1.9
         expose:
             - 80/tcp
             - 8080/tcp
@@ -37,7 +37,7 @@ services:
                 ipv4_address: 192.168.70.136
     oai-udm:
         container_name: "oai-udm"
-        image: oaisoftwarealliance/oai-udm:v2.1.0
+        image: oaisoftwarealliance/oai-udm:develop
         expose:
             - 80/tcp
             - 8080/tcp
@@ -52,7 +52,7 @@ services:
                 ipv4_address: 192.168.70.137
     oai-ausf:
         container_name: "oai-ausf"
-        image: oaisoftwarealliance/oai-ausf:v2.1.0
+        image: oaisoftwarealliance/oai-ausf:v2.1.9
         expose:
             - 80/tcp
             - 8080/tcp
@@ -67,7 +67,7 @@ services:
                 ipv4_address: 192.168.70.138
     oai-nrf:
         container_name: "oai-nrf"
-        image: oaisoftwarealliance/oai-nrf:v2.1.0
+        image: oaisoftwarealliance/oai-nrf:develop
         expose:
             - 80/tcp
             - 8080/tcp
@@ -80,7 +80,7 @@ services:
                 ipv4_address: 192.168.70.130
     oai-amf:
         container_name: "oai-amf"
-        image: oaisoftwarealliance/oai-amf:v2.1.0
+        image: oaisoftwarealliance/oai-amf:v2.1.9
         expose:
             - 80/tcp
             - 8080/tcp
@@ -96,7 +96,10 @@ services:
                 ipv4_address: 192.168.70.132
     oai-smf:
         container_name: "oai-smf"
-        image: tariromukute/oai-smf:smpa-latest
+        # SMF starts failing on commit 0e66e168, (Merge branch 'snssai_w_wo_ox' into 'develop')
+        # image: oaisoftwarealliance/oai-smf:v2.1.9
+        # image: tariromukute/oai-smf:1b06d2bc
+        image: selfix.sboai.cs.eurecom.fr/oai-smf:ci-tmp-pr-286-c7c8fe08
         expose:
             - 80/tcp
             - 8080/tcp
@@ -130,7 +133,7 @@ services:
                 ipv4_address: 192.168.70.139
     oai-upf:
         container_name: "oai-upf"
-        image: oaisoftwarealliance/oai-upf:v2.1.0
+        image: oaisoftwarealliance/oai-upf:develop
         expose:
             - 2152/udp
             - 8805/udp
@@ -242,8 +245,13 @@ services:
         privileged: true
         init: true
         container_name: gnb
-        image: phinetech/ueransim:v3.2.6 
-        command: nr-gnb -c /home/config-gnb.yaml
+        image: tariromukute/ueransim:v3.2.7
+        command:
+            - /bin/bash
+            - -c
+            - |
+                sleep 15
+                nr-gnb -c /home/config-gnb.yaml
         volumes:
             - ./ueransim/oai-cn5g-gnb.yaml:/home/config-gnb.yaml
             - ./ueransim/oai-cn5g-ue.yaml:/home/config-ue.yaml
@@ -251,6 +259,7 @@ services:
           - oai-amf
           - oai-smf
           - oai-upf
+          - oai-udr
           - oai-ext-dn
         networks:
             public_net:
@@ -261,7 +270,7 @@ services:
         privileged: true
         init: true
         container_name: ue
-        image: phinetech/ueransim:v3.2.6 
+        image: tariromukute/ueransim:v3.2.7
         # nr-ue -c /home/config-ue.yaml
         # ping -I uesimtun0 8.8.8.8
         command:
@@ -270,7 +279,7 @@ services:
             - |
                 sleep 60
                 echo "Starting UE..."
-                # nr-ue -c /home/config-ue.yaml
+                nr-ue -c /home/config-ue.yaml
                 tail -f /dev/null
         volumes:
             - ./ueransim/oai-cn5g-gnb.yaml:/home/config-gnb.yaml

@@ -1,5 +1,5 @@
 # Base image with common settings
-FROM debian:bullseye-slim AS base
+FROM debian:bookworm-slim AS base
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV IS_DOCKERFILE=1
@@ -46,6 +46,7 @@ RUN apt-get update && \
 
 # Copy the .proto files
 COPY ./common /app/common
+COPY ./oai-cn5g-common-src /app/oai-cn5g-common-src
 COPY ./common/build/cmake /app/build/cmake/
 COPY ./pcf_handler/build/scripts /app/build/scripts/
 COPY ./pcf_handler/build/cmake /app/build/cmake/
@@ -86,6 +87,7 @@ RUN ls /app/build-output/generated/ || echo "Generated headers not found"
 
 COPY ./common/ /app/common/
 # COPY ./common/build/cmake /app/build/cmake/
+COPY ./oai-cn5g-common-src /app/oai-cn5g-common-src
 COPY ./pcf_handler/build/scripts /app/build/scripts/
 COPY ./pcf_handler/build/cmake /app/build/cmake/
 COPY ./pcf_handler/src /app/src/
@@ -108,6 +110,7 @@ COPY --from=builder /usr/local/lib/libyaml-cpp* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libboost* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libssl* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libcrypto* /usr/local/lib/
+COPY --from=builder /usr/local/lib/libfmt* /usr/local/lib/
 
 # Copy only necessary runtime libraries
 COPY --from=builder /app/build-output/lib/libaf_common* /usr/local/lib/
@@ -117,6 +120,12 @@ RUN ldconfig
 
 # Copy build artifacts
 COPY --from=builder /app/build-output/bin/pcf_server /usr/local/bin/
+
+# Install minimal build dependencies
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends \
+      libssl3 \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY ./pcf_handler/config/pcf_handler.yaml /etc/oai/af/pcf_handler.yaml
 
