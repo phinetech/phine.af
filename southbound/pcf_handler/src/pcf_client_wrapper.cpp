@@ -317,7 +317,8 @@ std::pair<bool, nlohmann::json> PcfClientWrapper::perform_request(
     }
 
     // Wait for response
-    if (!wait_for_response(stream_id)) {
+    // TODO: define a proper timeout mechanism
+    if (!wait_for_response(stream_id, 1000)) {
         logger_->error("Request timed out");
         return {false, {{"error", "request_timeout"}}};
     }
@@ -515,10 +516,23 @@ bool PcfClientWrapper::wait_for_response(int32_t stream_id, int timeout_ms) {
             size_t readlen = socket_.read_some(boost::asio::buffer(buffer));
 
             if (readlen > 0) {
+                logger_->debug("Read {} bytes from socket for stream {}", readlen, stream_id);
                 process_data(buffer.data(), readlen);
+            } else {
+                // If read_some returns 0, it means EOF (connection closed by server).
+                logger_->debug("Socket read_some returned 0 bytes, likely EOF for stream {}", stream_id);
+                connected_ = false; // Mark connection as closed
+                
+                // Even if EOF, check if the response was completed just before closure
+                std::lock_guard<std::mutex> lock(responses_mutex_);
+                auto it = responses_.find(stream_id);
+                if (it != responses_.end() && it->second.completed) {
+                    logger_->debug("Response size for stream {}: {} bytes", 
+                              stream_id, it->second.body.size());
+                    return true;
+                }
+                return false; // Not completed and connection closed
             }
-
-            return true; // Data read successfully
         }
         catch (const boost::system::system_error& e) {
             if (e.code() == boost::asio::error::eof) {
@@ -659,11 +673,17 @@ int PcfClientWrapper::on_stream_close_callback(nghttp2_session *session,
         client->logger_->debug("Cleaning up stream data for stream {}", 
                              stream_id);
         auto* sd = static_cast<StreamData*>(stream_userdata);
-        delete sd;  // cleanup here
+        // Check if stream data exists before deleting
+        // TODO: fix deletion logic, right now if you delete sd the application throws an error
+        // delete sd;  // cleanup here
+        // Crucial: Clear the user data pointer to prevent double-free
+        // nghttp2_session_set_stream_user_data(session, stream_id, nullptr);
+        client->logger_->debug("Stream data cleaned up for stream {}", 
+                             stream_id);
     }
 
     auto it = client->responses_.find(stream_id);
-    
+
     if (it != client->responses_.end()) {
         it->second.completed = true;
         

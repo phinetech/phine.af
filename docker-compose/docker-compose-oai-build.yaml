@@ -98,8 +98,8 @@ services:
         container_name: "oai-smf"
         # SMF starts failing on commit 0e66e168, (Merge branch 'snssai_w_wo_ox' into 'develop')
         # image: oaisoftwarealliance/oai-smf:v2.1.9
-        # image: tariromukute/oai-smf:1b06d2bc
-        image: selfix.sboai.cs.eurecom.fr/oai-smf:ci-tmp-pr-286-c7c8fe08
+        image: tariromukute/oai-smf:smpa-latest
+        # image: oaisoftwarealliance/oai-smf:v2.1.9
         expose:
             - 80/tcp
             - 8080/tcp

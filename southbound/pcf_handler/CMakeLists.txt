@@ -23,6 +23,9 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
 
+# TODO: Set compiler options using modern approach below
+# target_compile_options(pcf_handler,$<$CONFIG:Debug:-g -O0>-Wall -Wextra)
+
 # Output directories
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -37,6 +40,7 @@ set (COMMON_DIR     ${SRC_TOP_DIR}/${MOUNTED_COMMON}/common)
 set (UTILS_DIR      ${SRC_TOP_DIR}/${MOUNTED_COMMON}/utils)
 set (3GPP_DIR      ${SRC_TOP_DIR}/${MOUNTED_COMMON}/3gpp)
 set (NAS_DIR        ${SRC_TOP_DIR}/${MOUNTED_COMMON}/nas)
+set (PCF_MODEL_DIR  ${SRC_TOP_DIR}/${MOUNTED_COMMON}/model/pcf)
 
 # Add CMake modules path
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/build/cmake)
@@ -71,6 +75,13 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/common/models
     ${CMAKE_SOURCE_DIR}/common/di/include
 )
+include_directories(${SRC_TOP_DIR}/${MOUNTED_COMMON}/3gpp)
+include_directories(${SRC_TOP_DIR}/${MOUNTED_COMMON}/utils)
+include_directories(${SRC_TOP_DIR}/${MOUNTED_COMMON}/config)
+include_directories(${SRC_TOP_DIR}/${MOUNTED_COMMON}/logger)
+include_directories(${SRC_TOP_DIR}/${MOUNTED_COMMON}/nas)
+include_directories(${SRC_TOP_DIR}/${MOUNTED_COMMON}/model/pcf)
+include_directories(${SRC_TOP_DIR}/${MOUNTED_COMMON}/model/common_model)
 include(${SRC_TOP_DIR}/${MOUNTED_COMMON}/3gpp/3gpp.cmake)
 include(${SRC_TOP_DIR}/${MOUNTED_COMMON}/http/http.cmake)
 include(${SRC_TOP_DIR}/${MOUNTED_COMMON}/logger/logger.cmake)
@@ -78,13 +89,6 @@ include(${SRC_TOP_DIR}/${MOUNTED_COMMON}/utils/utils.cmake)
 include(${SRC_TOP_DIR}/${MOUNTED_COMMON}/config/config.cmake)
 include(${SRC_TOP_DIR}/${MOUNTED_COMMON}/model/common_model/common_model.cmake)
 include(${SRC_TOP_DIR}/${MOUNTED_COMMON}/model/pcf/pcf_model.cmake)
-include_directories(${SRC_TOP_DIR}/${MOUNTED_COMMON}/3gpp)
-include_directories(${SRC_TOP_DIR}/${MOUNTED_COMMON}/utils)
-include_directories(${SRC_TOP_DIR}/${MOUNTED_COMMON}/config)
-include_directories(${SRC_TOP_DIR}/${MOUNTED_COMMON}/logger)
-include_directories(${SRC_TOP_DIR}/${MOUNTED_COMMON}/nas)
-
-
 include(${CMAKE_CURRENT_SOURCE_DIR}/build/cmake/used_common_files.cmake)
 
 # Components to build
@@ -94,6 +98,7 @@ ADD_SUBDIRECTORY(${LOGGER_DIR} ${CMAKE_CURRENT_BINARY_DIR}/oai-logger)
 ADD_SUBDIRECTORY(${UTILS_DIR} ${CMAKE_CURRENT_BINARY_DIR}/oai-utils)
 ADD_SUBDIRECTORY(${NAS_DIR} ${CMAKE_CURRENT_BINARY_DIR}/oai-nas)
 
+# TODO: ensure logger librabry is built for the PCF Handler
 
 # Create shared library
 add_library(pcf_handler STATIC ${SOURCES})
@@ -103,9 +108,8 @@ add_library(PCF STATIC ${USED_PCF_MODEL_SRC_FILES})
 add_library(COMMON_MODEL STATIC ${USED_COMMON_MODEL_SRC_FILES} ${CONFIG_SRC_FILES})
 # target_include_directories(COMMON_MODEL PUBLIC ${COMMON_MODEL_DIR})
 
-# target_include_directories(PCF PUBLIC ${PCF_MODEL_DIR})
 
-# Link dependencies
+# # Link dependencies
 target_link_libraries(pcf_handler
     PUBLIC
         CONFIG
@@ -116,6 +120,7 @@ target_link_libraries(pcf_handler
         fmt
         spdlog::spdlog
         nlohmann_json::nlohmann_json
+        # TODO: use namespaced targets for these
         yaml-cpp
         nghttp2
         Boost::system
@@ -124,8 +129,8 @@ target_link_libraries(pcf_handler
         gRPC::grpc++
         af_common_component
         af_communication
-        ssl
-        crypto
+        # ssl
+        # crypto
 )
 
 # Create executable
@@ -141,7 +146,7 @@ target_link_libraries(pcf_server
         nghttp2_asio
         ssl
         crypto
-        -Wl,-Bdynamic
+        -Wl,-Bdynamic # TODO remove this
 )
 
 # Install targets

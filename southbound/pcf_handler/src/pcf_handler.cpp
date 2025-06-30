@@ -253,6 +253,11 @@ af::communication::MessagePtr PcfHandler::create_app_session(
                 app_session_context["ueIpv6"] = request_data["ue_ipv6"];
             }
         }
+
+        // Add UE IMSI if available
+        if (request_data.contains("ue_supi")) {
+            app_session_req_data.setSupi(request_data["ue_supi"]);
+        }
         
         // Add media component information if available
         if (request_data.contains("media_components") && 
@@ -335,28 +340,31 @@ af::communication::MessagePtr PcfHandler::create_app_session(
             // Success
             auto& session_data = pcf_response.second;
             logger_->info("App session created successfully");
+
+            logger_->debug("PCF response data: {}", session_data.dump());
             
+            // TODO: handle app session response data
             // Store session information
             AppSessionInfo session_info;
-            session_info.app_session_id = session_data["appSessionId"];
-            session_info.app_session_context = session_data.dump();
+            // session_info.app_session_id = session_data["appSessionId"];
+            // session_info.app_session_context = session_data.dump();
             
-            if (request_data.contains("ue_ipv4")) {
-                session_info.ipv4_address = request_data["ue_ipv4"];
-            }
+            // if (request_data.contains("ue_ipv4")) {
+            //     session_info.ipv4_address = request_data["ue_ipv4"];
+            // }
             
-            if (request_data.contains("ue_ipv6")) {
-                session_info.ipv6_prefix = request_data["ue_ipv6"];
-            }
+            // if (request_data.contains("ue_ipv6")) {
+            //     session_info.ipv6_prefix = request_data["ue_ipv6"];
+            // }
             
-            // Extract media component IDs
-            if (session_data.contains("medComponents") && 
-                session_data["medComponents"].is_object()) {
+            // // Extract media component IDs
+            // if (session_data.contains("medComponents") && 
+            //     session_data["medComponents"].is_object()) {
                 
-                for (auto& [media_id, _] : session_data["medComponents"].items()) {
-                    session_info.media_components.push_back(media_id);
-                }
-            }
+            //     for (auto& [media_id, _] : session_data["medComponents"].items()) {
+            //         session_info.media_components.push_back(media_id);
+            //     }
+            // }
             
             session_info.active = true;
             
