@@ -13,7 +13,8 @@
 namespace af {
 namespace core {
 
-SubscriptionManager::SubscriptionManager() {
+SubscriptionManager::SubscriptionManager(std::shared_ptr<UeStateManager> ue_state_manager)
+        : ue_state_manager_(ue_state_manager) {
     // Setup logger
     initializeLogger(spdlog::level::debug);
     

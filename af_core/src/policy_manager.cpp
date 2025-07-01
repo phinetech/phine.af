@@ -13,7 +13,8 @@
 namespace af {
 namespace core {
 
-PolicyManager::PolicyManager() {
+PolicyManager::PolicyManager(std::shared_ptr<UeStateManager> ue_state_manager)
+        : ue_state_manager_(ue_state_manager) {
     // Setup logger
     initializeLogger(spdlog::level::debug);
     
@@ -335,6 +336,8 @@ bool PolicyManager::update_policy(const std::string& policy_id,
         policy = old_policy;  // Rollback to previous state
         return false;
     }
+
+    // Get the context of the policy, e.g., UE SUPI based on app_id or UE IPs
     
     // Apply the updated policy
     if (apply_policy(policy)) {

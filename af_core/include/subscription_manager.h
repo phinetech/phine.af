@@ -18,6 +18,7 @@
 #include <spdlog/spdlog.h>
 #include "../common/communication/include/message.h"
 #include <nlohmann/json.hpp>
+#include "ue_state_manager.h"
 
 namespace af {
 namespace core {
@@ -47,7 +48,7 @@ public:
     /**
      * @brief Constructor
      */
-    SubscriptionManager();
+    SubscriptionManager(std::shared_ptr<UeStateManager> ue_state_manager);
     
     /**
      * @brief Destructor
@@ -117,6 +118,9 @@ private:
     // Reference to orchestrator
     AfOrchestrator* orchestrator_;
     
+    // Reference to UE state manager for accessing UE subscription states
+    std::shared_ptr<UeStateManager> ue_state_manager_;
+
     // Map of subscription ID to subscription
     std::unordered_map<std::string, Subscription> subscriptions_;
     std::mutex subscriptions_mutex_;

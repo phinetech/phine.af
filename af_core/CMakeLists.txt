@@ -34,6 +34,7 @@ set(SOURCES
     src/request_router.cpp
     src/policy_manager.cpp
     src/subscription_manager.cpp
+    src/ue_state_manager.cpp
     src/main.cpp
 )
 

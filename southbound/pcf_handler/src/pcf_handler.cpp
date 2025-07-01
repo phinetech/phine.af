@@ -224,34 +224,21 @@ af::communication::MessagePtr PcfHandler::create_app_session(
         auto request_data = nlohmann::json::parse(payload_str);
         
         logger_->debug("App session request: {}", request_data.dump());
-        
-        // Prepare application session context
-        nlohmann::json app_session_context;
 
         oai::model::pcf::AppSessionContext app_session = {};
         oai::model::pcf::AppSessionContextReqData app_session_req_data = {};
         // Required fields
         if (request_data.contains("af_app_id")) {
-            app_session_context["afAppId"] = request_data["af_app_id"];
             app_session_req_data.setAfAppId(request_data["af_app_id"]);
         }
         
         // Add UE information if available
         if (request_data.contains("ue_ipv4")) {
-            nlohmann::json ue_info;
-            ue_info["ipv4Addr"] = request_data["ue_ipv4"];
             app_session_req_data.setUeIpv4(request_data["ue_ipv4"]);
-
-            if (request_data.contains("ue_ipv6")) {
-                ue_info["ipv6Addr"] = request_data["ue_ipv6"];
-                app_session_req_data.setUeIpv6(request_data["ue_ipv6"]);
-            }
-            
-            app_session_context["ueIpv4"] = request_data["ue_ipv4"];
-            
-            if (request_data.contains("ue_ipv6")) {
-                app_session_context["ueIpv6"] = request_data["ue_ipv6"];
-            }
+        }
+        
+        if (request_data.contains("ue_ipv6")) {
+            app_session_req_data.setUeIpv6(request_data["ue_ipv6"]);
         }
 
         // Add UE IMSI if available
@@ -285,25 +272,20 @@ af::communication::MessagePtr PcfHandler::create_app_session(
                 
                 // Set QoS information if available
                 if (component.contains("qos_info")) {
-                    nlohmann::json qos_info;
                     
                     if (component["qos_info"].contains("max_bw_ul")) {
-                        qos_info["maxbrUl"] = component["qos_info"]["max_bw_ul"];
                         media_component_.setMaxSuppBwUl(component["qos_info"]["max_bw_ul"]);
                     }
                     
                     if (component["qos_info"].contains("max_bw_dl")) {
-                        qos_info["maxbrDl"] = component["qos_info"]["max_bw_dl"];
                         media_component_.setMaxSuppBwDl(component["qos_info"]["max_bw_dl"]);
                     }
                     
                     if (component["qos_info"].contains("min_bw_ul")) {
-                        qos_info["minbrUl"] = component["qos_info"]["min_bw_ul"];
                         media_component_.setMinDesBwUl(component["qos_info"]["min_bw_ul"]);
                     }
                     
                     if (component["qos_info"].contains("min_bw_dl")) {
-                        qos_info["minbrDl"] = component["qos_info"]["min_bw_dl"];
                         media_component_.setMinDesBwDl(component["qos_info"]["min_bw_dl"]);
                     }
                     
@@ -313,7 +295,6 @@ af::communication::MessagePtr PcfHandler::create_app_session(
                 media_component_map[media_component_id] = media_component_;
             }
             
-            app_session_context["medComponents"] = media_components;
             app_session_req_data.setMedComponents(media_component_map);
         }
         
@@ -321,7 +302,6 @@ af::communication::MessagePtr PcfHandler::create_app_session(
         
         // Add additional parameters if needed
         if (request_data.contains("supp_features")) {
-            app_session_context["suppFeat"] = request_data["supp_features"];
             app_session_req_data.setSuppFeat(request_data["supp_features"]);
         }
 
@@ -332,7 +312,6 @@ af::communication::MessagePtr PcfHandler::create_app_session(
         to_json(json_data, app_session);
 
         // Call PCF client to create the app session
-        logger_->debug("Sending app session creation request to PCF: {}", app_session_context.dump());
         logger_->debug("App session request data: {}", json_data);
         auto pcf_response = pcf_client_->create_app_session(json_data);
         
@@ -347,7 +326,6 @@ af::communication::MessagePtr PcfHandler::create_app_session(
             // Store session information
             AppSessionInfo session_info;
             // session_info.app_session_id = session_data["appSessionId"];
-            // session_info.app_session_context = session_data.dump();
             
             // if (request_data.contains("ue_ipv4")) {
             //     session_info.ipv4_address = request_data["ue_ipv4"];

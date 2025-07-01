@@ -237,7 +237,7 @@ docker run --rm --network host -v ./common/protos:/var/protos/ fullstorydev/grpc
   -d '{
     "message_type": "qos_request",
     "correlation_id": "12345",
-    "payload": "'$(echo '{"ue_ipv4":"12.1.1.4"}' | base64)'",
+    "payload": "'$(echo '{"ue_ipv4":"12.1.1.4","ue_supi":"imsi-208950000000031"}' | base64)'",
     "metadata": {
       "source": "command_line",
       "priority": "high"

@@ -35,9 +35,10 @@ AfOrchestrator::AfOrchestrator(const std::string& config_path)
     logger_->info("Initializing AF Core Orchestrator");
     
     // Create components
+    ue_state_manager_ = std::make_shared<UeStateManager>();
     request_router_ = std::make_shared<RequestRouter>();
-    policy_manager_ = std::make_shared<PolicyManager>();
-    subscription_manager_ = std::make_shared<SubscriptionManager>();
+    policy_manager_ = std::make_shared<PolicyManager>(ue_state_manager_);
+    subscription_manager_ = std::make_shared<SubscriptionManager>(ue_state_manager_);
     
     // Create message handler
     message_handler_ = std::make_shared<OrchestratorMessageHandler>(this);

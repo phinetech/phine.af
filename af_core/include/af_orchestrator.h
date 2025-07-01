@@ -15,6 +15,7 @@
 #include "request_router.h"
 #include "policy_manager.h"
 #include "subscription_manager.h"
+#include "ue_state_manager.h"
 #include "../common/component/include/af_component.h"
 #include "../common/communication/include/communication_interface.h"
 
@@ -101,6 +102,7 @@ private:
     std::shared_ptr<RequestRouter> request_router_;
     std::shared_ptr<PolicyManager> policy_manager_;
     std::shared_ptr<SubscriptionManager> subscription_manager_;
+    std::shared_ptr<UeStateManager> ue_state_manager_;
     
     // Communication services for northbound and southbound interfaces
     std::unordered_map<std::string, std::shared_ptr<af::communication::CommunicationService>> communication_services_;

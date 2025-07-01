@@ -17,6 +17,7 @@
 #include <spdlog/spdlog.h>
 #include "../common/communication/include/message.h"
 #include <nlohmann/json.hpp>
+#include "ue_state_manager.h"
 
 namespace af {
 namespace core {
@@ -50,7 +51,7 @@ public:
     /**
      * @brief Constructor
      */
-    PolicyManager();
+    PolicyManager(std::shared_ptr<UeStateManager> ue_state_manager);
     
     /**
      * @brief Destructor
@@ -117,6 +118,8 @@ private:
     // Reference to orchestrator
     AfOrchestrator* orchestrator_;
     
+    std::shared_ptr<UeStateManager> ue_state_manager_;
+
     // Map of policy ID to policy
     std::unordered_map<std::string, QoSPolicy> policies_;
     std::mutex policies_mutex_;
