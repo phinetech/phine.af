@@ -44,6 +44,38 @@ void SubscriptionManager::initializeLogger(spdlog::level::level_enum log_level) 
 void SubscriptionManager::initialize(AfOrchestrator* orchestrator) {
     orchestrator_ = orchestrator;
     logger_->info("Subscription Manager initialized");
+
+    // Add a UE to the UE state manager for testing purposes
+    // This is just for demonstration; in a real application, this would be done by the
+    // UE registration process.
+    if (ue_state_manager_) {
+        AfUeSubscriptionState test_ue_state;
+        test_ue_state.supi = Supi{"imsi-208950000000031"}; // Example SUPI
+        test_ue_state.gpsi = Gpsi{"gpsi-208950000000031"}; // Example GPSI
+        test_ue_state.location_info = UeLocationInfo{
+            UserLocation{
+                std::nullopt, // No 5G location area
+                {Tac{"12345"}}, // Example TAI list
+                std::nullopt // No geographical area
+            },
+            std::nullopt // No time zone specified
+        };
+        test_ue_state.location_timestamp = DateTime{"2023-10-01T12:00:00Z"}; // Example timestamp
+        test_ue_state.pdu_sessions = {
+            PduSessionData{
+                "session-1", // Example PDU session ID
+                Dnn{"internet"}, // Example DNN
+                std::nullopt, // No S-NSSAI specified
+                "IPV4", // Example PDU session type
+                "ACTIVE", // Session status
+                DateTime{"2023-10-01T12:00:00Z"}, // Status timestamp
+                Ipv4Addr{"12.1.1.4"}, // Example IPv4 address
+            }
+        };
+        ue_state_manager_->update_ue_state(test_ue_state);
+    } else {
+        logger_->warn("UE State Manager is not initialized, cannot add test UE");
+    }
 }
 
 af::communication::MessagePtr SubscriptionManager::create_subscription(

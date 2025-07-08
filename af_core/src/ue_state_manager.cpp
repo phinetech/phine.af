@@ -1,4 +1,4 @@
-#include "ue_state_types.h"
+#include "models/ue_state.h"
 #include "ue_state_manager.h"
 
 UeStateManager::UeStateManager() = default;

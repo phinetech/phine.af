@@ -1,7 +1,7 @@
 #ifndef AF_CORE_UE_STATE_MANAGER_H
 #define AF_CORE_UE_STATE_MANAGER_H
 
-#include "ue_state_types.h" // Include the UE state struct definitions
+#include "models/ue_state.h" // Include the UE state struct definitions
 #include <unordered_map>
 #include <mutex>
 #include <optional>
