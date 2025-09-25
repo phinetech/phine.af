@@ -24,6 +24,7 @@ services:
     volumes:
       # - dbdata:/data/db
       - ./free5gc/dump:/data/dump
+      - ./free5gc/mongorestore.sh:/docker-entrypoint-initdb.d/mongorestore.sh
     networks:
       privnet:
         aliases:
@@ -281,8 +282,8 @@ services:
       - db
       - free5gc-nrf
 
-  ueransim:
-    container_name: ueransim
+  gnb:
+    container_name: gnb
     image: tariromukute/ueransim:v3.2.7
     command: ./nr-gnb -c /ueransim/config/gnbcfg.yaml
     volumes:
@@ -300,8 +301,34 @@ services:
       - free5gc-amf
       - free5gc-upf
 
-  oai-af:
-    container_name: "oai-af"
+  ue:
+    container_name: ue
+    image: tariromukute/ueransim:v3.2.7
+    command:
+      - /bin/bash
+      - -c
+      - |
+          sleep 15
+          echo "Starting UE..."
+          nr-ue -c /ueransim/config/uecfg.yaml
+          tail -f /dev/null
+    volumes:
+      - ./ueransim/free5gc-gnb.yaml:/ueransim/config/gnbcfg.yaml
+      - ./ueransim/free5gc-ue.yaml:/ueransim/config/uecfg.yaml
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - "/dev/net/tun"
+    networks:
+      privnet:
+        aliases:
+          - ue.free5gc.org
+    depends_on:
+      - free5gc-amf
+      - free5gc-upf
+
+  af:
+    container_name: "af"
     image: ubuntu:22.04
     expose:
       - 80/tcp
@@ -319,8 +346,6 @@ services:
     networks:
       privnet:
         ipv4_address: 192.168.70.143
-    # docker exec -it oai-af curl   -H 'Content-Type: application/json'   -X POST   -d '{"ascReqData": { "notifUri" :"https://example.com/notifications", "suppFeat": "F", "ueIpv4": "12.1.1.2" }}'  --http2-prior-knowledge http://pcf.free5gc.org:8000/npcf-policyauthorization/v1/app-sessions
-
 
     # Southbound Handlers
   pcf_handler:
