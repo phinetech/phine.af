@@ -154,6 +154,15 @@ For development:
 
 ## Building the Application
 
+### Using docker compose
+
+```bash
+# Start setup
+docker compose -f docker-compose/docker-compose-oai-build.yaml up -d
+
+
+```
+
 ### Using the Build Script
 
 The easiest way to build the application is to use the provided build script:
