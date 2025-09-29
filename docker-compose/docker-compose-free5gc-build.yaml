@@ -357,6 +357,8 @@ services:
     build:
       context: ../southbound/
       dockerfile: ./pcf_handler/Dockerfile
+    volumes:
+      - ./conf/pcf_handler.yaml:/etc/oai/af/pcf_handler.yaml
     networks:
       privnet:
         ipv4_address: 192.168.70.140
