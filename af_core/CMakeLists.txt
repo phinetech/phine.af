@@ -30,6 +30,9 @@ find_package(gRPC REQUIRED)
 
 # Define source files
 set(SOURCES
+    src/qod/qod_notification_manager.cpp
+    src/qod/qod_session_manager.cpp
+    src/qod/qod_handler.cpp
     src/af_orchestrator.cpp
     src/request_router.cpp
     src/policy_manager.cpp

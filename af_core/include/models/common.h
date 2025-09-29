@@ -459,5 +459,36 @@ struct TrafficFilteringInformation {
     std::optional<std::vector<EthFlowDescription>> ethernetTrafficFilters;
 };
 
+// --- Hash specializations for custom structs to use with std::unordered_map ---
+namespace std {
+
+// Helper for hashing optional values
+template<typename T>
+size_t hash_optional(const std::optional<T>& opt) {
+    return opt ? std::hash<T>{}(*opt) : 0;
+}
+
+// Helper for combining hashes (a common pattern similar to boost::hash_combine)
+inline void hash_combine(std::size_t& seed, const std::size_t& v) {
+    seed ^= v + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
+
+// Implementations for basic string-wrapped types
+template<> struct hash<Supi> { size_t operator()(const Supi& s) const { return hash<string>{}(s.value); } };
+template<> struct hash<Gpsi> { size_t operator()(const Gpsi& g) const { return hash<string>{}(g.value); } };
+template<> struct hash<Dnn> { size_t operator()(const Dnn& d) const { return hash<string>{}(d.value); } };
+template<> struct hash<Ipv4Addr> { size_t operator()(const Ipv4Addr& i) const { return hash<string>{}(i.value); } };
+template<> struct hash<Ipv6Addr> { size_t operator()(const Ipv6Addr& i) const { return hash<string>{}(i.value); } };
+template<> struct hash<Ipv6Prefix> { size_t operator()(const Ipv6Prefix& i) const { return hash<string>{}(i.value); } };
+template<> struct hash<MacAddr48> { size_t operator()(const MacAddr48& m) const { return hash<string>{}(m.value); } };
+template<> struct hash<DateTime> { size_t operator()(const DateTime& dt) const { return hash<string>{}(dt.value); } };
+template<> struct hash<Uri> { size_t operator()(const Uri& u) const { return hash<string>{}(u.value); } };
+template<> struct hash<AccessType> { size_t operator()(const AccessType& at) const { return hash<string>{}(at.value); } };
+template<> struct hash<RatType> { size_t operator()(const RatType& rt) const { return hash<string>{}(rt.value); } };
+template<> struct hash<Uinteger> { size_t operator()(const Uinteger& ui) const { return hash<unsigned int>{}(ui.value); } };
+template<> struct hash<Tac> { size_t operator()(const Tac& tac) const { return hash<string>{}(tac.value); } };
+
+} // namespace std
+
 
 #endif // AF_CORE_MODEL_COMMON_H

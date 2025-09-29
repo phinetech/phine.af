@@ -19,6 +19,11 @@
 #include "../common/component/include/af_component.h"
 #include "../common/communication/include/communication_interface.h"
 
+// QoD includes
+#include "qod/qod_session_manager.h"
+#include "qod/qod_handler.h"
+#include "qod/qod_notification_manager.h"
+
 namespace af {
 namespace core {
 
@@ -80,6 +85,12 @@ public:
     std::shared_ptr<SubscriptionManager> get_subscription_manager() const { return subscription_manager_; }
 
     /**
+     * @brief Get the QodSessionManager instance
+     * @return Shared pointer to QodSessionManager
+     */
+    std::shared_ptr<qod::QodSessionManager> get_qod_session_manager() const { return qod_session_manager_; }
+
+    /**
      * @brief Get the communication services map
      * @return Map of communication service names to instances
      */
@@ -103,6 +114,11 @@ private:
     std::shared_ptr<PolicyManager> policy_manager_;
     std::shared_ptr<SubscriptionManager> subscription_manager_;
     std::shared_ptr<UeStateManager> ue_state_manager_;
+    
+    // QoD components
+    std::shared_ptr<qod::QodSessionManager> qod_session_manager_;
+    std::shared_ptr<qod::QodHandler> qod_handler_;
+    std::shared_ptr<qod::QodNotificationManager> qod_notification_manager_;
     
     // Communication services for northbound and southbound interfaces
     std::unordered_map<std::string, std::shared_ptr<af::communication::CommunicationService>> communication_services_;
@@ -133,6 +149,16 @@ private:
      * @brief Configure subcomponents
      */
     void configure_components();
+    
+    /**
+     * @brief Initialize QoD components
+     */
+    void initialize_qod_components();
+    
+    /**
+     * @brief Register QoD message handlers
+     */
+    void register_qod_handlers();
 };
 
 } // namespace core

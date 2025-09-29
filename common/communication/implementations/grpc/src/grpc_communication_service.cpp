@@ -23,6 +23,7 @@
  // Include generated protobuf/gRPC code
  #include "message.grpc.pb.h"
  
+ // TODO: Use logger for this component
  namespace af {
  namespace communication {
  namespace grpc {

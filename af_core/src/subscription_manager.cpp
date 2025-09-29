@@ -50,8 +50,8 @@ void SubscriptionManager::initialize(AfOrchestrator* orchestrator) {
     // UE registration process.
     if (ue_state_manager_) {
         AfUeSubscriptionState test_ue_state;
-        test_ue_state.supi = Supi{"imsi-208950000000031"}; // Example SUPI
-        test_ue_state.gpsi = Gpsi{"gpsi-208950000000031"}; // Example GPSI
+        test_ue_state.supi = Supi{"imsi-208950000000001"}; // Example SUPI
+        test_ue_state.gpsi = Gpsi{"gpsi-208950000000001"}; // Example GPSI
         test_ue_state.location_info = UeLocationInfo{
             UserLocation{
                 std::nullopt, // No 5G location area
@@ -69,7 +69,7 @@ void SubscriptionManager::initialize(AfOrchestrator* orchestrator) {
                 "IPV4", // Example PDU session type
                 "ACTIVE", // Session status
                 DateTime{"2023-10-01T12:00:00Z"}, // Status timestamp
-                Ipv4Addr{"12.1.1.4"}, // Example IPv4 address
+                Ipv4Addr{"10.60.0.1"}, // Example IPv4 address
             }
         };
         ue_state_manager_->update_ue_state(test_ue_state);

@@ -40,6 +40,10 @@ AfOrchestrator::AfOrchestrator(const std::string& config_path)
     policy_manager_ = std::make_shared<PolicyManager>(ue_state_manager_);
     subscription_manager_ = std::make_shared<SubscriptionManager>(ue_state_manager_);
     
+    // Create QoD components
+    initialize_qod_components();
+    
+
     // Create message handler
     message_handler_ = std::make_shared<OrchestratorMessageHandler>(this);
 }
@@ -58,6 +62,11 @@ void AfOrchestrator::initialize() {
     request_router_->initialize(this);
     policy_manager_->initialize(this);
     subscription_manager_->initialize(this);
+
+    // Initialize QoD components
+    qod_session_manager_->initialize(this);
+    qod_handler_->initialize(this);
+    qod_notification_manager_->initialize(this);
     
     // Initialize communication interfaces
     initialize_communication();
@@ -67,6 +76,9 @@ void AfOrchestrator::initialize() {
     
     // Register message handlers
     register_handlers();
+    
+    // Register QoD-specific handlers
+    register_qod_handlers();
     
     logger_->info("AF Core initialization complete");
 }
@@ -152,6 +164,13 @@ void AfOrchestrator::register_handlers() {
         main_comm->register_handler("create_subscription", message_handler_);
         main_comm->register_handler("get_subscription", message_handler_);
         main_comm->register_handler("delete_subscription", message_handler_);
+
+        // Register QoD message handlers
+        main_comm->register_handler("qod_create_session", message_handler_);
+        main_comm->register_handler("qod_get_session", message_handler_);
+        main_comm->register_handler("qod_delete_session", message_handler_);
+        main_comm->register_handler("qod_extend_session", message_handler_);
+        main_comm->register_handler("qod_retrieve_sessions", message_handler_);
         
         logger_->info("Message handlers registered");
     }
@@ -195,6 +214,69 @@ void AfOrchestrator::configure_components() {
     logger_->info("Components configured");
 }
 
+void AfOrchestrator::initialize_qod_components() {
+    logger_->info("Initializing QoD components");
+    
+    // Configure QoD session manager
+    qod::QodSessionConfig qod_config;
+    qod_config.max_session_duration = std::chrono::seconds(86400); // 24 hours
+    qod_config.min_session_duration = std::chrono::seconds(60);     // 1 minute
+    qod_config.session_cleanup_interval = std::chrono::seconds(60);
+    qod_config.unavailable_session_ttl = std::chrono::seconds(360);
+    qod_config.enable_notifications = true;
+    qod_config.api_base_url = "https://api.example.com/quality-on-demand/v1";
+    
+    // TODO: Load QoD configuration from config file
+    // load_qod_config(qod_config);
+    
+    // Create QoD session manager
+    qod_session_manager_ = std::make_shared<qod::QodSessionManager>(
+        ue_state_manager_, qod_config);
+    
+    // Create QoD handler
+    qod_handler_ = std::make_shared<qod::QodHandler>(qod_session_manager_);
+    
+    // Create QoD notification manager
+    qod_notification_manager_ = std::make_shared<qod::QodNotificationManager>();
+    
+    // Wire up notification delivery to session manager
+    qod_session_manager_->set_notification_handler(qod_notification_manager_);
+    
+    logger_->info("QoD components created");
+}
+
+void AfOrchestrator::register_qod_handlers() {
+    logger_->info("Registering QoD message handlers");
+    
+    // Register CAMARA QoD API handlers
+    request_router_->register_handler("qod_create_session",
+        [this](const af::communication::MessagePtr& msg) {
+            return qod_handler_->handle_create_session(msg);
+        });
+    
+    request_router_->register_handler("qod_get_session",
+        [this](const af::communication::MessagePtr& msg) {
+            return qod_handler_->handle_get_session(msg);
+        });
+    
+    request_router_->register_handler("qod_delete_session",
+        [this](const af::communication::MessagePtr& msg) {
+            return qod_handler_->handle_delete_session(msg);
+        });
+    
+    request_router_->register_handler("qod_extend_session",
+        [this](const af::communication::MessagePtr& msg) {
+            return qod_handler_->handle_extend_session(msg);
+        });
+    
+    request_router_->register_handler("qod_retrieve_sessions",
+        [this](const af::communication::MessagePtr& msg) {
+            return qod_handler_->handle_retrieve_sessions(msg);
+        });
+    
+    logger_->info("QoD message handlers registered");
+}
+
 void AfOrchestrator::start() {
     logger_->info("Starting AF Core services");
     
@@ -207,6 +289,18 @@ void AfOrchestrator::start() {
             }
         }
     }
+
+    // Start QoD session manager
+    if (qod_session_manager_) {
+        qod_session_manager_->start();
+        logger_->info("Started QoD session manager");
+    }
+    
+    // Start QoD notification manager
+    if (qod_notification_manager_) {
+        qod_notification_manager_->start();
+        logger_->info("Started QoD notification manager");
+    }
     
     // Start components
     // Note: Most components don't need explicit start/stop,
@@ -218,6 +312,17 @@ void AfOrchestrator::start() {
 void AfOrchestrator::stop() {
     logger_->info("Stopping AF Core services");
     
+    // Stop QoD components first
+    if (qod_notification_manager_) {
+        qod_notification_manager_->stop();
+        logger_->info("Stopped QoD notification manager");
+    }
+    
+    if (qod_session_manager_) {
+        qod_session_manager_->stop();
+        logger_->info("Stopped QoD session manager");
+    }
+
     // Stop all communication services
     for (const auto& [name, service] : communication_services_) {
         if (service) {
