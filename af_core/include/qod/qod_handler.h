@@ -16,7 +16,7 @@
 #include <nlohmann/json.hpp>
 #include "qod_session_manager.h"
 #include "../../common/communication/include/message.h"
-#include "models/qod_session.h"
+#include "../../common/models/qod/qod_session.h"
 
 namespace af {
 namespace core {

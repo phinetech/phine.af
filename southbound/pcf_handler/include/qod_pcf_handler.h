@@ -17,15 +17,11 @@
 #include <chrono>
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
-#include "models/qod_session.h"
-#include "../../common/communication/include/message.h"
+#include "../common/models/qod/qod_session.h"
+#include "../common/communication/include/message.h"
 
 namespace af {
-namespace core {
-    class AfOrchestrator; // Forward declaration
-}
-
-namespace qod {
+namespace southbound {
 
 /**
  * @brief QoS profile to 5QI mapping configuration
@@ -87,7 +83,7 @@ public:
      * @brief Initialize the adapter
      * @param orchestrator Pointer to the orchestrator
      */
-    void initialize(af::core::AfOrchestrator* orchestrator);
+    void initialize();
     
     // === PCF Session Management ===
     
@@ -97,7 +93,7 @@ public:
      * @return PCF request message or nullopt on failure
      */
     std::optional<af::communication::MessagePtr> create_pcf_session(
-        const QodSession& qod_session);
+        const af::common::qod::QodSession& qod_session);
     
     /**
      * @brief Update PCF application session
@@ -105,7 +101,7 @@ public:
      * @return PCF request message or nullopt on failure
      */
     std::optional<af::communication::MessagePtr> update_pcf_session(
-        const QodSession& qod_session);
+        const af::common::qod::QodSession& qod_session);
     
     /**
      * @brief Delete PCF application session
@@ -113,7 +109,7 @@ public:
      * @return PCF request message or nullopt on failure
      */
     std::optional<af::communication::MessagePtr> delete_pcf_session(
-        const QodSession& qod_session);
+        const af::common::qod::QodSession& qod_session);
     
     // === PCF Response Handling ===
     
@@ -197,7 +193,7 @@ private:
      * @param qod_session QoD session
      * @return JSON representation of app session context
      */
-    nlohmann::json build_app_session_context(const QodSession& qod_session);
+    nlohmann::json build_app_session_context(const af::common::qod::QodSession& qod_session);
     
     /**
      * @brief Build media components for PCF
@@ -206,7 +202,7 @@ private:
      * @return JSON array of media components
      */
     nlohmann::json build_media_components(
-        const QodSession& qod_session,
+        const af::common::qod::QodSession& qod_session,
         const QosProfileMapping& mapping);
     
     /**
@@ -214,7 +210,7 @@ private:
      * @param qod_session QoD session
      * @return JSON array of flow descriptions
      */
-    nlohmann::json build_flow_descriptions(const QodSession& qod_session);
+    nlohmann::json build_flow_descriptions(const af::common::qod::QodSession& qod_session);
     
     /**
      * @brief Build subscription info for PCF notifications
@@ -230,7 +226,7 @@ private:
      * @return JSON representation of UE identification
      */
     nlohmann::json translate_device_to_ue_id(
-        const std::optional<QodDevice>& device,
+        const std::optional<af::common::qod::QodDevice>& device,
         const std::optional<Supi>& ue_supi);
     
     /**
@@ -238,7 +234,7 @@ private:
      * @param qod_session QoD session
      * @return JSON representation of AF request data
      */
-    nlohmann::json build_af_request_data(const QodSession& qod_session);
+    nlohmann::json build_af_request_data(const af::common::qod::QodSession& qod_session);
     
     /**
      * @brief Map QoD ports to PCF media sub-components
@@ -247,8 +243,8 @@ private:
      * @return JSON array of media sub-components
      */
     nlohmann::json map_ports_to_media_subcomponents(
-        const std::optional<PortsSpec>& device_ports,
-        const std::optional<PortsSpec>& server_ports);
+        const std::optional<af::common::qod::PortsSpec>& device_ports,
+        const std::optional<af::common::qod::PortsSpec>& server_ports);
     
     /**
      * @brief Generate PCF session ID
@@ -306,5 +302,5 @@ private:
     std::shared_ptr<spdlog::logger> logger_;
 };
 
-} // namespace qod
+} // namespace southbound
 } // namespace af

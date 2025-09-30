@@ -17,6 +17,7 @@
 #include <spdlog/spdlog.h>
 #include "../common/component/include/af_component.h"
 #include "../common/communication/include/communication_interface.h"
+#include "request_router.h"
 #include "pcc_rule_manager.h"
 #include "pcf_client_wrapper.h"
 
@@ -26,6 +27,9 @@
 
 namespace af {
 namespace southbound {
+
+// Forward declaration
+class RequestRouter;
 
 /**
  * @brief Handler for PCF interactions
@@ -61,6 +65,14 @@ public:
      */
     void stop() override;
     
+    /**
+     * @brief Process a message from any source
+     * @param message The incoming message
+     * @return Response message
+     */
+    af::communication::MessagePtr process_message(
+        const af::communication::MessagePtr& message);
+
     /**
      * @brief Create an application session with the PCF
      * @param app_session_data Application session data
@@ -121,6 +133,9 @@ private:
     // Communication service for talking to the AF Core
     std::shared_ptr<af::communication::CommunicationService> core_comm_;
     
+    // Request router for handling incoming messages
+    std::shared_ptr<RequestRouter> request_router_;
+
     // Message handler for incoming messages
     class PcfMessageHandler;
     std::shared_ptr<PcfMessageHandler> message_handler_;

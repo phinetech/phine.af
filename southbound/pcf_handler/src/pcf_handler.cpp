@@ -18,40 +18,45 @@ namespace southbound {
 class PcfHandler::PcfMessageHandler : public af::communication::MessageHandler {
 public:
     PcfMessageHandler(PcfHandler* handler) : handler_(handler) {}
-    
+
     af::communication::MessagePtr handle_message(
         const af::communication::MessagePtr& message) override {
-        
-        if (!message) {
-            return nullptr;
-        }
-        
-        const std::string& message_type = message->message_type;
-        
-        if (message_type == "pcf_create_app_session") {
-            return handler_->create_app_session(message);
-        }
-        else if (message_type == "pcf_update_app_session") {
-            return handler_->update_app_session(message);
-        }
-        else if (message_type == "pcf_delete_app_session") {
-            return handler_->delete_app_session(message);
-        }
-        else if (message_type == "pcf_get_app_session") {
-            return handler_->get_app_session(message);
-        }
-        else if (message_type == "pcf_notification") {
-            return handler_->handle_notification(message);
-        }
-        
-        // Default response for unknown message types
-        auto response = std::make_shared<af::communication::Message>();
-        response->message_type = "error";
-        response->correlation_id = message->correlation_id;
-        std::string error = "Unsupported message type: " + message_type;
-        response->payload.assign(error.begin(), error.end());
-        return response;
+        return handler_->process_message(message);
     }
+
+    // af::communication::MessagePtr handle_message(
+    //     const af::communication::MessagePtr& message) override {
+        
+    //     if (!message) {
+    //         return nullptr;
+    //     }
+        
+    //     const std::string& message_type = message->message_type;
+        
+    //     if (message_type == "pcf_create_app_session") {
+    //         return handler_->create_app_session(message);
+    //     }
+    //     else if (message_type == "pcf_update_app_session") {
+    //         return handler_->update_app_session(message);
+    //     }
+    //     else if (message_type == "pcf_delete_app_session") {
+    //         return handler_->delete_app_session(message);
+    //     }
+    //     else if (message_type == "pcf_get_app_session") {
+    //         return handler_->get_app_session(message);
+    //     }
+    //     else if (message_type == "pcf_notification") {
+    //         return handler_->handle_notification(message);
+    //     }
+        
+    //     // Default response for unknown message types
+    //     auto response = std::make_shared<af::communication::Message>();
+    //     response->message_type = "error";
+    //     response->correlation_id = message->correlation_id;
+    //     std::string error = "Unsupported message type: " + message_type;
+    //     response->payload.assign(error.begin(), error.end());
+    //     return response;
+    // }
 
 private:
     PcfHandler* handler_;
@@ -67,7 +72,10 @@ PcfHandler::PcfHandler(const std::string& config_path)
     
     // Create message handler
     message_handler_ = std::make_shared<PcfMessageHandler>(this);
-    
+
+    // Create request router
+    request_router_ = std::make_shared<RequestRouter>();
+
     // Load configuration
     load_config();
     
@@ -81,6 +89,20 @@ PcfHandler::PcfHandler(const std::string& config_path)
 
 PcfHandler::~PcfHandler() {
     stop();
+}
+
+af::communication::MessagePtr PcfHandler::process_message(
+    const af::communication::MessagePtr& message) {
+    
+    if (!message) {
+        logger_->error("Received null message");
+        return nullptr;
+    }
+    
+    logger_->debug("Processing message of type: {}", message->message_type);
+    
+    // Route the message to the appropriate handler
+    return request_router_->route_message(message);
 }
 
 void PcfHandler::initializeLogger(spdlog::level::level_enum log_level) {
@@ -104,6 +126,8 @@ void PcfHandler::initialize() {
     
     // Initialize PCF client
     pcf_client_->initialize();
+
+    request_router_->initialize(this);
     
     // Initialize PCC rule manager
     pcc_rule_manager_->initialize();

@@ -1,9 +1,9 @@
 /**
- * @file qod_pcf_adapter.cpp
+ * @file qod_pcf_handler.cpp
  * @brief Implementation of the QoD PCF adapter
  */
 
-#include "qod/qod_pcf_adapter.h"
+#include "qod_pcf_handler.h"
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <random>
@@ -11,7 +11,7 @@
 #include <iomanip>
 
 namespace af {
-namespace qod {
+namespace southbound {
 
 QodPcfHandler::QodPcfHandler(std::shared_ptr<UeStateManager> ue_state_manager)
     : ue_state_manager_(ue_state_manager) {
@@ -227,7 +227,7 @@ void QodPcfHandler::initialize_default_mappings() {
 // === PCF Session Management ===
 
 std::optional<af::communication::MessagePtr> QodPcfHandler::create_pcf_session(
-    const QodSession& qod_session) {
+    const af::common::qod::QodSession& qod_session) {
     
     logger_->info("Creating PCF session for QoD session: {}", qod_session.session_id);
     
@@ -307,7 +307,7 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::create_pcf_session(
 }
 
 std::optional<af::communication::MessagePtr> QodPcfHandler::update_pcf_session(
-    const QodSession& qod_session) {
+    const af::common::qod::QodSession& qod_session) {
     
     logger_->info("Updating PCF session for QoD session: {}", qod_session.session_id);
     
@@ -377,7 +377,7 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::update_pcf_session(
 }
 
 std::optional<af::communication::MessagePtr> QodPcfHandler::delete_pcf_session(
-    const QodSession& qod_session) {
+    const af::common::qod::QodSession& qod_session) {
     
     logger_->info("Deleting PCF session for QoD session: {}", qod_session.session_id);
     
@@ -656,7 +656,7 @@ std::string QodPcfHandler::get_qod_session_id(const std::string& pcf_session_id)
 
 // === Translation Methods ===
 
-nlohmann::json QodPcfHandler::build_app_session_context(const QodSession& qod_session) {
+nlohmann::json QodPcfHandler::build_app_session_context(const af::common::qod::QodSession& qod_session) {
     nlohmann::json context;
     
     // DNN if resolved from UE state
@@ -718,7 +718,7 @@ nlohmann::json QodPcfHandler::build_app_session_context(const QodSession& qod_se
 }
 
 nlohmann::json QodPcfHandler::build_media_components(
-    const QodSession& qod_session,
+    const af::common::qod::QodSession& qod_session,
     const QosProfileMapping& mapping) {
     
     nlohmann::json med_comps = nlohmann::json::array();
@@ -784,7 +784,7 @@ nlohmann::json QodPcfHandler::build_media_components(
     return med_comps;
 }
 
-nlohmann::json QodPcfHandler::build_flow_descriptions(const QodSession& qod_session) {
+nlohmann::json QodPcfHandler::build_flow_descriptions(const af::common::qod::QodSession& qod_session) {
     nlohmann::json flows = nlohmann::json::array();
     
     // Build flow description strings based on IP addresses and ports
@@ -861,7 +861,7 @@ nlohmann::json QodPcfHandler::build_subscription_info(const std::string& qod_ses
 }
 
 nlohmann::json QodPcfHandler::translate_device_to_ue_id(
-    const std::optional<QodDevice>& device,
+    const std::optional<af::common::qod::QodDevice>& device,
     const std::optional<Supi>& ue_supi) {
     
     nlohmann::json ue_id;
@@ -887,7 +887,7 @@ nlohmann::json QodPcfHandler::translate_device_to_ue_id(
     return ue_id;
 }
 
-nlohmann::json QodPcfHandler::build_af_request_data(const QodSession& qod_session) {
+nlohmann::json QodPcfHandler::build_af_request_data(const af::common::qod::QodSession& qod_session) {
     nlohmann::json af_req_data;
     
     // Traffic routes (optional)
@@ -903,8 +903,8 @@ nlohmann::json QodPcfHandler::build_af_request_data(const QodSession& qod_sessio
 }
 
 nlohmann::json QodPcfHandler::map_ports_to_media_subcomponents(
-    const std::optional<PortsSpec>& device_ports,
-    const std::optional<PortsSpec>& server_ports) {
+    const std::optional<af::common::qod::PortsSpec>& device_ports,
+    const std::optional<af::common::qod::PortsSpec>& server_ports) {
     
     nlohmann::json med_sub_comps = nlohmann::json::array();
     
@@ -1008,5 +1008,5 @@ void QodPcfHandler::remove_session_mapping(const std::string& qod_session_id) {
     }
 }
 
-} // namespace qod
+} // namespace southbound
 } // namespace af

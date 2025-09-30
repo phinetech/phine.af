@@ -20,8 +20,8 @@
 #include <chrono>
 #include <functional>
 #include <spdlog/spdlog.h>
-#include "../models/qod_events.h"
-#include "../models/qod_session.h"
+#include "../../common/models/qod/qod_events.h"
+#include "../../common/models/qod/qod_session.h"
 #include "../../common/communication/include/message.h"
 
 namespace af {
