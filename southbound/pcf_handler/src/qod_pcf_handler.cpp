@@ -13,8 +13,9 @@
 namespace af {
 namespace southbound {
 
-QodPcfHandler::QodPcfHandler(std::shared_ptr<UeStateManager> ue_state_manager)
-    : ue_state_manager_(ue_state_manager) {
+QodPcfHandler::QodPcfHandler()
+    // : ue_state_manager_(ue_state_manager) 
+    {
     
     // Setup logger
     initializeLogger(spdlog::level::debug);
@@ -32,108 +33,108 @@ QodPcfHandler::~QodPcfHandler() {
 void QodPcfHandler::initialize() {
     logger_->info("QoD PCF Adapter initialized");
     
-    // Initialize PCF client
-    pcf_client_->initialize();
+    // // Initialize PCF client
+    // pcf_client_->initialize();
     
-    // Initialize PCC rule manager
-    pcc_rule_manager_->initialize();
+    // // Initialize PCC rule manager
+    // pcc_rule_manager_->initialize();
     
-    // Initialize communication with AF Core
-    initialize_communication();
+    // // Initialize communication with AF Core
+    // initialize_communication();
     
-    // Register message handlers
-    register_handlers();
+    // // Register message handlers
+    // register_handlers();
     
     logger_->info("PCF Handler initialization complete");
 }
 
 // Register handlers with communication service
 // TODO: Fix me
-void QodPcfHandler::register_handlers() {
-    auto comm_services = orchestrator_->get_communication_services();
-    auto pcf_comm_it = comm_services.find("pcf");
+// void QodPcfHandler::register_handlers() {
+//     auto comm_services = orchestrator_->get_communication_services();
+//     auto pcf_comm_it = comm_services.find("pcf");
 
-    // Register PCF response handlers for QoD
-    request_router_->register_handler("pcf_qod_session_created",
-        [this](const af::communication::MessagePtr& msg) {
-            auto [success, pcf_session_id] = qod_pcf_adapter_->handle_pcf_create_response(msg);
+//     // Register PCF response handlers for QoD
+//     request_router_->register_handler("pcf_qod_session_created",
+//         [this](const af::communication::MessagePtr& msg) {
+//             auto [success, pcf_session_id] = qod_pcf_adapter_->handle_pcf_create_response(msg);
             
-            // Notify session manager of PCF response
-            qod_session_manager_->handle_pcf_session_response(
-                msg->correlation_id, pcf_session_id, success,
-                success ? "" : "PCF session creation failed");
+//             // Notify session manager of PCF response
+//             qod_session_manager_->handle_pcf_session_response(
+//                 msg->correlation_id, pcf_session_id, success,
+//                 success ? "" : "PCF session creation failed");
             
-            // Return empty response (already handled internally)
-            return std::make_shared<af::communication::Message>();
-        });
+//             // Return empty response (already handled internally)
+//             return std::make_shared<af::communication::Message>();
+//         });
     
-    request_router_->register_handler("pcf_qod_session_updated",
-        [this](const af::communication::MessagePtr& msg) {
-            bool success = qod_pcf_adapter_->handle_pcf_update_response(msg);
+//     request_router_->register_handler("pcf_qod_session_updated",
+//         [this](const af::communication::MessagePtr& msg) {
+//             bool success = qod_pcf_adapter_->handle_pcf_update_response(msg);
             
-            // Log the result
-            if (success) {
-                logger_->info("PCF session updated successfully");
-            } else {
-                logger_->error("PCF session update failed");
-            }
+//             // Log the result
+//             if (success) {
+//                 logger_->info("PCF session updated successfully");
+//             } else {
+//                 logger_->error("PCF session update failed");
+//             }
             
-            return std::make_shared<af::communication::Message>();
-        });
+//             return std::make_shared<af::communication::Message>();
+//         });
     
-    request_router_->register_handler("pcf_qod_session_deleted",
-        [this](const af::communication::MessagePtr& msg) {
-            bool success = qod_pcf_adapter_->handle_pcf_delete_response(msg);
+//     request_router_->register_handler("pcf_qod_session_deleted",
+//         [this](const af::communication::MessagePtr& msg) {
+//             bool success = qod_pcf_adapter_->handle_pcf_delete_response(msg);
             
-            if (success) {
-                logger_->info("PCF session deleted successfully");
-            } else {
-                logger_->error("PCF session deletion failed");
-            }
+//             if (success) {
+//                 logger_->info("PCF session deleted successfully");
+//             } else {
+//                 logger_->error("PCF session deletion failed");
+//             }
             
-            return std::make_shared<af::communication::Message>();
-        });
+//             return std::make_shared<af::communication::Message>();
+//         });
     
-    request_router_->register_handler("pcf_qod_notification",
-        [this](const af::communication::MessagePtr& msg) {
-            auto [qod_session_id, reason] = qod_pcf_adapter_->handle_pcf_notification(msg);
+//     request_router_->register_handler("pcf_qod_notification",
+//         [this](const af::communication::MessagePtr& msg) {
+//             auto [qod_session_id, reason] = qod_pcf_adapter_->handle_pcf_notification(msg);
             
-            if (qod_session_id) {
-                // Get PCF session ID from adapter
-                auto pcf_info = qod_pcf_adapter_->get_pcf_session_info(*qod_session_id);
-                if (pcf_info) {
-                    qod_session_manager_->handle_pcf_session_terminated(
-                        pcf_info->pcf_session_id,
-                        reason.value_or("NETWORK_TERMINATED"));
-                }
-            }
+//             if (qod_session_id) {
+//                 // Get PCF session ID from adapter
+//                 auto pcf_info = qod_pcf_adapter_->get_pcf_session_info(*qod_session_id);
+//                 if (pcf_info) {
+//                     qod_session_manager_->handle_pcf_session_terminated(
+//                         pcf_info->pcf_session_id,
+//                         reason.value_or("NETWORK_TERMINATED"));
+//                 }
+//             }
             
-            return std::make_shared<af::communication::Message>();
-        });
+//             return std::make_shared<af::communication::Message>();
+//         });
     
-    // Register QoD notification callback handler (for CloudEvents delivery results)
-    request_router_->register_handler("qod_notification_result",
-        [this](const af::communication::MessagePtr& msg) {
-            // Handle notification delivery results
-            try {
-                std::string payload_str(msg->payload.begin(), msg->payload.end());
-                auto result_json = nlohmann::json::parse(payload_str);
+//     // Register QoD notification callback handler (for CloudEvents delivery results)
+//     request_router_->register_handler("qod_notification_result",
+//         [this](const af::communication::MessagePtr& msg) {
+//             // Handle notification delivery results
+//             try {
+//                 std::string payload_str(msg->payload.begin(), msg->payload.end());
+//                 auto result_json = nlohmann::json::parse(payload_str);
                 
-                bool success = result_json.value("success", false);
-                std::string session_id = result_json.value("session_id", "");
-                std::string error = result_json.value("error", "");
+//                 bool success = result_json.value("success", false);
+//                 std::string session_id = result_json.value("session_id", "");
+//                 std::string error = result_json.value("error", "");
                 
-                if (!success) {
-                    logger_->warn("QoD notification delivery failed for session {}: {}", 
-                                 session_id, error);
-                }
-            } catch (const std::exception& e) {
-                logger_->error("Error processing notification result: {}", e.what());
-            }
+//                 if (!success) {
+//                     logger_->warn("QoD notification delivery failed for session {}: {}", 
+//                                  session_id, error);
+//                 }
+//             } catch (const std::exception& e) {
+//                 logger_->error("Error processing notification result: {}", e.what());
+//             }
             
-            return std::make_shared<af::communication::Message>();
-        });
-}
+//             return std::make_shared<af::communication::Message>();
+//         });
+// }
 
 void QodPcfHandler::initializeLogger(spdlog::level::level_enum log_level) {
     logger_ = spdlog::get("qod_pcf_adapter");
@@ -659,29 +660,29 @@ std::string QodPcfHandler::get_qod_session_id(const std::string& pcf_session_id)
 nlohmann::json QodPcfHandler::build_app_session_context(const af::common::qod::QodSession& qod_session) {
     nlohmann::json context;
     
-    // DNN if resolved from UE state
-    if (qod_session.pdu_session_id && ue_state_manager_) {
-        // Try to get DNN from UE state
-        if (qod_session.ue_supi) {
-            auto ue_state = ue_state_manager_->get_ue_state_by_supi(*qod_session.ue_supi);
-            if (ue_state) {
-                for (const auto& pdu : ue_state->pdu_sessions) {
-                    if (pdu.pdu_session_id == *qod_session.pdu_session_id) {
-                        context["dnn"] = pdu.dnn.value;
-                        if (pdu.snssai) {
-                            nlohmann::json snssai;
-                            snssai["sst"] = pdu.snssai->sst;
-                            if (pdu.snssai->sd) {
-                                snssai["sd"] = *pdu.snssai->sd;
-                            }
-                            context["sliceInfo"]["sNssai"] = snssai;
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-    }
+    // // DNN if resolved from UE state
+    // if (qod_session.pdu_session_id ) {
+    //     // Try to get DNN from UE state
+    //     if (qod_session.ue_supi) {
+    //         // auto ue_state = ue_state_manager_->get_ue_state_by_supi(*qod_session.ue_supi);
+    //         if (ue_state) {
+    //             for (const auto& pdu : ue_state.pdu_sessions) {
+    //                 if (pdu.pdu_session_id == *qod_session.pdu_session_id) {
+    //                     context["dnn"] = pdu.dnn.value;
+    //                     if (pdu.snssai) {
+    //                         nlohmann::json snssai;
+    //                         snssai["sst"] = pdu.snssai->sst;
+    //                         if (pdu.snssai->sd) {
+    //                             snssai["sd"] = *pdu.snssai->sd;
+    //                         }
+    //                         context["sliceInfo"]["sNssai"] = snssai;
+    //                     }
+    //                     break;
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
     
     // AF App ID
     context["afAppId"] = af_id_;

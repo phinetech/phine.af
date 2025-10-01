@@ -71,7 +71,7 @@ void QodSessionManager::stop() {
     {
         std::lock_guard<std::mutex> lock(sessions_mutex_);
         for (auto& [id, session] : sessions_) {
-            if (session.qos_status == QosStatus::AVAILABLE) {
+            if (session.qos_status == af::common::qod::QosStatus::AVAILABLE) {
                 // Try to remove from PCF
                 remove_session_from_pcf(session);
             }
@@ -96,8 +96,8 @@ void QodSessionManager::initializeLogger(spdlog::level::level_enum log_level) {
 
 // === Session Management Operations ===
 
-std::optional<QodSession> QodSessionManager::create_session(
-    const CreateSessionRequest& request) {
+std::optional<af::common::qod::QodSession> QodSessionManager::create_session(
+    const af::common::qod::CreateSessionRequest& request) {
     
     logger_->info("Creating QoD session for profile: {}", request.qos_profile);
     
@@ -139,7 +139,7 @@ std::optional<QodSession> QodSessionManager::create_session(
     }
     
     // Create new session
-    QodSession session;
+    af::common::qod::QodSession session;
     session.session_id = generate_session_id();
     session.api_consumer_id = request.api_consumer_id;
     session.device = request.device;
@@ -151,7 +151,7 @@ std::optional<QodSession> QodSessionManager::create_session(
     session.sink = request.sink;
     session.sink_credential = request.sink_credential;
     session.created_at = std::chrono::system_clock::now();
-    session.qos_status = QosStatus::REQUESTED;
+    session.qos_status = af::common::qod::QosStatus::REQUESTED;
     session.ue_supi = resolved_supi;
     session.pdu_session_id = pdu_session_id;
     
@@ -159,7 +159,7 @@ std::optional<QodSession> QodSessionManager::create_session(
     if (request.device && request.api_consumer_id.find("2-legged") != std::string::npos) {
         // For 2-legged tokens, return one device identifier
         // Priority: phone_number > ipv4_address > ipv6_address
-        QodDevice response_device;
+        af::common::qod::QodDevice response_device;
         if (request.device->phone_number) {
             response_device.phone_number = request.device->phone_number;
         } else if (request.device->ipv4_address) {
@@ -188,16 +188,16 @@ std::optional<QodSession> QodSessionManager::create_session(
         // Update session status
         {
             std::lock_guard<std::mutex> lock(sessions_mutex_);
-            sessions_[session.session_id].qos_status = QosStatus::UNAVAILABLE;
-            sessions_[session.session_id].status_info = StatusInfo::NETWORK_TERMINATED;
+            sessions_[session.session_id].qos_status = af::common::qod::QosStatus::UNAVAILABLE;
+            sessions_[session.session_id].status_info = af::common::qod::StatusInfo::NETWORK_TERMINATED;
         }
         
         // Send notification if configured
         if (request.sink && config_.enable_notifications) {
             send_status_change_notification(
                 sessions_[session.session_id],
-                QosStatus::REQUESTED,
-                StatusInfo::NETWORK_TERMINATED);
+                af::common::qod::QosStatus::REQUESTED,
+                af::common::qod::StatusInfo::NETWORK_TERMINATED);
         }
         
         return sessions_[session.session_id];
@@ -210,7 +210,7 @@ std::optional<QodSession> QodSessionManager::create_session(
     return session;
 }
 
-std::optional<QodSession> QodSessionManager::get_session(
+std::optional<af::common::qod::QodSession> QodSessionManager::get_session(
     const std::string& session_id,
     const std::string& api_consumer_id) {
     
@@ -253,22 +253,22 @@ bool QodSessionManager::delete_session(
         return false;
     }
     
-    QodSession& session = it->second;
-    QosStatus old_status = session.qos_status;
+    af::common::qod::QodSession& session = it->second;
+    af::common::qod::QosStatus old_status = session.qos_status;
     
     // Remove from PCF if active
-    if (session.qos_status == QosStatus::AVAILABLE) {
+    if (session.qos_status == af::common::qod::QosStatus::AVAILABLE) {
         remove_session_from_pcf(session);
     }
     
     // Update status
-    session.qos_status = QosStatus::UNAVAILABLE;
-    session.status_info = StatusInfo::DELETE_REQUESTED;
+    session.qos_status = af::common::qod::QosStatus::UNAVAILABLE;
+    session.status_info = af::common::qod::StatusInfo::DELETE_REQUESTED;
     session.expires_at = std::chrono::system_clock::now();
     
     // Send notification if configured
-    if (session.sink && config_.enable_notifications && old_status == QosStatus::AVAILABLE) {
-        send_status_change_notification(session, old_status, StatusInfo::DELETE_REQUESTED);
+    if (session.sink && config_.enable_notifications && old_status == af::common::qod::QosStatus::AVAILABLE) {
+        send_status_change_notification(session, old_status, af::common::qod::StatusInfo::DELETE_REQUESTED);
     }
     
     // Mark for cleanup (will be removed after TTL)
@@ -278,8 +278,8 @@ bool QodSessionManager::delete_session(
     return true;
 }
 
-std::optional<QodSession> QodSessionManager::extend_session_duration(
-    const ExtendSessionDurationRequest& request,
+std::optional<af::common::qod::QodSession> QodSessionManager::extend_session_duration(
+    const af::common::qod::ExtendSessionDurationRequest& request,
     const std::string& api_consumer_id) {
     
     logger_->info("Extending session {} by {} seconds", 
@@ -300,12 +300,12 @@ std::optional<QodSession> QodSessionManager::extend_session_duration(
         return std::nullopt;
     }
     
-    QodSession& session = it->second;
+    af::common::qod::QodSession& session = it->second;
     
     // Can only extend AVAILABLE sessions
-    if (session.qos_status != QosStatus::AVAILABLE) {
+    if (session.qos_status != af::common::qod::QosStatus::AVAILABLE) {
         logger_->error("Cannot extend session {} in status {}", 
-                      request.session_id, QodTypeUtils::qos_status_to_string(session.qos_status));
+                      request.session_id, af::common::qod::QodTypeUtils::qos_status_to_string(session.qos_status));
         return std::nullopt;
     }
     
@@ -337,12 +337,12 @@ std::optional<QodSession> QodSessionManager::extend_session_duration(
     return session;
 }
 
-std::vector<QodSession> QodSessionManager::retrieve_sessions_by_device(
-    const RetrieveSessionsRequest& request) {
+std::vector<af::common::qod::QodSession> QodSessionManager::retrieve_sessions_by_device(
+    const af::common::qod::RetrieveSessionsRequest& request) {
     
     logger_->debug("Retrieving sessions for device");
     
-    std::vector<QodSession> result;
+    std::vector<af::common::qod::QodSession> result;
     
     // Resolve device if provided
     std::optional<Supi> resolved_supi;
@@ -407,12 +407,12 @@ void QodSessionManager::handle_pcf_session_response(
         return;
     }
     
-    QodSession& session = it->second;
-    QosStatus old_status = session.qos_status;
+    af::common::qod::QodSession& session = it->second;
+    af::common::qod::QosStatus old_status = session.qos_status;
     
     if (success) {
         // Session is now available
-        session.qos_status = QosStatus::AVAILABLE;
+        session.qos_status = af::common::qod::QosStatus::AVAILABLE;
         session.pcf_session_id = pcf_session_id;
         session.started_at = std::chrono::system_clock::now();
         session.expires_at = *session.started_at + session.duration;
@@ -426,13 +426,13 @@ void QodSessionManager::handle_pcf_session_response(
         }
     } else {
         // Session failed
-        session.qos_status = QosStatus::UNAVAILABLE;
-        session.status_info = StatusInfo::NETWORK_TERMINATED;
+        session.qos_status = af::common::qod::QosStatus::UNAVAILABLE;
+        session.status_info = af::common::qod::StatusInfo::NETWORK_TERMINATED;
         session.error_message = error_message;
         
         // Send notification
         if (session.sink && config_.enable_notifications) {
-            send_status_change_notification(session, old_status, StatusInfo::NETWORK_TERMINATED);
+            send_status_change_notification(session, old_status, af::common::qod::StatusInfo::NETWORK_TERMINATED);
         }
     }
 }
@@ -458,17 +458,17 @@ void QodSessionManager::handle_pcf_session_terminated(
         return;
     }
     
-    QodSession& session = qod_it->second;
+    af::common::qod::QodSession& session = qod_it->second;
     
-    if (session.qos_status == QosStatus::AVAILABLE) {
-        QosStatus old_status = session.qos_status;
-        session.qos_status = QosStatus::UNAVAILABLE;
-        session.status_info = StatusInfo::NETWORK_TERMINATED;
+    if (session.qos_status == af::common::qod::QosStatus::AVAILABLE) {
+        af::common::qod::QosStatus old_status = session.qos_status;
+        session.qos_status = af::common::qod::QosStatus::UNAVAILABLE;
+        session.status_info = af::common::qod::StatusInfo::NETWORK_TERMINATED;
         session.expires_at = std::chrono::system_clock::now();
         
         // Send notification
         if (session.sink && config_.enable_notifications) {
-            send_status_change_notification(session, old_status, StatusInfo::NETWORK_TERMINATED);
+            send_status_change_notification(session, old_status, af::common::qod::StatusInfo::NETWORK_TERMINATED);
         }
     }
     
@@ -479,7 +479,7 @@ void QodSessionManager::handle_pcf_session_terminated(
 // === Private Methods ===
 
 std::pair<std::optional<Supi>, std::optional<std::string>> 
-QodSessionManager::resolve_device(const QodDevice& device) {
+QodSessionManager::resolve_device(const af::common::qod::QodDevice& device) {
     
     if (!ue_state_manager_) {
         return {std::nullopt, std::nullopt};
@@ -540,14 +540,14 @@ bool QodSessionManager::validate_qos_profile(const std::string& profile) {
 }
 
 std::optional<std::string> QodSessionManager::check_session_conflict(
-    const QodDevice& device,
-    const ApplicationServer& app_server) {
+    const af::common::qod::QodDevice& device,
+    const af::common::qod::ApplicationServer& app_server) {
     
     std::lock_guard<std::mutex> lock(sessions_mutex_);
     
     for (const auto& [id, session] : sessions_) {
         // Only check REQUESTED or AVAILABLE sessions
-        if (session.qos_status == QosStatus::UNAVAILABLE) {
+        if (session.qos_status == af::common::qod::QosStatus::UNAVAILABLE) {
             continue;
         }
         
@@ -579,7 +579,7 @@ std::optional<std::string> QodSessionManager::check_session_conflict(
     return std::nullopt;
 }
 
-bool QodSessionManager::apply_session_to_pcf(QodSession& session) {
+bool QodSessionManager::apply_session_to_pcf(af::common::qod::QodSession& session) {
     logger_->info("Applying QoD session {} to PCF", session.session_id);
     
     if (!orchestrator_) {
@@ -677,7 +677,7 @@ bool QodSessionManager::apply_session_to_pcf(QodSession& session) {
     }
 }
 
-bool QodSessionManager::remove_session_from_pcf(const QodSession& session) {
+bool QodSessionManager::remove_session_from_pcf(const af::common::qod::QodSession& session) {
     logger_->info("Removing QoD session {} from PCF", session.session_id);
     
     if (!session.pcf_session_id) {
@@ -732,7 +732,7 @@ bool QodSessionManager::remove_session_from_pcf(const QodSession& session) {
     }
 }
 
-bool QodSessionManager::update_session_in_pcf(QodSession& session, std::chrono::seconds new_duration) {
+bool QodSessionManager::update_session_in_pcf(af::common::qod::QodSession& session, std::chrono::seconds new_duration) {
     logger_->info("Updating QoD session {} in PCF with new duration: {} seconds", 
                  session.session_id, new_duration.count());
     
@@ -790,9 +790,9 @@ bool QodSessionManager::update_session_in_pcf(QodSession& session, std::chrono::
 }
 
 void QodSessionManager::send_status_change_notification(
-    const QodSession& session,
-    QosStatus old_status,
-    std::optional<StatusInfo> status_info) {
+    const af::common::qod::QodSession& session,
+    af::common::qod::QosStatus old_status,
+    std::optional<af::common::qod::StatusInfo> status_info) {
     
     if (!session.sink || !notification_handler_) {
         return;
@@ -800,11 +800,11 @@ void QodSessionManager::send_status_change_notification(
     
     logger_->info("Sending status change notification for session {}: {} -> {}", 
                  session.session_id,
-                 QodTypeUtils::qos_status_to_string(old_status),
-                 QodTypeUtils::qos_status_to_string(session.qos_status));
+                 af::common::qod::QodTypeUtils::qos_status_to_string(old_status),
+                 af::common::qod::QodTypeUtils::qos_status_to_string(session.qos_status));
     
     // Create CloudEvent
-    auto event = QodEventBuilder::create_qos_status_changed_event(
+    auto event = af::common::qod::QodEventBuilder::create_qos_status_changed_event(
         session.session_id,
         session.qos_status,
         status_info ? status_info : session.status_info,
@@ -832,14 +832,14 @@ void QodSessionManager::cleanup_expired_sessions() {
             bool should_remove = false;
             
             // Check if session has expired
-            if (session.qos_status == QosStatus::AVAILABLE && session.expires_at) {
+            if (session.qos_status == af::common::qod::QosStatus::AVAILABLE && session.expires_at) {
                 if (now >= *session.expires_at) {
                     // Session duration expired
                     logger_->info("Session {} duration expired", id);
                     
-                    QosStatus old_status = session.qos_status;
-                    session.qos_status = QosStatus::UNAVAILABLE;
-                    session.status_info = StatusInfo::DURATION_EXPIRED;
+                    af::common::qod::QosStatus old_status = session.qos_status;
+                    session.qos_status = af::common::qod::QosStatus::UNAVAILABLE;
+                    session.status_info = af::common::qod::StatusInfo::DURATION_EXPIRED;
                     
                     // Remove from PCF
                     remove_session_from_pcf(session);
@@ -847,13 +847,13 @@ void QodSessionManager::cleanup_expired_sessions() {
                     // Send notification
                     if (session.sink && config_.enable_notifications) {
                         send_status_change_notification(
-                            session, old_status, StatusInfo::DURATION_EXPIRED);
+                            session, old_status, af::common::qod::StatusInfo::DURATION_EXPIRED);
                     }
                 }
             }
             
             // Check if unavailable session should be cleaned up
-            if (session.qos_status == QosStatus::UNAVAILABLE) {
+            if (session.qos_status == af::common::qod::QosStatus::UNAVAILABLE) {
                 auto unavailable_duration = now - session.created_at;
                 if (session.expires_at) {
                     unavailable_duration = now - *session.expires_at;
@@ -926,7 +926,7 @@ std::string QodSessionManager::generate_session_id() {
     return ss.str();
 }
 
-nlohmann::json QodSessionManager::build_pcf_request(const QodSession& session) {
+nlohmann::json QodSessionManager::build_pcf_request(const af::common::qod::QodSession& session) {
     nlohmann::json request;
     
     // Basic session information
@@ -971,7 +971,7 @@ nlohmann::json QodSessionManager::build_pcf_request(const QodSession& session) {
 }
 
 nlohmann::json QodSessionManager::convert_device_to_pcf(
-    const QodDevice& device,
+    const af::common::qod::QodDevice& device,
     const std::optional<Supi>& supi) {
     
     nlohmann::json pcf_device;
@@ -1001,7 +1001,7 @@ nlohmann::json QodSessionManager::convert_device_to_pcf(
     return pcf_device;
 }
 
-nlohmann::json QodSessionManager::build_flow_filters(const QodSession& session) {
+nlohmann::json QodSessionManager::build_flow_filters(const af::common::qod::QodSession& session) {
     nlohmann::json flow_info = nlohmann::json::array();
     
     nlohmann::json flow;
@@ -1064,14 +1064,14 @@ std::chrono::seconds QodSessionManager::get_max_duration_for_profile(const std::
 // === Public utility methods ===
 
 void QodSessionManager::set_notification_handler(
-    std::shared_ptr<INotificationDelivery> handler) {
+    std::shared_ptr<af::common::qod::INotificationDelivery> handler) {
     notification_handler_ = handler;
 }
 
-std::vector<QodSession> QodSessionManager::get_all_sessions() {
+std::vector<af::common::qod::QodSession> QodSessionManager::get_all_sessions() {
     std::lock_guard<std::mutex> lock(sessions_mutex_);
     
-    std::vector<QodSession> result;
+    std::vector<af::common::qod::QodSession> result;
     result.reserve(sessions_.size());
     
     for (const auto& [id, session] : sessions_) {
@@ -1081,10 +1081,10 @@ std::vector<QodSession> QodSessionManager::get_all_sessions() {
     return result;
 }
 
-std::vector<QodSession> QodSessionManager::get_sessions_by_status(QosStatus status) {
+std::vector<af::common::qod::QodSession> QodSessionManager::get_sessions_by_status(af::common::qod::QosStatus status) {
     std::lock_guard<std::mutex> lock(sessions_mutex_);
     
-    std::vector<QodSession> result;
+    std::vector<af::common::qod::QodSession> result;
     
     for (const auto& [id, session] : sessions_) {
         if (session.qos_status == status) {

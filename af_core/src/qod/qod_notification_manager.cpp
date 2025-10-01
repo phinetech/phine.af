@@ -38,13 +38,13 @@ void HttpNotificationClient::cleanup_headers() {
 }
 
 void HttpNotificationClient::setup_authentication(
-    const std::optional<SinkCredential>& credential) {
+    const std::optional<af::common::qod::SinkCredential>& credential) {
     
     if (!credential) {
         return;
     }
     
-    if (credential->credential_type == SinkCredential::CredentialType::ACCESSTOKEN) {
+    if (credential->credential_type == af::common::qod::SinkCredential::CredentialType::ACCESSTOKEN) {
         if (credential->access_token) {
             std::string auth_header = "Authorization: Bearer " + *credential->access_token;
         }
@@ -53,8 +53,8 @@ void HttpNotificationClient::setup_authentication(
 
 std::pair<int, std::string> HttpNotificationClient::send_notification(
     const std::string& url,
-    const CloudEvent& event,
-    const std::optional<SinkCredential>& credential,
+    const af::common::qod::CloudEvent& event,
+    const std::optional<af::common::qod::SinkCredential>& credential,
     std::chrono::seconds timeout) {
     
     // TODO: Implement method using nghttp2 or another HTTP library
@@ -152,14 +152,14 @@ void QodNotificationManager::stop() {
     logger_->info("QoD Notification Manager stopped");
 }
 
-NotificationDeliveryResult QodNotificationManager::deliver(
-    const CloudEvent& event,
+af::common::qod::NotificationDeliveryResult QodNotificationManager::deliver(
+    const af::common::qod::CloudEvent& event,
     const std::string& sink,
-    const std::optional<SinkCredential>& credential) {
+    const std::optional<af::common::qod::SinkCredential>& credential) {
     
     logger_->debug("Delivering notification to: {}", sink);
     
-    NotificationDeliveryResult result;
+    af::common::qod::NotificationDeliveryResult result;
     result.timestamp = std::chrono::system_clock::now();
     
     // Validate sink URL
@@ -236,11 +236,11 @@ NotificationDeliveryResult QodNotificationManager::deliver(
 }
 
 bool QodNotificationManager::queue_notification(
-    const CloudEvent& event,
+    const af::common::qod::CloudEvent& event,
     const std::string& sink,
-    const std::optional<SinkCredential>& credential,
+    const std::optional<af::common::qod::SinkCredential>& credential,
     const std::string& session_id,
-    std::function<void(const NotificationDeliveryResult&)> callback) {
+    std::function<void(const af::common::qod::NotificationDeliveryResult&)> callback) {
     
     std::lock_guard<std::mutex> lock(queue_mutex_);
     
@@ -392,7 +392,7 @@ void QodNotificationManager::worker_thread() {
             } else {
                 // Final result (success or max retries reached)
                 if (task.callback) {
-                    NotificationDeliveryResult result;
+                    af::common::qod::NotificationDeliveryResult result;
                     result.success = success;
                     result.http_status_code = http_code;
                     result.error_message = success ? "" : response;
@@ -462,13 +462,13 @@ bool QodNotificationManager::validate_sink(const std::string& sink) {
 }
 
 bool QodNotificationManager::validate_credential(
-    const std::optional<SinkCredential>& credential) {
+    const std::optional<af::common::qod::SinkCredential>& credential) {
     
     if (!credential) {
         return true; // No credential is valid
     }
     
-    if (credential->credential_type != SinkCredential::CredentialType::ACCESSTOKEN) {
+    if (credential->credential_type != af::common::qod::SinkCredential::CredentialType::ACCESSTOKEN) {
         logger_->warn("Unsupported credential type");
         return false;
     }

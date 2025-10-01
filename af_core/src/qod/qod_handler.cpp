@@ -60,7 +60,7 @@ af::communication::MessagePtr QodHandler::handle_create_session(
         logger_->debug("Create session request: {}", request_json.dump());
         
         // Create session request
-        CreateSessionRequest request;
+        af::common::qod::CreateSessionRequest request;
         request.api_consumer_id = context.api_consumer_id;
         request.correlation_id = context.correlation_id;
         
@@ -285,7 +285,7 @@ af::communication::MessagePtr QodHandler::handle_extend_session(
         logger_->debug("Extend session request: {}", request_json.dump());
         
         // Create extension request
-        ExtendSessionDurationRequest request;
+        af::common::qod::ExtendSessionDurationRequest request;
         request.session_id = session_id;
         
         if (!request_json.contains("requestedAdditionalDuration")) {
@@ -314,10 +314,10 @@ af::communication::MessagePtr QodHandler::handle_extend_session(
                     "Session not found", context.correlation_id);
             }
             
-            if (existing->qos_status != QosStatus::AVAILABLE) {
+            if (existing->qos_status != af::common::qod::QosStatus::AVAILABLE) {
                 return create_error_response(409, ErrorCode::SESSION_EXTENSION_NOT_ALLOWED,
                     "Extending the session duration is not allowed in the current state (" +
-                    QodTypeUtils::qos_status_to_string(existing->qos_status) + 
+                    af::common::qod::QodTypeUtils::qos_status_to_string(existing->qos_status) + 
                     "). The session must be in the AVAILABLE state.",
                     context.correlation_id);
             }
@@ -361,7 +361,7 @@ af::communication::MessagePtr QodHandler::handle_retrieve_sessions(
         // Parse request body
         std::string payload_str(message->payload.begin(), message->payload.end());
         
-        RetrieveSessionsRequest request;
+        af::common::qod::RetrieveSessionsRequest request;
         request.api_consumer_id = context.api_consumer_id;
         
         // Handle optional body for device specification
@@ -416,7 +416,7 @@ af::communication::MessagePtr QodHandler::handle_retrieve_sessions(
 // === Validation Methods ===
 
 std::optional<std::string> QodHandler::validate_device(
-    const std::optional<QodDevice>& device,
+    const std::optional<af::common::qod::QodDevice>& device,
     const QodRequestContext& context) {
     
     if (context.is_three_legged && device) {
@@ -458,7 +458,7 @@ std::optional<std::string> QodHandler::validate_device(
 }
 
 std::optional<std::string> QodHandler::validate_application_server(
-    const ApplicationServer& app_server) {
+    const af::common::qod::ApplicationServer& app_server) {
     
     if (app_server.is_empty()) {
         return "Application server must have at least one IP address";
@@ -470,7 +470,7 @@ std::optional<std::string> QodHandler::validate_application_server(
 }
 
 std::optional<std::string> QodHandler::validate_ports(
-    const std::optional<PortsSpec>& ports) {
+    const std::optional<af::common::qod::PortsSpec>& ports) {
     
     if (!ports) {
         return std::nullopt;
@@ -512,7 +512,7 @@ std::optional<std::string> QodHandler::validate_duration(
 
 std::optional<std::string> QodHandler::validate_sink(
     const std::optional<std::string>& sink,
-    const std::optional<SinkCredential>& credential) {
+    const std::optional<af::common::qod::SinkCredential>& credential) {
     
     if (!sink) {
         return std::nullopt;
@@ -526,7 +526,7 @@ std::optional<std::string> QodHandler::validate_sink(
     
     // Validate credential if provided
     if (credential) {
-        if (credential->credential_type != SinkCredential::CredentialType::ACCESSTOKEN) {
+        if (credential->credential_type != af::common::qod::SinkCredential::CredentialType::ACCESSTOKEN) {
             return "Only ACCESSTOKEN credential type is supported";
         }
         
@@ -553,12 +553,12 @@ std::optional<std::string> QodHandler::validate_sink(
 
 // === JSON Conversion Methods ===
 
-std::optional<QodDevice> QodHandler::parse_device(const nlohmann::json& json) {
+std::optional<af::common::qod::QodDevice> QodHandler::parse_device(const nlohmann::json& json) {
     if (json.is_null()) {
         return std::nullopt;
     }
     
-    QodDevice device;
+    af::common::qod::QodDevice device;
     
     if (json.contains("phoneNumber")) {
         device.phone_number = json["phoneNumber"];
@@ -569,7 +569,7 @@ std::optional<QodDevice> QodHandler::parse_device(const nlohmann::json& json) {
     }
     
     if (json.contains("ipv4Address")) {
-        DeviceIpv4Addr ipv4;
+        af::common::qod::DeviceIpv4Addr ipv4;
         auto& ipv4_json = json["ipv4Address"];
         
         if (ipv4_json.contains("publicAddress")) {
@@ -581,7 +581,7 @@ std::optional<QodDevice> QodHandler::parse_device(const nlohmann::json& json) {
         }
         
         if (ipv4_json.contains("publicPort")) {
-            ipv4.public_port = ipv4_json["publicPort"].get<Port>();
+            ipv4.public_port = ipv4_json["publicPort"].get<af::common::qod::Port>();
         }
         
         device.ipv4_address = ipv4;
@@ -594,8 +594,8 @@ std::optional<QodDevice> QodHandler::parse_device(const nlohmann::json& json) {
     return device;
 }
 
-ApplicationServer QodHandler::parse_application_server(const nlohmann::json& json) {
-    ApplicationServer server;
+af::common::qod::ApplicationServer QodHandler::parse_application_server(const nlohmann::json& json) {
+    af::common::qod::ApplicationServer server;
     
     if (json.contains("ipv4Address")) {
         server.ipv4_address = json["ipv4Address"];
@@ -608,41 +608,41 @@ ApplicationServer QodHandler::parse_application_server(const nlohmann::json& jso
     return server;
 }
 
-std::optional<PortsSpec> QodHandler::parse_ports(const nlohmann::json& json) {
+std::optional<af::common::qod::PortsSpec> QodHandler::parse_ports(const nlohmann::json& json) {
     if (json.is_null()) {
         return std::nullopt;
     }
     
-    PortsSpec ports;
+    af::common::qod::PortsSpec ports;
     
     if (json.contains("ranges") && json["ranges"].is_array()) {
         for (const auto& range_json : json["ranges"]) {
-            PortRange range;
-            range.from = range_json["from"].get<Port>();
-            range.to = range_json["to"].get<Port>();
+            af::common::qod::PortRange range;
+            range.from = range_json["from"].get<af::common::qod::Port>();
+            range.to = range_json["to"].get<af::common::qod::Port>();
             ports.ranges.push_back(range);
         }
     }
     
     if (json.contains("ports") && json["ports"].is_array()) {
         for (const auto& port_json : json["ports"]) {
-            ports.ports.push_back(port_json.get<Port>());
+            ports.ports.push_back(port_json.get<af::common::qod::Port>());
         }
     }
     
     return ports;
 }
 
-std::optional<SinkCredential> QodHandler::parse_sink_credential(const nlohmann::json& json) {
+std::optional<af::common::qod::SinkCredential> QodHandler::parse_sink_credential(const nlohmann::json& json) {
     if (json.is_null()) {
         return std::nullopt;
     }
     
-    SinkCredential credential;
+    af::common::qod::SinkCredential credential;
     
     std::string type = json["credentialType"];
     if (type == "ACCESSTOKEN") {
-        credential.credential_type = SinkCredential::CredentialType::ACCESSTOKEN;
+        credential.credential_type = af::common::qod::SinkCredential::CredentialType::ACCESSTOKEN;
         
         if (json.contains("accessToken")) {
             credential.access_token = json["accessToken"];
@@ -662,11 +662,11 @@ std::optional<SinkCredential> QodHandler::parse_sink_credential(const nlohmann::
             credential.access_token_type = json["accessTokenType"];
         }
     } else if (type == "PLAIN") {
-        credential.credential_type = SinkCredential::CredentialType::PLAIN;
+        credential.credential_type = af::common::qod::SinkCredential::CredentialType::PLAIN;
         credential.identifier = json.value("identifier", "");
         credential.secret = json.value("secret", "");
     } else if (type == "REFRESHTOKEN") {
-        credential.credential_type = SinkCredential::CredentialType::REFRESHTOKEN;
+        credential.credential_type = af::common::qod::SinkCredential::CredentialType::REFRESHTOKEN;
         credential.access_token = json.value("accessToken", "");
         credential.refresh_token = json.value("refreshToken", "");
         credential.refresh_token_endpoint = json.value("refreshTokenEndpoint", "");
@@ -676,14 +676,14 @@ std::optional<SinkCredential> QodHandler::parse_sink_credential(const nlohmann::
 }
 
 nlohmann::json QodHandler::session_to_json(
-    const QodSession& session,
+    const af::common::qod::QodSession& session,
     bool include_device) {
     
     nlohmann::json result;
     
     // Session ID and status
     result["sessionId"] = session.session_id;
-    result["qosStatus"] = QodTypeUtils::qos_status_to_string(session.qos_status);
+    result["qosStatus"] = af::common::qod::QodTypeUtils::qos_status_to_string(session.qos_status);
     
     // QoS profile
     result["qosProfile"] = session.qos_profile;
@@ -743,7 +743,7 @@ nlohmann::json QodHandler::session_to_json(
     }
     
     // Timing information for AVAILABLE/UNAVAILABLE sessions
-    if (session.qos_status != QosStatus::REQUESTED) {
+    if (session.qos_status != af::common::qod::QosStatus::REQUESTED) {
         if (session.started_at) {
             // Format as RFC3339
             auto time_t = std::chrono::system_clock::to_time_t(*session.started_at);
@@ -761,14 +761,14 @@ nlohmann::json QodHandler::session_to_json(
     }
     
     // Status info for UNAVAILABLE sessions
-    if (session.qos_status == QosStatus::UNAVAILABLE && session.status_info) {
-        result["statusInfo"] = QodTypeUtils::status_info_to_string(*session.status_info);
+    if (session.qos_status == af::common::qod::QosStatus::UNAVAILABLE && session.status_info) {
+        result["statusInfo"] = af::common::qod::QodTypeUtils::status_info_to_string(*session.status_info);
     }
     
     return result;
 }
 
-nlohmann::json QodHandler::device_to_json(const QodDevice& device) {
+nlohmann::json QodHandler::device_to_json(const af::common::qod::QodDevice& device) {
     nlohmann::json result;
     
     if (device.phone_number) {

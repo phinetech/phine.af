@@ -72,7 +72,7 @@ public:
      * @brief Constructor
      * @param ue_state_manager Shared pointer to UE state manager
      */
-    explicit QodPcfHandler(std::shared_ptr<UeStateManager> ue_state_manager);
+    explicit QodPcfHandler();
     
     /**
      * @brief Destructor
@@ -283,7 +283,7 @@ private:
     
     // === Member Variables ===
     
-    std::shared_ptr<PcfClientWrapper> pcf_client_;
+    // std::shared_ptr<PcfClientWrapper> pcf_client_;
     
     // QoS profile mappings
     std::unordered_map<std::string, QosProfileMapping> qos_profile_mappings_;

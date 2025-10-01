@@ -50,13 +50,13 @@ struct NotificationConfig {
  * @brief Notification delivery task
  */
 struct NotificationTask {
-    CloudEvent event;
+    af::common::qod::CloudEvent event;
     std::string sink;
-    std::optional<SinkCredential> credential;
+    std::optional<af::common::qod::SinkCredential> credential;
     int retry_count{0};
     std::chrono::system_clock::time_point next_retry_time;
     std::string session_id;
-    std::function<void(const NotificationDeliveryResult&)> callback;
+    std::function<void(const af::common::qod::NotificationDeliveryResult&)> callback;
 };
 
 /**
@@ -68,31 +68,31 @@ public:
     ~HttpNotificationClient();
     
     /**
-     * @brief Send HTTP POST request with CloudEvent
+     * @brief Send HTTP POST request with af::common::qod::CloudEvent
      * @param url Target URL
-     * @param event CloudEvent to send
+     * @param event af::common::qod::CloudEvent to send
      * @param credential Optional authentication credential
      * @param timeout Request timeout
      * @return HTTP response code and body
      */
     std::pair<int, std::string> send_notification(
         const std::string& url,
-        const CloudEvent& event,
-        const std::optional<SinkCredential>& credential,
+        const af::common::qod::CloudEvent& event,
+        const std::optional<af::common::qod::SinkCredential>& credential,
         std::chrono::seconds timeout);
     
 private:
     // TODO: Add HTTP client members (e.g., CURL handle)
     
     static size_t write_callback(void* contents, size_t size, size_t nmemb, void* userp);
-    void setup_authentication(const std::optional<SinkCredential>& credential);
+    void setup_authentication(const std::optional<af::common::qod::SinkCredential>& credential);
     void cleanup_headers();
 };
 
 /**
  * @brief Manages QoD CloudEvents notifications
  */
-class QodNotificationManager : public INotificationDelivery {
+class QodNotificationManager : public af::common::qod::INotificationDelivery {
 public:
     /**
      * @brief Constructor
@@ -123,20 +123,20 @@ public:
     void stop();
     
     /**
-     * @brief Deliver a CloudEvent notification
-     * @param event The CloudEvent to deliver
+     * @brief Deliver a af::common::qod::CloudEvent notification
+     * @param event The af::common::qod::CloudEvent to deliver
      * @param sink The target URL
      * @param credential Optional authentication credential
      * @return Delivery result
      */
-    NotificationDeliveryResult deliver(
-        const CloudEvent& event,
+    af::common::qod::NotificationDeliveryResult deliver(
+        const af::common::qod::CloudEvent& event,
         const std::string& sink,
-        const std::optional<SinkCredential>& credential = std::nullopt) override;
+        const std::optional<af::common::qod::SinkCredential>& credential = std::nullopt) override;
     
     /**
      * @brief Queue a notification for async delivery
-     * @param event The CloudEvent to deliver
+     * @param event The af::common::qod::CloudEvent to deliver
      * @param sink The target URL
      * @param credential Optional authentication credential
      * @param session_id QoD session ID for tracking
@@ -144,11 +144,11 @@ public:
      * @return true if queued successfully
      */
     bool queue_notification(
-        const CloudEvent& event,
+        const af::common::qod::CloudEvent& event,
         const std::string& sink,
-        const std::optional<SinkCredential>& credential,
+        const std::optional<af::common::qod::SinkCredential>& credential,
         const std::string& session_id,
-        std::function<void(const NotificationDeliveryResult&)> callback = nullptr);
+        std::function<void(const af::common::qod::NotificationDeliveryResult&)> callback = nullptr);
     
     /**
      * @brief Cancel pending notifications for a session
@@ -209,7 +209,7 @@ private:
      * @param credential Credential to validate
      * @return true if valid (not expired)
      */
-    bool validate_credential(const std::optional<SinkCredential>& credential);
+    bool validate_credential(const std::optional<af::common::qod::SinkCredential>& credential);
     
     /**
      * @brief Update session statistics

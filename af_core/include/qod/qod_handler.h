@@ -139,7 +139,7 @@ private:
      * @return Error message if invalid, empty if valid
      */
     std::optional<std::string> validate_device(
-        const std::optional<QodDevice>& device,
+        const std::optional<af::common::qod::QodDevice>& device,
         const QodRequestContext& context);
     
     /**
@@ -148,7 +148,7 @@ private:
      * @return Error message if invalid, empty if valid
      */
     std::optional<std::string> validate_application_server(
-        const ApplicationServer& app_server);
+        const af::common::qod::ApplicationServer& app_server);
     
     /**
      * @brief Validate port specification
@@ -156,7 +156,7 @@ private:
      * @return Error message if invalid, empty if valid
      */
     std::optional<std::string> validate_ports(
-        const std::optional<PortsSpec>& ports);
+        const std::optional<af::common::qod::PortsSpec>& ports);
     
     /**
      * @brief Validate duration
@@ -176,7 +176,7 @@ private:
      */
     std::optional<std::string> validate_sink(
         const std::optional<std::string>& sink,
-        const std::optional<SinkCredential>& credential);
+        const std::optional<af::common::qod::SinkCredential>& credential);
     
     // === JSON Conversion Methods ===
     
@@ -185,28 +185,28 @@ private:
      * @param json JSON object
      * @return Parsed device or nullopt
      */
-    std::optional<QodDevice> parse_device(const nlohmann::json& json);
+    std::optional<af::common::qod::QodDevice> parse_device(const nlohmann::json& json);
     
     /**
      * @brief Parse application server from JSON
      * @param json JSON object
      * @return Parsed application server
      */
-    ApplicationServer parse_application_server(const nlohmann::json& json);
+    af::common::qod::ApplicationServer parse_application_server(const nlohmann::json& json);
     
     /**
      * @brief Parse port specification from JSON
      * @param json JSON object
      * @return Parsed port specification
      */
-    std::optional<PortsSpec> parse_ports(const nlohmann::json& json);
+    std::optional<af::common::qod::PortsSpec> parse_ports(const nlohmann::json& json);
     
     /**
      * @brief Parse sink credential from JSON
      * @param json JSON object
      * @return Parsed sink credential
      */
-    std::optional<SinkCredential> parse_sink_credential(const nlohmann::json& json);
+    std::optional<af::common::qod::SinkCredential> parse_sink_credential(const nlohmann::json& json);
     
     /**
      * @brief Convert session to JSON response
@@ -215,7 +215,7 @@ private:
      * @return JSON representation
      */
     nlohmann::json session_to_json(
-        const QodSession& session,
+        const af::common::qod::QodSession& session,
         bool include_device = false);
     
     /**
@@ -223,7 +223,7 @@ private:
      * @param device Device
      * @return JSON representation
      */
-    nlohmann::json device_to_json(const QodDevice& device);
+    nlohmann::json device_to_json(const af::common::qod::QodDevice& device);
     
     // === Error Response Methods ===
     
