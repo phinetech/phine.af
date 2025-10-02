@@ -161,6 +161,8 @@ bool UeStateManager::add_or_update_pdu_session(const Supi& supi, const PduSessio
 }
 
 bool UeStateManager::remove_pdu_session(const Supi& supi, const std::string& pdu_session_id) {
+    // TODO: WHen pdu is removed, also change state of any associated QoD sessions to "INACTIVE"
+
     std::lock_guard<std::mutex> lock(mtx_);
     auto it = ue_states_by_supi_.find(supi.value);
     if (it != ue_states_by_supi_.end()) {
@@ -169,6 +171,11 @@ bool UeStateManager::remove_pdu_session(const Supi& supi, const std::string& pdu
             if (session_it->pdu_session_id == pdu_session_id) {
                 remove_pdu_session_indices(supi.value, *session_it);
                 pdu_sessions.erase(session_it);
+                
+                // Publish PDU Session Terminated Event
+                af::core::events::PduSessionTerminatedEvent event{supi, pdu_session_id};
+                event_dispatcher_->publish(event);
+                
                 return true;
             }
         }
@@ -295,4 +302,58 @@ void UeStateManager::remove_pdu_session_indices(const std::string& supi_value, c
             supi_by_mac_addr_.erase(it_mac);
         }
     }
+}
+
+void UeStateManager::add_qod_session_to_pdu_session(const Supi& supi, const std::string& pdu_session_id, const std::string& qod_session_id) {
+    std::lock_guard<std::mutex> lock(mtx_);
+    auto it = ue_states_by_supi_.find(supi.value);
+    if (it != ue_states_by_supi_.end()) {
+        for (auto& pdu_session : it->second.pdu_sessions) {
+            if (pdu_session.pdu_session_id == pdu_session_id) {
+                pdu_session.active_qod_session_ids.insert(qod_session_id);
+                return true;
+            }
+        }
+    }
+    return false; // UE or PDU Session not found
+}
+
+void UeStateManager::remove_qod_session_from_pdu_session(const Supi& supi, const std::string& pdu_session_id, const std::string& qod_session_id) {
+    std::lock_guard<std::mutex> lock(mtx_);
+    auto it = ue_states_by_supi_.find(supi.value);
+    if (it != ue_states_by_supi_.end()) {
+        for (auto& pdu_session : it->second.pdu_sessions) {
+            if (pdu_session.pdu_session_id == pdu_session_id) {
+                pdu_session.active_qod_session_ids.erase(qod_session_id);
+                return true;
+            }
+        }
+    }
+    return false; // UE or PDU Session not found
+}
+
+std::optional<std::unordered_set<std::string>> UeStateManager::get_qod_sessions_for_pdu_session(const Supi& supi, const std::string& pdu_session_id) const {
+    std::lock_guard<std::mutex> lock(mtx_);
+    auto it = ue_states_by_supi_.find(supi.value);
+    if (it != ue_states_by_supi_.end()) {
+        for (const auto& pdu_session : it->second.pdu_sessions) {
+            if (pdu_session.pdu_session_id == pdu_session_id) {
+                return pdu_session.active_qod_session_ids;
+            }
+        }
+    }
+    return std::nullopt; // UE or PDU Session not found
+}
+
+std::vector<std::string> UeStateManager::get_pdu_sessions_for_qod_session(const std::string& qod_session_id) const {
+    std::lock_guard<std::mutex> lock(mtx_);
+    std::vector<std::string> pdu_session_ids;
+    for (const auto& ue_pair : ue_states_by_supi_) {
+        for (const auto& pdu_session : ue_pair.second.pdu_sessions) {
+            if (pdu_session.active_qod_session_ids.find(qod_session_id) != pdu_session.active_qod_session_ids.end()) {
+                pdu_session_ids.push_back(pdu_session.pdu_session_id);
+            }
+        }
+    }
+    return pdu_session_ids;
 }

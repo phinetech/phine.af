@@ -67,17 +67,12 @@ void QodSessionManager::stop() {
         cleanup_thread_.join();
     }
     
-    // Clean up all sessions
+    // Clean up all sessions in qod_state_manager_
     {
-        std::lock_guard<std::mutex> lock(sessions_mutex_);
-        for (auto& [id, session] : sessions_) {
-            if (session.qos_status == af::common::qod::QosStatus::AVAILABLE) {
-                // Try to remove from PCF
-                remove_session_from_pcf(session);
-            }
+        for (const auto& pair : sessions_) {
+            qod_state_manager_->remove_session(pair.first);
         }
         sessions_.clear();
-        pcf_to_qod_session_.clear();
     }
     
     logger_->info("QoD Session Manager stopped");
@@ -174,8 +169,9 @@ std::optional<af::common::qod::QodSession> QodSessionManager::create_session(
     
     // Store session
     {
-        std::lock_guard<std::mutex> lock(sessions_mutex_);
-        sessions_[session.session_id] = session;
+        qod_state_manager_->add_session(session);
+        // TODO: handle case when supi is not resolved 
+        ue_state_manager_.add_qod_session_to_pdu_session(session.ue_supi, session.pdu_session_id, session.session_id);
     }
     
     // Apply to PCF
@@ -474,6 +470,31 @@ void QodSessionManager::handle_pcf_session_terminated(
     
     // Remove PCF mapping
     pcf_to_qod_session_.erase(pcf_session_id);
+}
+
+void QodSessionManager::handle_pdu_session_terminated_event(
+    const af::core::events::PduSessionTerminatedEvent& event) {
+    
+    logger_->info("Handling PDU Session Terminated Event for SUPI: {}, PDU ID: {}", 
+                 event.supi.value, event.pdu_session_id);
+    
+    std::lock_guard<std::mutex> lock(sessions_mutex_);
+    
+    // First get session and check if there is sink configured
+    auto qod_session = qod_state_manager_->get_session_by_pdu_session(event.supi, event.pdu_session_id);
+    if (!qod_session) {
+        logger_->debug("No QoD session associated with SUPI: {}, PDU ID: {}", 
+                      event.supi.value, event.pdu_session_id);
+        return;
+    }
+    
+    // Delete the session if it exists
+    qod_state_manager_->remove_session(qod_session->session_id);
+
+    if (qod_session->sink && config_.enable_notifications && qod_session.qos_status == af::common::qod::QosStatus::AVAILABLE) {
+        logger_->info("Sending notification for QoD session {} due to PDU session termination", qod_session->session_id);
+        send_status_change_notification(*qod_session, qod_session->qos_status, af::common::qod::StatusInfo::NETWORK_TERMINATED);
+    }
 }
 
 // === Private Methods ===

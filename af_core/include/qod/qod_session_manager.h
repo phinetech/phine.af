@@ -54,10 +54,12 @@ public:
     /**
      * @brief Constructor
      * @param ue_state_manager Shared pointer to UE state manager
+     * @param qod_state_manager Shared pointer to QoD state manager
      * @param config Configuration for QoD session management
      */
     QodSessionManager(
         std::shared_ptr<UeStateManager> ue_state_manager,
+        std::shared_ptr<QodStateManager> qod_state_manager,
         const QodSessionConfig& config = QodSessionConfig{});
     
     /**
@@ -173,6 +175,13 @@ public:
      * @return Vector of sessions with the specified status
      */
     std::vector<af::common::qod::QodSession> get_sessions_by_status(af::common::qod::QosStatus status);
+
+    /**
+     * @brief Handle PDU Session Terminated Event
+     * @param event Event containing SUPI and PDU session ID
+     * @return void
+     */
+    void handle_pdu_session_terminated(const af::core::events::PduSessionTerminatedEvent& event);
 
     /**
      * @brief Initialize logger
@@ -292,11 +301,7 @@ private:
     // Core dependencies
     af::core::AfOrchestrator* orchestrator_;
     std::shared_ptr<UeStateManager> ue_state_manager_;
-    
-    // Session storage
-    std::unordered_map<std::string, af::common::qod::QodSession> sessions_;              // By session ID
-    std::unordered_map<std::string, std::string> pcf_to_qod_session_;   // PCF ID to QoD ID
-    mutable std::mutex sessions_mutex_;
+    std::shared_ptr<QodStateManager> qod_state_manager_;
     
     // Configuration
     QodSessionConfig config_;

@@ -4,6 +4,7 @@
  */
 
 #include "af_orchestrator.h"
+#include "events/event_dispatcher.h"
 #include <yaml-cpp/yaml.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
@@ -35,14 +36,23 @@ AfOrchestrator::AfOrchestrator(const std::string& config_path)
     logger_->info("Initializing AF Core Orchestrator");
     
     // Create components
-    ue_state_manager_ = std::make_shared<UeStateManager>();
+    event_dispatcher_ = std::make_shared<EventDispatcher>();
+    ue_state_manager_ = std::make_shared<UeStateManager>(event_dispatcher_);
     request_router_ = std::make_shared<RequestRouter>();
     policy_manager_ = std::make_shared<PolicyManager>(ue_state_manager_);
     subscription_manager_ = std::make_shared<SubscriptionManager>(ue_state_manager_);
+
     
     // Create QoD components
     initialize_qod_components();
     
+    // event_dispatcher_->subscribe<af::core::events::PduSessionTerminatedEvent>(
+    //     [this](const auto& event) {
+    //         logger_->info("Received PDU Session Terminated Event for SUPI: {}, PDU Session ID: {}",
+    //                       event.supi.value, event.pdu_session_id);
+    //         // Handle the event as needed
+    //         qod_session_manager_->handle_pdu_session_terminated(event);
+    //     });
 
     // Create message handler
     message_handler_ = std::make_shared<OrchestratorMessageHandler>(this);

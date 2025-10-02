@@ -36,6 +36,7 @@ struct PduSessionData {
     std::optional<DateTime> dnai_timestamp; // Timestamp of DNAI update
     std::vector<RouteToLocation> n6_traffic_routing_info; // N6 traffic routing requirement for the PDU session
     std::optional<DateTime> n6_traffic_routing_info_timestamp; // Timestamp for N6 traffic routing info update
+    std::unordered_set<std::string> active_qod_session_ids; // Set of active QoD session IDs associated with this PDU session
 
     bool operator==(const PduSessionData& other) const {
         return pdu_session_id == other.pdu_session_id &&

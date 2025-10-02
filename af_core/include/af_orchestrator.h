@@ -109,6 +109,8 @@ private:
     // Configuration
     std::string config_path_;
     
+    std::shared_ptr<af::core::events::IEventDispatcher> event_dispatcher_;
+    
     // Component instances
     std::shared_ptr<RequestRouter> request_router_;
     std::shared_ptr<PolicyManager> policy_manager_;

@@ -1,7 +1,8 @@
 #ifndef AF_CORE_UE_STATE_MANAGER_H
 #define AF_CORE_UE_STATE_MANAGER_H
 
-#include "models/ue_state.h" // Include the UE state struct definitions
+#include "models/ue_state.h" 
+#include "events/i_event_dispatcher.h"
 #include <unordered_map>
 #include <mutex>
 #include <optional>
@@ -12,7 +13,7 @@
  */
 class UeStateManager {
 public:
-    UeStateManager(); // Default constructor
+    explicit UeStateManager(std::shared_ptr<af::core::events::IEventDispatcher> dispatcher);
 
     /**
      * @brief Adds or updates a UE's full state based on a received notification.
@@ -162,6 +163,38 @@ public:
      */
     bool update_high_throughput_desired(const Supi& supi, bool desired);
 
+    /**
+     * @brief Associates a QoD session ID with a specific PDU session of a UE.
+     * @param supi The SUPI of the UE.
+     * @param pdu_session_id The PDU Session ID to associate with.
+     * @param qod_session_id The QoD session ID to add.
+     * @return True if the association was made, false if UE or PDU session not found.
+     */
+    bool add_qod_session_to_pdu_session(const Supi& supi, const std::string& pdu_session_id, const std::string& qod_session_id);
+
+    /**
+     * @brief Removes a QoD session ID association from a specific PDU session of a UE.
+     * @param supi The SUPI of the UE.
+     * @param pdu_session_id The PDU Session ID to disassociate from.
+     * @param qod_session_id The QoD session ID to remove.
+     * @return True if the removal was made, false if UE or PDU session not found.
+     */
+    bool remove_qod_session_from_pdu_session(const Supi& supi, const std::string& pdu_session_id, const std::string& qod_session_id);
+
+    /**
+     * @brief Retrieves all QoD session IDs associated with a specific PDU session of a UE.
+     * @param supi The SUPI of the UE.
+     * @param pdu_session_id The PDU Session ID to query.
+     * @return An optional set of QoD session IDs if found, std::nullopt if UE or PDU session not found.
+     */
+    std::optional<std::unordered_set<std::string>> get_qod_sessions_for_pdu_session(const Supi& supi, const std::string& pdu_session_id) const;
+
+    /**
+     * @brief Retrive all pdu session ids for a specific qod session id
+     * @param qod_session_id The QoD Session ID to query.
+     * @return A vector of PDU session IDs associated with the QoD session ID.
+     */
+    std::vector<std::string> get_pdu_sessions_for_qod_session(const std::string& qod_session_id) const;
 
 private:
     // Main storage for UE states, keyed by SUPI string for efficient lookup.
@@ -176,6 +209,7 @@ private:
     mutable std::unordered_map<std::string, std::string> supi_by_ipv6_prefix_;
     mutable std::unordered_map<std::string, std::string> supi_by_mac_addr_;
     mutable std::unordered_map<std::string, std::string> supi_by_pdu_session_id_;
+    std::shared_ptr<af::core::events::IEventDispatcher> event_dispatcher_;
 
     // Mutex for thread-safe access to the maps.
     mutable std::mutex mtx_;

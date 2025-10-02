@@ -29,39 +29,49 @@ The system is divided into three primary logical layers: **Northbound**, **AF Co
 
 ### 3.1. Component Diagram
 
-The following diagram illustrates the major components and the flow of information. An external application request comes in through a Northbound Gateway, is processed by the AF Core, which then uses a Southbound Connector to interact with the 5G Core Network.
+The following diagram illustrates the major components and the flow of information. An external application request comes in through a Northbound Gateway, is processed by the AF Core, which then uses a Southbound Connector to interact with the 5G Core Network. Note the central role of the Event Dispatcher within the AF Core for handling internal state propagation.
 
 ```mermaid
 graph TD
     subgraph External World
-        A[External Applications <br/> e.g., OpenFlow, ROS2]
-        N5G[5G Core Network <br/> (PCF, NEF, etc.)]
+        A[External Applications]
+        N5G[5G Core Network]
     end
 
     subgraph Project AF
         NB(Northbound Gateway)
-        CORE(AF Core <br/> Business Logic & State)
-        SB(Southbound Connectors <br/> pcf_connector, nef_connector)
+        
+        subgraph AF Core
+            direction LR
+            subgraph State Managers
+                UE_MGR(UeStateManager)
+                QOD_MGR(QodSessionManager)
+                LOC_MGR(...)
+            end
+            
+            DISPATCHER(Event Dispatcher)
+
+            UE_MGR -- Publishes Events --> DISPATCHER
+            DISPATCHER -- Notifies --> QOD_MGR
+            DISPATCHER -- Notifies --> LOC_MGR
+        end
+
+        SB(Southbound Connectors)
         
         subgraph Common Library
             COMMS[Communication Abstraction]
             DI[Dependency Injection]
             MODELS[Data Models]
-            STATE[Base State Interfaces]
         end
     end
 
     A --> NB
-    NB -->|CAMARA API Models| CORE
-    CORE -->|Internal Models| SB
+    NB -->|CAMARA API| AF Core
+    AF Core -->|Internal Models| SB
     SB -->|3GPP Models| N5G
     N5G -->|Notifications| SB
-    SB -->|Notifications| CORE
+    SB -->|Network Events| AF Core
 
-    NB -.->|Uses| COMMS
-    CORE -.->|Uses| DI
-    SB -.->|Uses| MODELS
-    CORE -.->|Implements| STATE
 ```
 
 ### 3.2. Data Flow
@@ -77,6 +87,16 @@ graph TD
 5. The **AF Core** routes the request to the appropriate **Southbound Connector** (e.g., `pcf_connector`).
 
 6. The **Southbound Connector** maps the internal model to the specific 3GPP-compliant model required by the target Network Function (e.g., PCF) and communicates with the **5G Core Network**.
+
+### 3.3. Internal AF Core Communication: The Event Bus
+
+To avoid circular dependencies between different state managers (e.g., UeStateManager and QodSessionManager), the system uses a publish-subscribe model.
+
+- Publishers: When a low-level state manager (like UeStateManager) detects a significant change (e.g., a PDU session is terminated), it publishes an event to the EventDispatcher. The publisher has no knowledge of who is listening.
+
+- Subscribers: Higher-level, application-specific managers (like QodSessionManager) subscribe to the events they care about.
+
+- Benefit: This inverts the dependency. Instead of the UeStateManager needing to know about every other manager, the other managers are responsible for listening for events that affect them. This makes the system highly extensible.
 
 ## 4. Component Deep Dive
 
@@ -96,7 +116,7 @@ graph TD
 
   * **Service Logic:** Implements the business logic for each CAMARA API (e.g., `qod_service.h`).
 
-  * **State Management:** Manages the lifecycle of sessions, subscriptions, and UE state (`ue_state_manager.h`).
+  * **State Management:** Contains dedicated managers for different domains of state (`ue_state_manager.h`, `qod_state_manager.h`), with `ue_state_manager.h` being a central state manager.
 
   * **Orchestration:** Routes requests between northbound interfaces and the appropriate southbound connectors.
 
@@ -145,6 +165,10 @@ phine.af/
 |   ├── Dockerfile                  # Defines the container for deploying the core application.
 │   ├── CMakeLists.txt              # Build script for the core application.
 │   ├── include/                    # Header files for the core application logic.
+│   │   ├── events/                 # Event definitions and dispatcher interface.
+│   │   │   ├── events.h
+│   │   │   ├── i_event_dispatcher.h
+│   │   │   └── event_dispatcher.h  # Concrete implementation.
 │   │   ├── state/                  # Manages the application's long-term state (e.g., active sessions, subscriptions).
 │   │   │   ├── ue_state_manager.h  # Tracks and manages the state of individual User Equipments (UEs).
 │   │   │   └── subscription_manager.h # Manages notification subscriptions for events.
@@ -153,6 +177,7 @@ phine.af/
 │   │       └── qod/                # Logic specific to the Quality on Demand (QoD) service.
 │   │           ├── qod_service.h   # Main entry point and facade for the QoD service. It orchestrates all QoD operations.
 |   |           ├── qod_session_manager.h # Handles the creation, modification, and deletion of QoD sessions.
+|   |           ├── qod_state_manager.h # Manages state for CAMARA QualityOnDemand sessions
 │   │           └── qod_api_mapper.h    # Maps incoming CAMARA API data models to the application's internal domain models.
 │   │
 │   └── src/                        # Source file implementations for the core application.
