@@ -16,8 +16,9 @@ namespace qod {
 
 QodSessionManager::QodSessionManager(
     std::shared_ptr<UeStateManager> ue_state_manager,
+    std::shared_ptr<QodStateManager> qod_state_manager,
     const QodSessionConfig& config)
-    : ue_state_manager_(ue_state_manager), config_(config) {
+    : ue_state_manager_(ue_state_manager), qod_state_manager_(qod_state_manager), config_(config) {
     
     // Setup logger
     initializeLogger(spdlog::level::debug);
@@ -69,10 +70,7 @@ void QodSessionManager::stop() {
     
     // Clean up all sessions in qod_state_manager_
     {
-        for (const auto& pair : sessions_) {
-            qod_state_manager_->remove_session(pair.first);
-        }
-        sessions_.clear();
+        qod_state_manager_->clear_all_sessions();
     }
     
     logger_->info("QoD Session Manager stopped");
@@ -170,8 +168,11 @@ std::optional<af::common::qod::QodSession> QodSessionManager::create_session(
     // Store session
     {
         qod_state_manager_->add_session(session);
-        // TODO: handle case when supi is not resolved 
-        ue_state_manager_.add_qod_session_to_pdu_session(session.ue_supi, session.pdu_session_id, session.session_id);
+        // TODO: handle case when supi is not resolved
+        if (session.ue_supi.has_value() && session.pdu_session_id.has_value()) {
+            logger_->debug("Adding QoD session to PDU session with SUPI: {}, PDU session ID {}", session.ue_supi.value().value, session.pdu_session_id.value());
+            ue_state_manager_->add_qod_session_to_pdu_session(session.ue_supi.value(), session.pdu_session_id.value(), session.session_id);
+        }
     }
     
     // Apply to PCF
@@ -183,20 +184,25 @@ std::optional<af::common::qod::QodSession> QodSessionManager::create_session(
         
         // Update session status
         {
-            std::lock_guard<std::mutex> lock(sessions_mutex_);
-            sessions_[session.session_id].qos_status = af::common::qod::QosStatus::UNAVAILABLE;
-            sessions_[session.session_id].status_info = af::common::qod::StatusInfo::NETWORK_TERMINATED;
+            qod_state_manager_->update_session_status(session.session_id, af::common::qod::QosStatus::UNAVAILABLE, af::common::qod::StatusInfo::NETWORK_TERMINATED);
+            
         }
         
+        auto state_session_opt = qod_state_manager_->get_session_by_id(session.session_id);
+        if (!state_session_opt || !state_session_opt.has_value()) {
+            logger_->debug("Session not found: {}", session.session_id);
+        }
+        
+        af::common::qod::QodSession state_session = state_session_opt.value();
         // Send notification if configured
         if (request.sink && config_.enable_notifications) {
             send_status_change_notification(
-                sessions_[session.session_id],
+                state_session,
                 af::common::qod::QosStatus::REQUESTED,
                 af::common::qod::StatusInfo::NETWORK_TERMINATED);
         }
         
-        return sessions_[session.session_id];
+        return state_session;
     }
     
     logger_->info("QoD session created with ID: {}", session.session_id);
@@ -210,22 +216,20 @@ std::optional<af::common::qod::QodSession> QodSessionManager::get_session(
     const std::string& session_id,
     const std::string& api_consumer_id) {
     
-    std::lock_guard<std::mutex> lock(sessions_mutex_);
-    
-    auto it = sessions_.find(session_id);
-    if (it == sessions_.end()) {
+    logger_->info("Retrieving session: {}", session_id);
+    auto session_opt = qod_state_manager_->get_session_by_id(session_id);
+    if (!session_opt) {
         logger_->debug("Session not found: {}", session_id);
         return std::nullopt;
     }
-    
+
     // Check authorization
-    if (it->second.api_consumer_id != api_consumer_id) {
+    if (session_opt->api_consumer_id != api_consumer_id) {
         logger_->warn("Unauthorized access to session {} by consumer {}", 
                      session_id, api_consumer_id);
         return std::nullopt;
     }
-    
-    return it->second;
+    return *session_opt;
 }
 
 bool QodSessionManager::delete_session(
@@ -234,22 +238,22 @@ bool QodSessionManager::delete_session(
     
     logger_->info("Deleting session: {}", session_id);
     
-    std::lock_guard<std::mutex> lock(sessions_mutex_);
-    
-    auto it = sessions_.find(session_id);
-    if (it == sessions_.end()) {
+    auto session_opt = qod_state_manager_->get_session_by_id(session_id);
+    if (!session_opt || !session_opt.has_value()) {
         logger_->debug("Session not found: {}", session_id);
         return false;
     }
-    
+    auto session = session_opt.value();
+
     // Check authorization
-    if (it->second.api_consumer_id != api_consumer_id) {
+    if (session.api_consumer_id != api_consumer_id) {
         logger_->warn("Unauthorized deletion attempt for session {} by consumer {}", 
                      session_id, api_consumer_id);
         return false;
     }
     
-    af::common::qod::QodSession& session = it->second;
+    
+    // af::common::qod::QodSession& session = it->second;
     af::common::qod::QosStatus old_status = session.qos_status;
     
     // Remove from PCF if active
@@ -281,22 +285,20 @@ std::optional<af::common::qod::QodSession> QodSessionManager::extend_session_dur
     logger_->info("Extending session {} by {} seconds", 
                  request.session_id, request.requested_additional_duration.count());
     
-    std::lock_guard<std::mutex> lock(sessions_mutex_);
-    
-    auto it = sessions_.find(request.session_id);
-    if (it == sessions_.end()) {
+    auto session_opt = qod_state_manager_->get_session_by_id(request.session_id);
+    if (!session_opt || !session_opt.has_value()) {
         logger_->debug("Session not found: {}", request.session_id);
         return std::nullopt;
     }
-    
+
+    auto session = session_opt.value();
+
     // Check authorization
-    if (it->second.api_consumer_id != api_consumer_id) {
+    if (session.api_consumer_id != api_consumer_id) {
         logger_->warn("Unauthorized extension attempt for session {} by consumer {}", 
                      request.session_id, api_consumer_id);
         return std::nullopt;
     }
-    
-    af::common::qod::QodSession& session = it->second;
     
     // Can only extend AVAILABLE sessions
     if (session.qos_status != af::common::qod::QosStatus::AVAILABLE) {
@@ -346,37 +348,36 @@ std::vector<af::common::qod::QodSession> QodSessionManager::retrieve_sessions_by
         auto [supi, pdu_id] = resolve_device(*request.device);
         resolved_supi = supi;
     }
-    
-    std::lock_guard<std::mutex> lock(sessions_mutex_);
-    
-    for (const auto& [id, session] : sessions_) {
-        // Check API consumer authorization
-        if (session.api_consumer_id != request.api_consumer_id) {
-            continue;
-        }
-        
-        // Match device
-        bool matches = false;
-        
-        if (!request.device) {
-            // No device specified, return all for this consumer
-            matches = true;
-        } else if (resolved_supi && session.ue_supi) {
-            // Match by SUPI
-            matches = (*resolved_supi == *session.ue_supi);
-        } else if (request.device && session.device) {
-            // Match by device identifiers
-            if (request.device->phone_number && session.device->phone_number) {
-                matches = (*request.device->phone_number == *session.device->phone_number);
-            } else if (request.device->ipv4_address && session.device->ipv4_address) {
-                matches = (*request.device->ipv4_address == *session.device->ipv4_address);
-            } else if (request.device->ipv6_address && session.device->ipv6_address) {
-                matches = (*request.device->ipv6_address == *session.device->ipv6_address);
+    std::string resolved_supi_str = resolved_supi.has_value() ? resolved_supi.value().value : "";
+
+    std::vector<std::string> sessions = qod_state_manager_->get_sessions_by_supi(resolved_supi_str);
+    for (const auto& session_id : sessions) {
+        auto session_opt = qod_state_manager_->get_session_by_id(session_id);
+        if (session_opt && session_opt.has_value()) {
+            const auto& session = session_opt.value();
+            if (session.api_consumer_id == request.api_consumer_id) {
+                // Match device
+                bool matches = false;
+                if (!request.device) {
+                    // No device specified, return all for this consumer
+                    matches = true;
+                } else if (resolved_supi && session.ue_supi) {
+                    // Match by SUPI
+                    matches = (*resolved_supi == *session.ue_supi);
+                } else if (request.device && session.device) {
+                    // Match by device identifiers
+                    if (request.device->phone_number && session.device->phone_number) {
+                        matches = (*request.device->phone_number == *session.device->phone_number);
+                    } else if (request.device->ipv4_address && session.device->ipv4_address) {
+                        matches = (*request.device->ipv4_address == *session.device->ipv4_address);
+                    } else if (request.device->ipv6_address && session.device->ipv6_address) {
+                        matches = (*request.device->ipv6_address == *session.device->ipv6_address);
+                    }
+                }
+                if (matches) {
+                    result.push_back(session);
+                }
             }
-        }
-        
-        if (matches) {
-            result.push_back(session);
         }
     }
     
@@ -395,15 +396,13 @@ void QodSessionManager::handle_pcf_session_response(
     logger_->info("PCF response for session {}: success={}, pcf_id={}", 
                  session_id, success, pcf_session_id);
     
-    std::lock_guard<std::mutex> lock(sessions_mutex_);
-    
-    auto it = sessions_.find(session_id);
-    if (it == sessions_.end()) {
+    auto session_opt = qod_state_manager_->get_session_by_id(session_id);
+    if (!session_opt || !session_opt.has_value()) {
         logger_->error("Session not found: {}", session_id);
         return;
     }
     
-    af::common::qod::QodSession& session = it->second;
+    af::common::qod::QodSession& session = session_opt.value();
     af::common::qod::QosStatus old_status = session.qos_status;
     
     if (success) {
@@ -414,7 +413,9 @@ void QodSessionManager::handle_pcf_session_response(
         session.expires_at = *session.started_at + session.duration;
         
         // Map PCF ID to QoD ID
-        pcf_to_qod_session_[pcf_session_id] = session_id;
+        {
+            qod_state_manager_->update_pcf_session_map(pcf_session_id, session_id);
+        }
         
         // Send notification
         if (session.sink && config_.enable_notifications) {
@@ -438,23 +439,15 @@ void QodSessionManager::handle_pcf_session_terminated(
     const std::string& reason) {
     
     logger_->info("PCF session terminated: pcf_id={}, reason={}", pcf_session_id, reason);
-    
-    std::lock_guard<std::mutex> lock(sessions_mutex_);
-    
-    // Find QoD session by PCF ID
-    auto pcf_it = pcf_to_qod_session_.find(pcf_session_id);
-    if (pcf_it == pcf_to_qod_session_.end()) {
-        logger_->warn("No QoD session found for PCF session: {}", pcf_session_id);
+
+    auto session_opt = qod_state_manager_->get_session_by_pcf_session_id(pcf_session_id);
+    if (!session_opt || !session_opt.has_value()) {
+        logger_->error("QoD session not found for PCF session ID: {}", pcf_session_id);
         return;
     }
+
     
-    auto qod_it = sessions_.find(pcf_it->second);
-    if (qod_it == sessions_.end()) {
-        logger_->error("QoD session not found: {}", pcf_it->second);
-        return;
-    }
-    
-    af::common::qod::QodSession& session = qod_it->second;
+    af::common::qod::QodSession& session = session_opt.value();
     
     if (session.qos_status == af::common::qod::QosStatus::AVAILABLE) {
         af::common::qod::QosStatus old_status = session.qos_status;
@@ -469,7 +462,9 @@ void QodSessionManager::handle_pcf_session_terminated(
     }
     
     // Remove PCF mapping
-    pcf_to_qod_session_.erase(pcf_session_id);
+    {
+        qod_state_manager_->remove_pcf_to_qod_session_mapping(pcf_session_id);
+    }
 }
 
 void QodSessionManager::handle_pdu_session_terminated_event(
@@ -478,22 +473,21 @@ void QodSessionManager::handle_pdu_session_terminated_event(
     logger_->info("Handling PDU Session Terminated Event for SUPI: {}, PDU ID: {}", 
                  event.supi.value, event.pdu_session_id);
     
-    std::lock_guard<std::mutex> lock(sessions_mutex_);
-    
     // First get session and check if there is sink configured
-    auto qod_session = qod_state_manager_->get_session_by_pdu_session(event.supi, event.pdu_session_id);
-    if (!qod_session) {
+    auto session_opt = qod_state_manager_->get_session_by_pdu_session(event.supi, event.pdu_session_id);
+    if (!session_opt || !session_opt.has_value()) {
         logger_->debug("No QoD session associated with SUPI: {}, PDU ID: {}", 
                       event.supi.value, event.pdu_session_id);
         return;
     }
-    
-    // Delete the session if it exists
-    qod_state_manager_->remove_session(qod_session->session_id);
+    af::common::qod::QodSession& qod_session = session_opt.value();
 
-    if (qod_session->sink && config_.enable_notifications && qod_session.qos_status == af::common::qod::QosStatus::AVAILABLE) {
-        logger_->info("Sending notification for QoD session {} due to PDU session termination", qod_session->session_id);
-        send_status_change_notification(*qod_session, qod_session->qos_status, af::common::qod::StatusInfo::NETWORK_TERMINATED);
+    // Delete the session if it exists
+    qod_state_manager_->remove_session(qod_session.session_id);
+
+    if (qod_session.sink && config_.enable_notifications && qod_session.qos_status == af::common::qod::QosStatus::AVAILABLE) {
+        logger_->info("Sending notification for QoD session {} due to PDU session termination", qod_session.session_id);
+        send_status_change_notification(qod_session, qod_session.qos_status, af::common::qod::StatusInfo::NETWORK_TERMINATED);
     }
 }
 
@@ -564,39 +558,26 @@ std::optional<std::string> QodSessionManager::check_session_conflict(
     const af::common::qod::QodDevice& device,
     const af::common::qod::ApplicationServer& app_server) {
     
-    std::lock_guard<std::mutex> lock(sessions_mutex_);
-    
-    for (const auto& [id, session] : sessions_) {
+    auto sessions = retrieve_sessions_by_device(
+        af::common::qod::RetrieveSessionsRequest{device, ""});
+
+    for (const auto& session : sessions) {
         // Only check REQUESTED or AVAILABLE sessions
         if (session.qos_status == af::common::qod::QosStatus::UNAVAILABLE) {
             continue;
         }
-        
-        // Check if same device
-        bool same_device = false;
-        if (device.phone_number && session.device && session.device->phone_number) {
-            same_device = (*device.phone_number == *session.device->phone_number);
-        } else if (device.ipv4_address && session.device && session.device->ipv4_address) {
-            same_device = (*device.ipv4_address == *session.device->ipv4_address);
-        } else if (device.ipv6_address && session.device && session.device->ipv6_address) {
-            same_device = (*device.ipv6_address == *session.device->ipv6_address);
+        // Check if same application server
+        bool same_server = false;
+        if (app_server.ipv4_address && session.application_server.ipv4_address) {
+            same_server = (*app_server.ipv4_address == *session.application_server.ipv4_address);
+        } else if (app_server.ipv6_address && session.application_server.ipv6_address) {
+            same_server = (*app_server.ipv6_address == *session.application_server.ipv6_address);
         }
-        
-        if (same_device) {
-            // Check if same application server
-            bool same_server = false;
-            if (app_server.ipv4_address && session.application_server.ipv4_address) {
-                same_server = (*app_server.ipv4_address == *session.application_server.ipv4_address);
-            } else if (app_server.ipv6_address && session.application_server.ipv6_address) {
-                same_server = (*app_server.ipv6_address == *session.application_server.ipv6_address);
-            }
-            
-            if (same_server) {
-                return id;  // Conflict found
-            }
+        if (same_server) {
+            return session.session_id;  // Conflict found
         }
     }
-    
+
     return std::nullopt;
 }
 
@@ -648,7 +629,7 @@ bool QodSessionManager::apply_session_to_pcf(af::common::qod::QodSession& sessio
 
     try {
         // Build PCF request
-        auto pcf_request = build_pcf_request(session);
+        auto pcf_request = build_pcf_request(session); // TODO: pass QodSession instead??
         
         // Create message for PCF
         auto msg = std::make_shared<af::communication::Message>();
@@ -846,67 +827,15 @@ void QodSessionManager::cleanup_expired_sessions() {
     auto now = std::chrono::system_clock::now();
     std::vector<std::string> to_remove;
     
-    {
-        std::lock_guard<std::mutex> lock(sessions_mutex_);
-        
-        for (auto& [id, session] : sessions_) {
-            bool should_remove = false;
-            
-            // Check if session has expired
-            if (session.qos_status == af::common::qod::QosStatus::AVAILABLE && session.expires_at) {
-                if (now >= *session.expires_at) {
-                    // Session duration expired
-                    logger_->info("Session {} duration expired", id);
-                    
-                    af::common::qod::QosStatus old_status = session.qos_status;
-                    session.qos_status = af::common::qod::QosStatus::UNAVAILABLE;
-                    session.status_info = af::common::qod::StatusInfo::DURATION_EXPIRED;
-                    
-                    // Remove from PCF
-                    remove_session_from_pcf(session);
-                    
-                    // Send notification
-                    if (session.sink && config_.enable_notifications) {
-                        send_status_change_notification(
-                            session, old_status, af::common::qod::StatusInfo::DURATION_EXPIRED);
-                    }
-                }
-            }
-            
-            // Check if unavailable session should be cleaned up
-            if (session.qos_status == af::common::qod::QosStatus::UNAVAILABLE) {
-                auto unavailable_duration = now - session.created_at;
-                if (session.expires_at) {
-                    unavailable_duration = now - *session.expires_at;
-                }
-                
-                if (unavailable_duration >= config_.unavailable_session_ttl) {
-                    should_remove = true;
-                    logger_->debug("Removing expired unavailable session: {}", id);
-                }
-            }
-            
-            if (should_remove) {
-                to_remove.push_back(id);
-            }
-        }
-        
-        // Remove expired sessions
-        for (const auto& id : to_remove) {
-            auto it = sessions_.find(id);
-            if (it != sessions_.end()) {
-                // Clean up PCF mapping if exists
-                if (it->second.pcf_session_id) {
-                    pcf_to_qod_session_.erase(*it->second.pcf_session_id);
-                }
-                sessions_.erase(it);
-            }
-        }
+    auto to_remove_sessions = qod_state_manager_->get_expired_sessions(now, config_.unavailable_session_ttl);
+    for (const auto& session : to_remove_sessions) {
+        to_remove.push_back(session.session_id);
+        qod_state_manager_->remove_session(session.session_id);
     }
     
     if (!to_remove.empty()) {
         logger_->info("Cleaned up {} expired sessions", to_remove.size());
-    }
+    } 
 }
 
 void QodSessionManager::session_cleanup_thread() {
@@ -1087,33 +1016,6 @@ std::chrono::seconds QodSessionManager::get_max_duration_for_profile(const std::
 void QodSessionManager::set_notification_handler(
     std::shared_ptr<af::common::qod::INotificationDelivery> handler) {
     notification_handler_ = handler;
-}
-
-std::vector<af::common::qod::QodSession> QodSessionManager::get_all_sessions() {
-    std::lock_guard<std::mutex> lock(sessions_mutex_);
-    
-    std::vector<af::common::qod::QodSession> result;
-    result.reserve(sessions_.size());
-    
-    for (const auto& [id, session] : sessions_) {
-        result.push_back(session);
-    }
-    
-    return result;
-}
-
-std::vector<af::common::qod::QodSession> QodSessionManager::get_sessions_by_status(af::common::qod::QosStatus status) {
-    std::lock_guard<std::mutex> lock(sessions_mutex_);
-    
-    std::vector<af::common::qod::QodSession> result;
-    
-    for (const auto& [id, session] : sessions_) {
-        if (session.qos_status == status) {
-            result.push_back(session);
-        }
-    }
-    
-    return result;
 }
 
 } // namespace qod

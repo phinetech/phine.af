@@ -32,6 +32,7 @@ find_package(gRPC REQUIRED)
 set(SOURCES
     src/qod/qod_notification_manager.cpp
     src/qod/qod_session_manager.cpp
+    src/qod/qod_state_manager.cpp
     src/qod/qod_handler.cpp
     src/af_orchestrator.cpp
     src/request_router.cpp

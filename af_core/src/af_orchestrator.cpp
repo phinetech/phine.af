@@ -36,7 +36,7 @@ AfOrchestrator::AfOrchestrator(const std::string& config_path)
     logger_->info("Initializing AF Core Orchestrator");
     
     // Create components
-    event_dispatcher_ = std::make_shared<EventDispatcher>();
+    event_dispatcher_ = std::make_shared<af::core::events::EventDispatcher>();
     ue_state_manager_ = std::make_shared<UeStateManager>(event_dispatcher_);
     request_router_ = std::make_shared<RequestRouter>();
     policy_manager_ = std::make_shared<PolicyManager>(ue_state_manager_);
@@ -239,9 +239,11 @@ void AfOrchestrator::initialize_qod_components() {
     // TODO: Load QoD configuration from config file
     // load_qod_config(qod_config);
     
+    // Create QoD state manager
+    qod_state_manager_ = std::make_shared<qod::QodStateManager>();
     // Create QoD session manager
     qod_session_manager_ = std::make_shared<qod::QodSessionManager>(
-        ue_state_manager_, qod_config);
+        ue_state_manager_, qod_state_manager_, qod_config);
     
     // Create QoD handler
     qod_handler_ = std::make_shared<qod::QodHandler>(qod_session_manager_);

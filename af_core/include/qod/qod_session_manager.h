@@ -21,6 +21,7 @@
 #include <functional>
 #include <spdlog/spdlog.h>
 #include <unordered_set>
+#include "qod_state_manager.h"
 #include "../../common/models/qod/qod_session.h"
 #include "../../common/models/qod/qod_events.h"
 #include "ue_state_manager.h"
@@ -187,6 +188,10 @@ public:
      * @brief Initialize logger
      */
     void initializeLogger(spdlog::level::level_enum log_level = spdlog::level::info);
+
+    // === Events ===
+    void handle_pdu_session_terminated_event(
+        const af::core::events::PduSessionTerminatedEvent& event);
 
 private:
     // === Internal Methods ===

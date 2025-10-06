@@ -23,6 +23,7 @@
 #include "qod/qod_session_manager.h"
 #include "qod/qod_handler.h"
 #include "qod/qod_notification_manager.h"
+#include "events/event_dispatcher.h"
 
 namespace af {
 namespace core {
@@ -109,7 +110,7 @@ private:
     // Configuration
     std::string config_path_;
     
-    std::shared_ptr<af::core::events::IEventDispatcher> event_dispatcher_;
+    std::shared_ptr<af::core::events::EventDispatcher> event_dispatcher_;
     
     // Component instances
     std::shared_ptr<RequestRouter> request_router_;
@@ -121,6 +122,7 @@ private:
     std::shared_ptr<qod::QodSessionManager> qod_session_manager_;
     std::shared_ptr<qod::QodHandler> qod_handler_;
     std::shared_ptr<qod::QodNotificationManager> qod_notification_manager_;
+    std::shared_ptr<qod::QodStateManager> qod_state_manager_;
     
     // Communication services for northbound and southbound interfaces
     std::unordered_map<std::string, std::shared_ptr<af::communication::CommunicationService>> communication_services_;

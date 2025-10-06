@@ -6,6 +6,7 @@
 #include <vector>
 #include <optional>
 #include <functional> // Required for std::hash
+#include <unordered_set>
 #include "../../common/models/common.h"
 
 

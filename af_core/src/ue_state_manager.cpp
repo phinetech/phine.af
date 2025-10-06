@@ -1,7 +1,15 @@
 #include "models/ue_state.h"
 #include "ue_state_manager.h"
 
-UeStateManager::UeStateManager() = default;
+UeStateManager::UeStateManager()
+    : event_dispatcher_(nullptr) // Initialize pointer or other members as needed
+{
+    // Initialize other members here if necessary
+}
+
+UeStateManager::UeStateManager(std::shared_ptr<af::core::events::EventDispatcher> dispatcher) {
+    event_dispatcher_ = dispatcher;
+}
 
 // Public Methods Implementations
 
@@ -173,7 +181,7 @@ bool UeStateManager::remove_pdu_session(const Supi& supi, const std::string& pdu
                 pdu_sessions.erase(session_it);
                 
                 // Publish PDU Session Terminated Event
-                af::core::events::PduSessionTerminatedEvent event{supi, pdu_session_id};
+                af::core::events::PduSessionTerminatedEvent event(supi, pdu_session_id);
                 event_dispatcher_->publish(event);
                 
                 return true;
@@ -304,7 +312,7 @@ void UeStateManager::remove_pdu_session_indices(const std::string& supi_value, c
     }
 }
 
-void UeStateManager::add_qod_session_to_pdu_session(const Supi& supi, const std::string& pdu_session_id, const std::string& qod_session_id) {
+bool UeStateManager::add_qod_session_to_pdu_session(const Supi& supi, const std::string& pdu_session_id, const std::string& qod_session_id) {
     std::lock_guard<std::mutex> lock(mtx_);
     auto it = ue_states_by_supi_.find(supi.value);
     if (it != ue_states_by_supi_.end()) {
@@ -318,7 +326,7 @@ void UeStateManager::add_qod_session_to_pdu_session(const Supi& supi, const std:
     return false; // UE or PDU Session not found
 }
 
-void UeStateManager::remove_qod_session_from_pdu_session(const Supi& supi, const std::string& pdu_session_id, const std::string& qod_session_id) {
+bool UeStateManager::remove_qod_session_from_pdu_session(const Supi& supi, const std::string& pdu_session_id, const std::string& qod_session_id) {
     std::lock_guard<std::mutex> lock(mtx_);
     auto it = ue_states_by_supi_.find(supi.value);
     if (it != ue_states_by_supi_.end()) {

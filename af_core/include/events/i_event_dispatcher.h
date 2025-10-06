@@ -3,6 +3,11 @@
 
 #include <functional>
 #include <memory>
+#include <vector>
+#include <unordered_map>
+#include <typeindex>
+#include <mutex>
+
 #include "events.h"
 
 namespace af {
@@ -15,11 +20,11 @@ class IEventDispatcher {
 public:
     virtual ~IEventDispatcher() = default;
 
-    /**
-     * @brief Subscribes a listener to a specific event type.
-     */
-    template<typename TEvent>
-    virtual void subscribe(std::function<void(const TEvent&)> callback) = 0;
+    // /**
+    //  * @brief Subscribes a listener to a specific event type.
+    //  */
+    // template<typename TEvent>
+    // virtual void subscribe(std::function<void(const TEvent&)> callback) = 0;
 
     /**
      * @brief Publishes an event to all interested subscribers.

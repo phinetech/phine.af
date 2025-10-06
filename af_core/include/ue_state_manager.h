@@ -3,7 +3,9 @@
 
 #include "models/ue_state.h" 
 #include "events/i_event_dispatcher.h"
+#include "events/event_dispatcher.h"
 #include <unordered_map>
+#include <unordered_set>
 #include <mutex>
 #include <optional>
 
@@ -13,7 +15,9 @@
  */
 class UeStateManager {
 public:
-    explicit UeStateManager(std::shared_ptr<af::core::events::IEventDispatcher> dispatcher);
+    explicit UeStateManager(std::shared_ptr<af::core::events::EventDispatcher> dispatcher);
+
+    UeStateManager();
 
     /**
      * @brief Adds or updates a UE's full state based on a received notification.
@@ -209,7 +213,7 @@ private:
     mutable std::unordered_map<std::string, std::string> supi_by_ipv6_prefix_;
     mutable std::unordered_map<std::string, std::string> supi_by_mac_addr_;
     mutable std::unordered_map<std::string, std::string> supi_by_pdu_session_id_;
-    std::shared_ptr<af::core::events::IEventDispatcher> event_dispatcher_;
+    std::shared_ptr<af::core::events::EventDispatcher> event_dispatcher_;
 
     // Mutex for thread-safe access to the maps.
     mutable std::mutex mtx_;
