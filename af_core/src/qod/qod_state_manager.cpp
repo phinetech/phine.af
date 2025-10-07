@@ -15,6 +15,9 @@ QodStateManager::QodStateManager() {
     // Setup logger
     initializeLogger(spdlog::level::debug);
     
+    // Initialize default QoS profile mappings
+    initialize_default_mappings();
+    
     logger_->info("QoD State Manager created");
 }
 
@@ -31,6 +34,84 @@ void QodStateManager::initializeLogger(spdlog::level::level_enum log_level) {
     
     logger_->set_level(log_level);
     logger_->set_pattern("%Y-%m-%d %H:%M:%S.%e [%^%l%$] [%n] %v");
+}
+
+void QodStateManager::initialize_default_mappings() {
+    // CAMARA standard profiles
+    qos_profile_mappings_["QOS_E"] = {
+        1,          // 5QI = 1 (Conversational Voice)
+        20,         // Priority
+        100,        // Packet Delay Budget (ms)
+        0.001,      // Packet Error Rate (10^-3)
+        std::nullopt, // Max Data Burst
+        true,       // GBR
+        64,         // Guaranteed UL (kbps)
+        64,         // Guaranteed DL (kbps)
+        128,        // Max UL (kbps)
+        128         // Max DL (kbps)
+    };
+    
+    qos_profile_mappings_["QOS_S"] = {
+        2,          // 5QI = 2 (Conversational Video)
+        40,         // Priority
+        150,        // Packet Delay Budget (ms)
+        0.001,      // Packet Error Rate
+        std::nullopt,
+        true,       // GBR
+        384,        // Guaranteed UL (kbps)
+        384,        // Guaranteed DL (kbps)
+        512,        // Max UL (kbps)
+        512         // Max DL (kbps)
+    };
+    
+    qos_profile_mappings_["QOS_M"] = {
+        3,          // 5QI = 3 (Real Time Gaming)
+        30,         // Priority
+        50,         // Packet Delay Budget (ms)
+        0.001,      // Packet Error Rate
+        std::nullopt,
+        true,       // GBR
+        512,        // Guaranteed UL (kbps)
+        512,        // Guaranteed DL (kbps)
+        1024,       // Max UL (kbps)
+        1024        // Max DL (kbps)
+    };
+    
+    qos_profile_mappings_["QOS_L"] = {
+        4,          // 5QI = 4 (Non-Conversational Video)
+        50,         // Priority
+        300,        // Packet Delay Budget (ms)
+        0.000001,   // Packet Error Rate (10^-6)
+        std::nullopt,
+        true,       // GBR
+        256,        // Guaranteed UL (kbps)
+        256,        // Guaranteed DL (kbps)
+        512,        // Max UL (kbps)
+        512         // Max DL (kbps)
+    };
+    
+    // Custom profiles
+    qos_profile_mappings_["voice"] = {
+        1, 20, 100, 0.001, std::nullopt, true, 64, 64, 128, 128
+    };
+    
+    qos_profile_mappings_["video"] = {
+        2, 40, 150, 0.001, std::nullopt, true, 1024, 2048, 2048, 4096
+    };
+    
+    qos_profile_mappings_["game"] = {
+        3, 30, 50, 0.001, std::nullopt, true, 512, 512, 1024, 1024
+    };
+    
+    qos_profile_mappings_["data"] = {
+        9,          // 5QI = 9 (Default non-GBR)
+        60,         // Priority
+        300,        // Packet Delay Budget (ms)
+        0.000001,   // Packet Error Rate
+        std::nullopt,
+        false,      // Non-GBR
+        std::nullopt, std::nullopt, std::nullopt, std::nullopt
+    };
 }
 
 void QodStateManager::add_session(const af::common::qod::QodSession& session) {
@@ -233,6 +314,28 @@ bool QodStateManager::remove_pcf_to_qod_session_mapping(
     
     std::lock_guard<std::mutex> lock(pcf_mapping_mutex_);
     pcf_session_mapping_.erase(pcf_session_id);
+}
+
+// === QoS Profile Mapping ===
+// TODO: move to qos_profile_manager when available
+std::optional<af::common::qod::QosProfileMapping> QodStateManager::get_qos_profile_mapping(
+    const std::string& qos_profile) {
+    
+    std::lock_guard<std::mutex> lock(mappings_mutex_);
+    
+    auto it = qos_profile_mappings_.find(qos_profile);
+    if (it != qos_profile_mappings_.end()) {
+        return it->second;
+    }
+    
+    return std::nullopt;
+}
+
+void QodStateManager::register_qos_profile(const std::string& profile_name,
+                                        const af::common::qod::QosProfileMapping& mapping) {
+    std::lock_guard<std::mutex> lock(mappings_mutex_);
+    qos_profile_mappings_[profile_name] = mapping;
+    logger_->info("Registered QoS profile mapping: {}", profile_name);
 }
 
 } // namespace qod

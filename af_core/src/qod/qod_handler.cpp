@@ -594,6 +594,7 @@ std::optional<af::common::qod::QodDevice> QodHandler::parse_device(const nlohman
     return device;
 }
 
+// TODO: remove this has been moved to southbound/pcf_handler/src/qod_pcf_handler.cpp
 af::common::qod::ApplicationServer QodHandler::parse_application_server(const nlohmann::json& json) {
     af::common::qod::ApplicationServer server;
     

@@ -275,4 +275,20 @@ docker run --rm --network host -v ./common/protos:/var/protos/ fullstorydev/grpc
   af.proto.InternalCommunication/SendMessage
 ```
 
-    "payload": "'$(echo '{"device":{"ipv4Address":{"publicAddress":"203.0.113.0","publicPort":"59765"}},"qosProfile":"voice"}' | base64)'",
+
+```bash
+docker run --rm --network host -v ./common/protos:/var/protos/ fullstorydev/grpcurl -plaintext \
+  -proto message.proto \
+  -import-path /var/protos \
+  -d '{
+     "message_type": "qod_create_session",
+     "correlation_id": "12345",
+     "payload": "'$(cat ./af_core/tests/requests/qod/qod_create_session.json | base64 -w 0)'",
+     "metadata": {
+      "source": "command_line",
+      "priority": "high"
+    }
+  }' \
+  192.168.70.141:50051 \
+  af.proto.InternalCommunication/SendMessage
+```

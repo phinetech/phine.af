@@ -348,6 +348,13 @@ std::pair<bool, nlohmann::json> PcfClientWrapper::perform_request(
         // Add status code to response
         response_json["http_code"] = response.status_code;
         
+        // Add headers to response
+        nlohmann::json headers_json = nlohmann::json::object();
+        for (const auto& [key, value] : response.headers) {
+            headers_json[key] = value;
+        }
+        response_json["headers"] = headers_json;
+        
         if (!success) {
             logger_->error("Request failed with HTTP code {}: {}", 
                           response.status_code, response.body);

@@ -24,40 +24,6 @@ public:
         return handler_->process_message(message);
     }
 
-    // af::communication::MessagePtr handle_message(
-    //     const af::communication::MessagePtr& message) override {
-        
-    //     if (!message) {
-    //         return nullptr;
-    //     }
-        
-    //     const std::string& message_type = message->message_type;
-        
-    //     if (message_type == "pcf_create_app_session") {
-    //         return handler_->create_app_session(message);
-    //     }
-    //     else if (message_type == "pcf_update_app_session") {
-    //         return handler_->update_app_session(message);
-    //     }
-    //     else if (message_type == "pcf_delete_app_session") {
-    //         return handler_->delete_app_session(message);
-    //     }
-    //     else if (message_type == "pcf_get_app_session") {
-    //         return handler_->get_app_session(message);
-    //     }
-    //     else if (message_type == "pcf_notification") {
-    //         return handler_->handle_notification(message);
-    //     }
-        
-    //     // Default response for unknown message types
-    //     auto response = std::make_shared<af::communication::Message>();
-    //     response->message_type = "error";
-    //     response->correlation_id = message->correlation_id;
-    //     std::string error = "Unsupported message type: " + message_type;
-    //     response->payload.assign(error.begin(), error.end());
-    //     return response;
-    // }
-
 private:
     PcfHandler* handler_;
 };
@@ -78,7 +44,10 @@ PcfHandler::PcfHandler(const std::string& config_path)
 
     // Load configuration
     load_config();
-    
+
+    // Create QoD PCF handler
+    qod_pcf_handler_ = std::make_shared<QodPcfHandler>(config_path_);
+
     // Create PCC rule manager
     pcc_rule_manager_ = std::make_shared<PccRuleManager>();
     
@@ -137,6 +106,9 @@ void PcfHandler::initialize() {
     
     // Register message handlers
     register_handlers();
+
+    // Register QoD related handlers
+    register_qod_handlers();
     
     logger_->info("PCF Handler initialization complete");
 }
@@ -229,9 +201,30 @@ void PcfHandler::register_handlers() {
         core_comm_->register_handler("pcf_delete_app_session", message_handler_);
         core_comm_->register_handler("pcf_get_app_session", message_handler_);
         core_comm_->register_handler("pcf_notification", message_handler_);
-        
+
+        core_comm_->register_handler("pcf_create_qod_session", message_handler_);
+        core_comm_->register_handler("pcf_update_qod_session", message_handler_);
+        core_comm_->register_handler("pcf_delete_qod_session", message_handler_);
+
         logger_->info("Message handlers registered");
     }
+}
+
+// TODO: move them to qod handlers
+void PcfHandler::register_qod_handlers() {
+    request_router_->register_handler("pcf_create_qod_session",
+        [this](const af::communication::MessagePtr& msg) {
+            return qod_pcf_handler_->handle_qod_create_pcf_session(msg);
+        });
+
+    request_router_->register_handler("pcf_update_qod_session",
+        [this](const af::communication::MessagePtr& msg) {
+            return qod_pcf_handler_->handle_qod_update_pcf_session(msg);
+        });
+    request_router_->register_handler("pcf_delete_qod_session",
+        [this](const af::communication::MessagePtr& msg) {
+            return qod_pcf_handler_->handle_qod_delete_pcf_session(msg);
+        });
 }
 
 af::communication::MessagePtr PcfHandler::create_app_session(

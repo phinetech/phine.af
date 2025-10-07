@@ -107,6 +107,14 @@ std::optional<af::common::qod::QodSession> QodSessionManager::create_session(
                       request.duration.count(), request.qos_profile);
         return std::nullopt;
     }
+
+    // Get QoS profile mapping
+    auto mapping_opt = qod_state_manager_->get_qos_profile_mapping(request.qos_profile);
+    if (!mapping_opt || !mapping_opt.has_value()) {
+        logger_->error("No mapping found for QoS profile: {}", request.qos_profile);
+        return std::nullopt;
+    }
+    auto mapping = mapping_opt.value();
     
     // Resolve device if provided
     std::optional<Supi> resolved_supi;
@@ -140,6 +148,7 @@ std::optional<af::common::qod::QodSession> QodSessionManager::create_session(
     session.device_ports = request.device_ports;
     session.application_server_ports = request.application_server_ports;
     session.qos_profile = request.qos_profile;
+    session.qos_profile_mapping = mapping;
     session.duration = request.duration;
     session.sink = request.sink;
     session.sink_credential = request.sink_credential;
@@ -880,7 +889,7 @@ nlohmann::json QodSessionManager::build_pcf_request(const af::common::qod::QodSe
     nlohmann::json request;
     
     // Basic session information
-    request["qod_session_id"] = session.session_id;
+    request["session_id"] = session.session_id;
     request["qos_profile"] = session.qos_profile;
     request["duration"] = session.duration.count();
     
@@ -888,19 +897,35 @@ nlohmann::json QodSessionManager::build_pcf_request(const af::common::qod::QodSe
     if (session.device) {
         request["device"] = convert_device_to_pcf(*session.device, session.ue_supi);
     } else if (session.ue_supi) {
-        request["supi"] = session.ue_supi->value;
+        request["ue_supi"] = session.ue_supi->value;
     }
     
     // Application server
     if (session.application_server.ipv4_address) {
-        request["app_server_ipv4"] = *session.application_server.ipv4_address;
+        request["application_server"]["ipv4Address"] = *session.application_server.ipv4_address;
     }
     if (session.application_server.ipv6_address) {
-        request["app_server_ipv6"] = *session.application_server.ipv6_address;
+        request["application_server"]["ipv6Address"] = *session.application_server.ipv6_address;
     }
     
-    // Flow filters
-    request["flow_info"] = build_flow_filters(session);
+    // Device ports
+    if (session.device_ports) {
+        // Convert PortsSpec to json object
+        std::vector<nlohmann::json> port_ranges;
+        for (const auto& range : session.device_ports->ranges) {
+            port_ranges.push_back({
+                {"from", range.from},
+                {"to", range.to}
+            });
+        }
+        if (!port_ranges.empty()) {
+            request["device_ports"]["port_ranges"] = port_ranges;
+        }
+
+        if (!session.device_ports->ports.empty()) {
+            request["device_ports"]["ports"] = session.device_ports->ports;
+        }
+    }
     
     // Map QoS profile to 5QI and other parameters
     // This mapping would be configured based on operator policies

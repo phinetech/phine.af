@@ -17,27 +17,12 @@
 #include <chrono>
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
+#include "pcf_client_wrapper.h"
 #include "../common/models/qod/qod_session.h"
 #include "../common/communication/include/message.h"
 
 namespace af {
 namespace southbound {
-
-/**
- * @brief QoS profile to 5QI mapping configuration
- */
-struct QosProfileMapping {
-    int fiveqi;                          // 5G QoS Identifier
-    std::optional<int> priority_level;   // Priority level (1-127)
-    std::optional<int> packet_delay_budget; // In milliseconds
-    std::optional<double> packet_error_rate; // Error rate (e.g., 10^-2)
-    std::optional<int> max_data_burst_volume; // In bytes
-    bool is_gbr;                         // Guaranteed Bit Rate
-    std::optional<int> guaranteed_uplink_rate;   // In kbps
-    std::optional<int> guaranteed_downlink_rate; // In kbps
-    std::optional<int> max_uplink_rate;          // In kbps
-    std::optional<int> max_downlink_rate;        // In kbps
-};
 
 /**
  * @brief PCF session state
@@ -70,10 +55,10 @@ class QodPcfHandler {
 public:
     /**
      * @brief Constructor
-     * @param ue_state_manager Shared pointer to UE state manager
+     * @param config_path Path to configuration file
      */
-    explicit QodPcfHandler();
-    
+    explicit QodPcfHandler(const std::string& config_path);
+
     /**
      * @brief Destructor
      */
@@ -84,6 +69,33 @@ public:
      * @param orchestrator Pointer to the orchestrator
      */
     void initialize();
+
+    // === QoD Handlers ===
+    /**
+     * @brief Receive MessagePtr and convert to required model
+     * @param message Incoming request message
+     * @return Response message
+     */
+    af::communication::MessagePtr handle_qod_create_pcf_session(
+        const af::communication::MessagePtr& message);
+
+
+    /**
+     * @brief Receive MessagePtr and convert to required model
+     * @param message Incoming request message
+     * @return Response message
+     */
+    af::communication::MessagePtr handle_qod_update_pcf_session(
+        const af::communication::MessagePtr& message);
+
+    /**
+     * @brief Receive MessagePtr and convert to required model
+     * @param message Incoming request message
+     * @return Response message
+     */
+    af::communication::MessagePtr handle_qod_delete_pcf_session(
+        const af::communication::MessagePtr& message);
+     
     
     // === PCF Session Management ===
     
@@ -145,24 +157,6 @@ public:
     std::pair<std::optional<std::string>, std::optional<std::string>> 
         handle_pcf_notification(const af::communication::MessagePtr& message);
     
-    // === QoS Profile Mapping ===
-    
-    /**
-     * @brief Get QoS profile mapping
-     * @param qos_profile QoS profile name
-     * @return Mapping configuration or nullopt if not found
-     */
-    std::optional<QosProfileMapping> get_qos_profile_mapping(
-        const std::string& qos_profile);
-    
-    /**
-     * @brief Register custom QoS profile mapping
-     * @param profile_name Profile name
-     * @param mapping Mapping configuration
-     */
-    void register_qos_profile(const std::string& profile_name, 
-                              const QosProfileMapping& mapping);
-    
     // === Session Mapping ===
     
     /**
@@ -202,8 +196,7 @@ private:
      * @return JSON array of media components
      */
     nlohmann::json build_media_components(
-        const af::common::qod::QodSession& qod_session,
-        const QosProfileMapping& mapping);
+        const af::common::qod::QodSession& qod_session);
     
     /**
      * @brief Build flow descriptions for PCF
@@ -247,12 +240,6 @@ private:
         const std::optional<af::common::qod::PortsSpec>& server_ports);
     
     /**
-     * @brief Generate PCF session ID
-     * @return Unique PCF session ID
-     */
-    std::string generate_pcf_session_id();
-    
-    /**
      * @brief Store PCF session mapping
      * @param qod_session_id QoD session ID
      * @param pcf_session_id PCF session ID
@@ -276,18 +263,81 @@ private:
      */
     void remove_session_mapping(const std::string& qod_session_id);
     
+    // === Parsing Methods ===
+
     /**
-     * @brief Initialize default QoS profile mappings
+     * @brief Parse device from JSON
+     * @param json JSON object
+     * @return Parsed device or nullopt
      */
-    void initialize_default_mappings();
+    std::optional<af::common::qod::QodDevice> parse_device(const nlohmann::json& json);
+
+    /**
+     * @brief Parse application server from JSON
+     * @param json JSON object
+     * @return Parsed application server
+     */
+    af::common::qod::ApplicationServer parse_application_server(const nlohmann::json& json);
+
+    /**
+     * @brief Parse port specification from JSON
+     * @param json JSON object
+     * @return Parsed port specification
+     */
+    std::optional<af::common::qod::PortsSpec> parse_ports(const nlohmann::json& json);
+
+    /**
+     * @brief Parse sink credential from JSON
+     * @param json JSON object
+     * @return Parsed sink credential
+     */
+    std::optional<af::common::qod::SinkCredential> parse_sink_credential(const nlohmann::json& json);
     
+    // === Response helpers ===
+    /**
+     * @brief Create error response of given type
+     * @param status HTTP status code
+     * @param code Error code
+     * @param message Error message
+     * @param correlation_id Correlation ID for response
+     * @return Error response message ptr
+     */
+    af::communication::MessagePtr create_error_response(
+        int status,
+        const std::string& code,
+        const std::string& message,
+        const std::string& correlation_id);
+
+    /**
+     * @brief Create success response for QoD session of type message ptr
+     * @param data JSON data to include in response
+     * @param status HTTP status code
+     * @param correlation_id Correlation ID for response
+     * @return Success response message ptr
+     */
+    af::communication::MessagePtr create_success_response(
+        const nlohmann::json& data,
+        int status,
+        const std::string& message_type,
+        const std::string& correlation_id);
+
+    /**
+     * @brief Load configuration from file
+     * @param path Path to configuration file
+     */
+    void load_config(const std::string& path);
+
     // === Member Variables ===
     
-    // std::shared_ptr<PcfClientWrapper> pcf_client_;
+    // Configuration
+    std::string config_path_;
+    std::string pcf_base_url_;
+    bool use_tls_;
+    std::string api_version_;
+
+    std::shared_ptr<PcfClientWrapper> pcf_client_;
+
     
-    // QoS profile mappings
-    std::unordered_map<std::string, QosProfileMapping> qos_profile_mappings_;
-    mutable std::mutex mappings_mutex_;
     
     // Session mappings
     std::unordered_map<std::string, PcfSessionInfo> qod_to_pcf_sessions_; // QoD ID -> PCF info

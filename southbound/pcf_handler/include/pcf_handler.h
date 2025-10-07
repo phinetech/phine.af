@@ -20,6 +20,7 @@
 #include "request_router.h"
 #include "pcc_rule_manager.h"
 #include "pcf_client_wrapper.h"
+#include "qod_pcf_handler.h"
 
 #include "AppSessionContext.h"
 #include "AppSessionContextReqData.h"
@@ -136,6 +137,9 @@ private:
     // Request router for handling incoming messages
     std::shared_ptr<RequestRouter> request_router_;
 
+    // Handlers
+    std::shared_ptr<QodPcfHandler> qod_pcf_handler_;
+
     // Message handler for incoming messages
     class PcfMessageHandler;
     std::shared_ptr<PcfMessageHandler> message_handler_;
@@ -173,6 +177,13 @@ private:
      */
     void register_handlers();
     
+    // === QoD ===
+    // TODO: move me
+    /**
+     * @brief Register message handlers
+     */
+    void register_qod_handlers();
+
     /**
      * @brief Store application session information
      * @param session_id Session ID

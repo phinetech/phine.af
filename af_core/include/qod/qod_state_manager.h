@@ -35,6 +35,12 @@ public:
     ~QodStateManager();
 
     /**
+     * @brief Initialize default QoS profile mappings
+     */
+    void initialize_default_mappings();
+
+
+    /**
      * @brief Add a new QoD session
      * @param session The QoD session to add
      */
@@ -133,6 +139,23 @@ public:
     bool remove_pcf_to_qod_session_mapping(
         const std::string& pcf_session_id);
 
+    // === QoS Profile Mapping ===
+    
+    /**
+     * @brief Get QoS profile mapping
+     * @param qos_profile QoS profile name
+     * @return Mapping configuration or nullopt if not found
+     */
+    std::optional<af::common::qod::QosProfileMapping> get_qos_profile_mapping(
+        const std::string& qos_profile);
+    
+    /**
+     * @brief Register custom QoS profile mapping
+     * @param profile_name Profile name
+     * @param mapping Mapping configuration
+     */
+    void register_qos_profile(const std::string& profile_name, 
+                              const af::common::qod::QosProfileMapping& mapping);
 private:
 
     /**
@@ -154,6 +177,10 @@ private:
     // Note: The reverse mapping (PCF to QoD) is maintained in Qod Session Manager
     // because it needs to be accessed without locking this entire state manager.
     mutable std::mutex pcf_mapping_mutex_;
+
+    // QoS profile mappings
+    std::unordered_map<std::string, af::common::qod::QosProfileMapping> qos_profile_mappings_;
+    mutable std::mutex mappings_mutex_;
 
     // Logger
     std::shared_ptr<spdlog::logger> logger_;
