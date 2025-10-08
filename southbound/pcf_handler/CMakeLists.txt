@@ -61,6 +61,7 @@ find_package(OpenSSL REQUIRED) # for TLS support
 # Define source files
 set(SOURCES
     ${CONFIG_SRC_FILES}
+    src/helpers.cpp
     src/qod_pcf_handler.cpp
     src/request_router.cpp
     src/pcf_handler.cpp

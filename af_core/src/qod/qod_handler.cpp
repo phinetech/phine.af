@@ -71,6 +71,7 @@ af::communication::MessagePtr QodHandler::handle_create_session(
             // Validate device based on token type
             auto device_error = validate_device(request.device, context);
             if (device_error) {
+                logger_->error("Device validation error: {}", device_error.value());
                 return create_error_response(422, 
                     context.is_three_legged ? ErrorCode::UNNECESSARY_IDENTIFIER : ErrorCode::MISSING_IDENTIFIER,
                     *device_error, context.correlation_id);

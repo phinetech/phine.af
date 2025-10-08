@@ -504,8 +504,10 @@ void QodSessionManager::handle_pdu_session_terminated_event(
 
 std::pair<std::optional<Supi>, std::optional<std::string>> 
 QodSessionManager::resolve_device(const af::common::qod::QodDevice& device) {
-    
+    logger_->debug("Resolving device to SUPI");
+
     if (!ue_state_manager_) {
+        logger_->error("UE State Manager not initialized");
         return {std::nullopt, std::nullopt};
     }
     
@@ -516,9 +518,13 @@ QodSessionManager::resolve_device(const af::common::qod::QodDevice& device) {
         // Convert phone number to GPSI format
         Gpsi gpsi{*device.phone_number};
         ue_state = ue_state_manager_->get_ue_state_by_gpsi(gpsi);
+        if (!ue_state) {
+            logger_->debug("No UE state found for phone number: {}", device.phone_number.value());
+        }
     }
     
-    if (!ue_state && device.ipv4_address) {
+    if (!ue_state && device.ipv4_address.has_value()) {
+        logger_->debug("Attempting to resolve by IPv4 address");
         if (device.ipv4_address->public_address.value.empty() == false) {
             Ipv4Addr addr{device.ipv4_address->public_address.value};
             ue_state = ue_state_manager_->get_ue_state_by_ipv4(addr);
@@ -527,11 +533,17 @@ QodSessionManager::resolve_device(const af::common::qod::QodDevice& device) {
             Ipv4Addr addr{device.ipv4_address->private_address->value};
             ue_state = ue_state_manager_->get_ue_state_by_ipv4(addr);
         }
+        if (!ue_state) {
+            logger_->debug("No UE state found for provided IPv4 addresses {}", device.ipv4_address->public_address.value);
+        }
     }
     
     if (!ue_state && device.ipv6_address) {
         Ipv6Addr addr{device.ipv6_address->value};
         ue_state = ue_state_manager_->get_ue_state_by_ipv6_addr(addr);
+        if (!ue_state) {
+            logger_->debug("No UE state found for IPv6 address: {}", device.ipv6_address->value);
+        }
     }
     
     if (ue_state) {
@@ -546,6 +558,8 @@ QodSessionManager::resolve_device(const af::common::qod::QodDevice& device) {
             }
         }
         return {ue_state->supi, pdu_session_id};
+    } else {
+        logger_->warn("Could not resolve device to SUPI");
     }
     
     return {std::nullopt, std::nullopt};
@@ -960,17 +974,18 @@ nlohmann::json QodSessionManager::convert_device_to_pcf(
     }
     
     if (device.ipv4_address) {
-        pcf_device["ipv4"] = device.ipv4_address->public_address.value;
+        pcf_device["ipv4Address"] = {};
+        pcf_device["ipv4Address"]["publicAddress"] = device.ipv4_address->public_address.value;
         if (device.ipv4_address->private_address) {
-            pcf_device["ipv4_private"] = device.ipv4_address->private_address->value;
+            pcf_device["ipv4Address"]["privateAddress"] = device.ipv4_address->private_address->value;
         }
         if (device.ipv4_address->public_port) {
-            pcf_device["port"] = *device.ipv4_address->public_port;
+            pcf_device["ipv4Address"]["publicPort"] = *device.ipv4_address->public_port;
         }
     }
     
     if (device.ipv6_address) {
-        pcf_device["ipv6"] = device.ipv6_address->value;
+        pcf_device["ipv6Address"] = device.ipv6_address->value;
     }
     
     return pcf_device;

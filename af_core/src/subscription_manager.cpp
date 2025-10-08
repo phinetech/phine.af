@@ -72,7 +72,7 @@ void SubscriptionManager::initialize(AfOrchestrator* orchestrator) {
                 Ipv4Addr{"10.60.0.1"}, // Example IPv4 address
             }
         };
-        ue_state_manager_->update_ue_state(test_ue_state);
+        // ue_state_manager_->update_ue_state(test_ue_state);
     } else {
         logger_->warn("UE State Manager is not initialized, cannot add test UE");
     }

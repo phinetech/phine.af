@@ -142,13 +142,27 @@ bool PcfClientWrapper::connect() {
     logger_->debug("Connecting to {}:{} with HTTP/2 prior knowledge", host_, port_);
     
     try {
+        // CRITICAL: Verify session is initialized
+        if (session_ == nullptr) {
+            logger_->error("nghttp2 session is not initialized. Call initialize_nghttp2() first.");
+            return false;
+        }
+
         // Resolve the host
         boost::asio::ip::tcp::resolver resolver(io_context_);
         auto endpoints = resolver.resolve(host_, port_);
-        
+
+        logger_->debug("Resolved endpoints");
         // Connect to the host
         boost::asio::connect(socket_, endpoints);
-        
+        logger_->debug("TCP connection established");
+
+        // // --- HTTP/2 prior knowledge preface ---
+        // // Send the client connection preface as per RFC 7540 section 3.5
+        // static const std::string http2_preface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+        // boost::asio::write(socket_, boost::asio::buffer(http2_preface));
+        // logger_->debug("Sent HTTP/2 client connection preface");
+
         // Configure proper HTTP/2 settings
         nghttp2_settings_entry iv[] = {
             {NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100},
@@ -156,9 +170,15 @@ bool PcfClientWrapper::connect() {
             {NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, 65535} // Default window size
         };
         
-        nghttp2_submit_settings(session_, NGHTTP2_FLAG_NONE, iv, 
-                               sizeof(iv) / sizeof(iv[0]));
-        
+        logger_->debug("Submitting HTTP/2 SETTINGS frame");
+        int rv = nghttp2_submit_settings(session_, NGHTTP2_FLAG_NONE, iv, 
+                                         sizeof(iv) / sizeof(iv[0]));
+        if (rv != 0) {
+            logger_->error("nghttp2_submit_settings failed: {}", nghttp2_strerror(rv));
+            return false;
+        }
+
+        logger_->debug("Sending HTTP/2 SETTINGS frame");
         // Send the SETTINGS frame
         std::vector<uint8_t> buffer(16384);
         const uint8_t* data_ptr;
@@ -168,11 +188,14 @@ bool PcfClientWrapper::connect() {
             boost::asio::write(socket_, boost::asio::buffer(data_ptr, serlen));
         }
         
+        logger_->debug("HTTP/2 SETTINGS frame sent, waiting for server response");
+
         // Exchange frames to complete the handshake
         bool handshake_complete = false;
         int attempt = 0;
         
         while (!handshake_complete && attempt < 5) {
+            logger_->debug("Handshake attempt {}", attempt + 1);
             attempt++;
             
             try {
@@ -180,6 +203,7 @@ bool PcfClientWrapper::connect() {
                 buffer.resize(16384);
                 size_t readlen = socket_.read_some(boost::asio::buffer(buffer));
                 
+                logger_->debug("Read {} bytes from socket", readlen);
                 if (readlen > 0) {
                     
                     // Process the data
@@ -210,7 +234,13 @@ bool PcfClientWrapper::connect() {
                     logger_->error("Server closed connection during handshake");
                     return false;
                 }
+                logger_->error("Boost system error during handshake: {}", e.what());
                 throw;
+            }
+            // Catch other exceptions and log
+            catch (const std::exception& e) {
+                logger_->error("Exception during handshake: {}", e.what());
+                return false;
             }
         }
         
@@ -354,7 +384,7 @@ std::pair<bool, nlohmann::json> PcfClientWrapper::perform_request(
             headers_json[key] = value;
         }
         response_json["headers"] = headers_json;
-        
+
         if (!success) {
             logger_->error("Request failed with HTTP code {}: {}", 
                           response.status_code, response.body);

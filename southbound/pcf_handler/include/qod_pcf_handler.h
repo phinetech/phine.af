@@ -183,6 +183,14 @@ private:
     // === Translation Methods ===
     
     /**
+     * @brief Build PCF request for creating application session
+     * @param qod_session QoD session
+     * @return PCF request json or nullopt on failure
+     */
+    nlohmann::json build_pcf_create_request(
+        const af::common::qod::QodSession& qod_session);
+
+    /**
      * @brief Build PCF application session context
      * @param qod_session QoD session
      * @return JSON representation of app session context

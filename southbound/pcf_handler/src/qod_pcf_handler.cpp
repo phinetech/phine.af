@@ -11,6 +11,8 @@
 #include <sstream>
 #include <iomanip>
 
+#include "helpers.h"
+
 namespace af {
 namespace southbound {
 
@@ -26,6 +28,7 @@ QodPcfHandler::QodPcfHandler(const std::string& config_path)
     pcf_client_ = std::make_shared<PcfClientWrapper>(
         pcf_base_url_, use_tls_, api_version_);
 
+    initialize();
     
     logger_->info("QoD PCF Adapter created");
 }
@@ -37,8 +40,8 @@ QodPcfHandler::~QodPcfHandler() {
 void QodPcfHandler::initialize() {
     logger_->info("QoD PCF Adapter initialized");
     
-    // // Initialize PCF client
-    // pcf_client_->initialize();
+    // Initialize PCF client
+    pcf_client_->initialize();
     
     // // Initialize PCC rule manager
     // pcc_rule_manager_->initialize();
@@ -338,31 +341,23 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::create_pcf_session(
     
     try {
         // Build PCF application session request
-        nlohmann::json pcf_request;
+        nlohmann::json pcf_request = build_pcf_create_request(qod_session);
         
-        // Application session context
-        pcf_request["ascReqData"] = build_app_session_context(qod_session);
-        
-        // AF request data
-        pcf_request["afReqData"] = build_af_request_data(qod_session);
-        
-        // Media components
-        pcf_request["medComponents"] = build_media_components(qod_session);
-        
-        // Subscription for notifications
-        pcf_request["evSubsc"] = build_subscription_info(qod_session.session_id);
-        
-        // AF Application ID
-        pcf_request["afAppId"] = af_id_;
-        
-        // UE identification
-        pcf_request["ueId"] = translate_device_to_ue_id(
-            qod_session.device, qod_session.ue_supi);
-        
-        // Service URN (optional, for specific services)
-        pcf_request["servUrn"] = "urn:x-3gpp-qod:" + qod_session.qos_profile;
-        
-        
+        // Validate request
+        logger_->debug("Constructed PCF create app session request: {}", pcf_request.dump());
+        ValidationResult validation = validate_app_session_context(pcf_request);
+        if (!validation.is_valid) {
+            // Print validation errors
+            for (const auto& err : validation.errors) {
+                logger_->error("Validation error: {}", err);
+            }
+            return create_error_response(
+                400,
+                "pcf_request_invalid",
+                "PCF create app session request validation failed",
+                qod_session.session_id
+            );
+        }
         
         // TODO: send the request to PCF via REST client
         auto [success, response] = pcf_client_->create_app_session(pcf_request);
@@ -380,7 +375,7 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::create_pcf_session(
         
         // Get appSessionId from response header Loacation field
         // Format is {apiRoot}/npcf-policyauthorization/v1/app-sessions/{appSessionId}
-        if (!response.contains("headers") || !response["headers"].contains("Location")) {
+        if (!response.contains("headers") || (!response["headers"].contains("Location") && !response["headers"].contains("location"))) {
             logger_->error("PCF response missing Location header");
             return create_error_response(
                 502,
@@ -389,18 +384,39 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::create_pcf_session(
                 qod_session.session_id
             );
         }
-        std::string location = response["headers"]["Location"];
-        std::string prefix = pcf_base_url_ + "/app-sessions/";
-        if (location.find(prefix) != 0) {
-            logger_->error("PCF Location header has unexpected format: {}", location);
+        
+        std::string location = response["headers"].value("Location", response["headers"].value("location", ""));
+
+        // TODO: move this into a helper function
+        // Look for the app-sessions pattern in the location header
+        // Format expected: {anyBaseUrl}/npcf-policyauthorization/v1/app-sessions/{appSessionId}
+        std::string app_sessions_pattern = "/app-sessions/";
+        size_t app_sessions_pos = location.find(app_sessions_pattern);
+        
+        if (app_sessions_pos == std::string::npos) {
+            logger_->error("PCF Location header missing '/app-sessions/' pattern: {}", location);
             return create_error_response(
                 502,
                 "pcf_response_invalid",
-                "PCF Location header has unexpected format",
+                "PCF Location header missing '/app-sessions/' pattern",
                 qod_session.session_id
             );
         }
-        std::string app_session_id = location.substr(prefix.length());
+        
+        // Extract app session ID (everything after /app-sessions/)
+        size_t app_session_id_start = app_sessions_pos + app_sessions_pattern.length();
+        std::string app_session_id = location.substr(app_session_id_start);
+        
+        // Validate that we actually got an app session ID
+        if (app_session_id.empty()) {
+            logger_->error("PCF Location header contains empty app session ID: {}", location);
+            return create_error_response(
+                502,
+                "pcf_response_invalid",
+                "PCF Location header contains empty app session ID",
+                qod_session.session_id
+            );
+        }
         logger_->info("Extracted appSessionId from PCF response: {}", app_session_id);
 
 
@@ -720,22 +736,11 @@ QodPcfHandler::handle_pcf_notification(const af::communication::MessagePtr& mess
         // Check notification type
         std::string event_type = notification_json.value("eventType", "");
         
-        if (event_type == "SESSION_TERMINATED" || event_type == "RESOURCES_RELEASED") {
-            // Session terminated by network
-            std::string termination_reason = notification_json.value("reason", "NETWORK_TERMINATED");
-            
-            // Update state
-            update_session_state(pcf_session_id, PcfSessionState::TERMINATED);
-            
-            logger_->info("PCF session terminated for QoD session {}: {}", 
-                         qod_session_id, termination_reason);
-            
-            return {qod_session_id, termination_reason};
-        }
-        else if (event_type == "QOS_NOT_GUARANTEED") {
+        // TODO: handle different notification types
+        if (event_type == "QOS_NOTIF") {
             // QoS cannot be guaranteed
-            logger_->warn("QoS not guaranteed for session: {}", qod_session_id);
-            return {qod_session_id, "QOS_NOT_GUARANTEED"};
+            logger_->warn("PCF QoS notification for QoD session {}", qod_session_id);
+            return {qod_session_id, "QOS_NOTIF"};
         }
         else {
             logger_->debug("Unhandled PCF notification type: {}", event_type);
@@ -776,6 +781,15 @@ std::string QodPcfHandler::get_qod_session_id(const std::string& pcf_session_id)
 
 // === Translation Methods ===
 
+nlohmann::json QodPcfHandler::build_pcf_create_request(const af::common::qod::QodSession& qod_session) {
+    nlohmann::json request;
+    
+    // Application session context
+    request["ascReqData"] = build_app_session_context(qod_session);
+
+    return request;
+}   
+
 nlohmann::json QodPcfHandler::build_app_session_context(const af::common::qod::QodSession& qod_session) {
     nlohmann::json context;
     
@@ -802,45 +816,72 @@ nlohmann::json QodPcfHandler::build_app_session_context(const af::common::qod::Q
     //         }
     //     }
     // }
+    // AF request data
+    context["afReqData"] = build_af_request_data(qod_session);
     
-    // AF App ID
+    // Media components
+    context["medComponents"] = build_media_components(qod_session);
+    
+    // Subscription for notifications
+    context["evSubsc"] = build_subscription_info(qod_session.session_id);
+    
+    // AF Application ID
     context["afAppId"] = af_id_;
     
-    // AF Service ID (optional, using QoS profile as service identifier)
-    context["afServId"] = "qod-" + qod_session.qos_profile;
-    
-    // Sponsor ID (optional, for sponsored connectivity)
-    // context["sponId"] = "sponsor123";
-    
-    // AF routing requirement
-    context["afRoutReq"]["routeToLocs"] = nlohmann::json::array();
-    
-    // Temporal validity (session duration)
-    context["tempValidities"] = nlohmann::json::array();
-    nlohmann::json validity;
-    
-    auto now = std::chrono::system_clock::now();
-    auto end_time = now + qod_session.duration;
-    
-    // Format times as RFC3339
-    auto format_time = [](const std::chrono::system_clock::time_point& tp) {
-        auto time_t = std::chrono::system_clock::to_time_t(tp);
-        char buffer[100];
-        std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&time_t));
-        return std::string(buffer);
-    };
-    
-    validity["startTime"] = format_time(now);
-    validity["stopTime"] = format_time(end_time);
-    context["tempValidities"].push_back(validity);
+    // == Root level fields ==
+    // Service URN (optional, for specific services)
+    context["servUrn"] = "urn:x-3gpp-qod:" + qod_session.qos_profile;
+
+    // Notification URI - required field
+    context["notifUri"] = af_notification_uri_ + "/" + qod_session.session_id;
+
+    // Supported Features - required field (using placeholder value)
+    context["suppFeat"] = "1"; // Basic feature support
+
+    // UE identification - at least one of ueIpv4, ueIpv6, or ueMac is required
+    if (qod_session.device) {
+        const auto& device = *qod_session.device;
+        
+        // IPv4 address (highest priority)
+        if (device.ipv4_address) {
+            context["ueIpv4"] = device.ipv4_address->public_address.value;
+        }
+        // IPv6 address
+        else if (device.ipv6_address) {
+            context["ueIpv6"] = device.ipv6_address->value;
+        }
+        // Phone number as GPSI
+        else if (device.phone_number) {
+            context["gpsi"] = *device.phone_number;
+        }
+        // Network access identifier as GPSI
+        else if (device.network_access_identifier) {
+            context["gpsi"] = *device.network_access_identifier;
+        }
+    }
+
+    // SUPI if available
+    if (qod_session.ue_supi) {
+        context["supi"] = qod_session.ue_supi->value;
+    }
+
+    // DNN if available (from PDU session context)
+    if (qod_session.pdu_session_id) {
+        // Default DNN for QoD sessions if not available from context
+        context["dnn"] = "internet";
+    }
+
+    // Service information status (preliminary during creation)
+    context["servInfStatus"] = "PRELIMINARY";
     
     return context;
 }
 
 nlohmann::json QodPcfHandler::build_media_components(
     const af::common::qod::QodSession& qod_session) {
-    
-    nlohmann::json med_comps = nlohmann::json::array();
+    // TODO: Support multiple media components if needed
+
+    nlohmann::json med_comps;
     nlohmann::json med_comp;
     
     // Media component number
@@ -874,42 +915,110 @@ nlohmann::json QodPcfHandler::build_media_components(
     if (!mapping_opt || !mapping_opt.has_value()) {
         logger_->error("No mapping found for QoS profile: {}", qod_session.qos_profile);
 
-        med_comps.push_back(med_comp);
+        med_comps["1"] = med_comp;
 
-        return med_comps; // Return empty array
+        return med_comps; // Return with basic component
     }
     auto& mapping = mapping_opt.value();
 
-    // QoS requirements
-    if (mapping.is_gbr) {
-        // Guaranteed Bit Rate
-        if (mapping.guaranteed_downlink_rate) {
-            med_comp["marBwDl"] = std::to_string(*mapping.guaranteed_downlink_rate) + " Kbps";
-            med_comp["mirBwDl"] = std::to_string(*mapping.guaranteed_downlink_rate) + " Kbps";
-        }
-        if (mapping.guaranteed_uplink_rate) {
-            med_comp["marBwUl"] = std::to_string(*mapping.guaranteed_uplink_rate) + " Kbps";
-            med_comp["mirBwUl"] = std::to_string(*mapping.guaranteed_uplink_rate) + " Kbps";
-        }
+    // QoS requirements - BitRate format should be in bits per second as string
+    
+    // 5QI reference (mutually exclusive with altSerReqsData per schema)
+    if (mapping.fiveqi > 0) {
+        med_comp["qosReference"] = std::to_string(mapping.fiveqi);
     }
     
-    // Max bit rates
-    if (mapping.max_downlink_rate) {
-        med_comp["marBwDl"] = std::to_string(*mapping.max_downlink_rate) + " Kbps";
-    }
-    if (mapping.max_uplink_rate) {
-        med_comp["marBwUl"] = std::to_string(*mapping.max_uplink_rate) + " Kbps";
-    }
-    
-    // 5QI
-    med_comp["qosReference"] = mapping.fiveqi;
-    
-    // Priority
+    // Priority level
     if (mapping.priority_level) {
         med_comp["resPrio"] = *mapping.priority_level;
     }
     
-    med_comps.push_back(med_comp);
+    // Bandwidth requirements
+    if (mapping.is_gbr) {
+        // Guaranteed Bit Rate (GBR) - both MAR and MIR should be set for GBR
+        if (mapping.guaranteed_downlink_rate) {
+            // Convert from Kbps to bps for API compliance
+            uint64_t bps_dl = static_cast<uint64_t>(*mapping.guaranteed_downlink_rate) * 1000;
+            med_comp["marBwDl"] = std::to_string(bps_dl);
+            med_comp["mirBwDl"] = std::to_string(bps_dl);
+        }
+        if (mapping.guaranteed_uplink_rate) {
+            // Convert from Kbps to bps for API compliance
+            uint64_t bps_ul = static_cast<uint64_t>(*mapping.guaranteed_uplink_rate) * 1000;
+            med_comp["marBwUl"] = std::to_string(bps_ul);
+            med_comp["mirBwUl"] = std::to_string(bps_ul);
+        }
+    } else {
+        // Non-GBR - only set maximum rates if no guaranteed rates
+        if (mapping.max_downlink_rate) {
+            uint64_t bps_dl = static_cast<uint64_t>(*mapping.max_downlink_rate) * 1000;
+            med_comp["marBwDl"] = std::to_string(bps_dl);
+        }
+        if (mapping.max_uplink_rate) {
+            uint64_t bps_ul = static_cast<uint64_t>(*mapping.max_uplink_rate) * 1000;
+            med_comp["marBwUl"] = std::to_string(bps_ul);
+        }
+    }
+    
+    // Additional QoS parameters if available from mapping
+    // Minimum desired bandwidth - typically lower than guaranteed for GBR
+    if (mapping.is_gbr && mapping.guaranteed_downlink_rate) {
+        // Set minimum desired as 80% of guaranteed rate
+        uint64_t min_bps_dl = static_cast<uint64_t>(*mapping.guaranteed_downlink_rate * 0.8) * 1000;
+        med_comp["minDesBwDl"] = std::to_string(min_bps_dl);
+    }
+    if (mapping.is_gbr && mapping.guaranteed_uplink_rate) {
+        uint64_t min_bps_ul = static_cast<uint64_t>(*mapping.guaranteed_uplink_rate * 0.8) * 1000;
+        med_comp["minDesBwUl"] = std::to_string(min_bps_ul);
+    }
+    
+    // Maximum supported bandwidth - typically higher than requested
+    if (mapping.max_downlink_rate) {
+        uint64_t max_supp_dl = static_cast<uint64_t>(*mapping.max_downlink_rate) * 1000;
+        med_comp["maxSuppBwDl"] = std::to_string(max_supp_dl);
+    }
+    if (mapping.max_uplink_rate) {
+        uint64_t max_supp_ul = static_cast<uint64_t>(*mapping.max_uplink_rate) * 1000;
+        med_comp["maxSuppBwUl"] = std::to_string(max_supp_ul);
+    }
+    
+    // Latency requirements - typical values based on 5QI
+    if (mapping.fiveqi == 1 || mapping.fiveqi == 2) {
+        // Conversational services (voice/video)
+        med_comp["desMaxLatency"] = 100.0; // 100ms
+    } else if (mapping.fiveqi == 3 || mapping.fiveqi == 4) {
+        // Real-time gaming
+        med_comp["desMaxLatency"] = 50.0; // 50ms
+    } else if (mapping.fiveqi >= 5 && mapping.fiveqi <= 9) {
+        // Non-GBR services
+        med_comp["desMaxLatency"] = 300.0; // 300ms
+    }
+    
+    // Packet loss requirements - typical values based on 5QI
+    if (mapping.fiveqi == 1 || mapping.fiveqi == 2) {
+        // Voice/Video - stricter loss requirements
+        med_comp["desMaxLoss"] = 1.0; // 1% max loss
+        med_comp["maxPacketLossRateDl"] = 10; // 10^-2 (1%)
+        med_comp["maxPacketLossRateUl"] = 10; // 10^-2 (1%)
+    } else if (mapping.fiveqi == 3 || mapping.fiveqi == 4) {
+        // Real-time gaming
+        med_comp["desMaxLoss"] = 0.1; // 0.1% max loss
+        med_comp["maxPacketLossRateDl"] = 3; // 10^-3 (0.1%)
+        med_comp["maxPacketLossRateUl"] = 3; // 10^-3 (0.1%)
+    }
+    
+    // Preemption settings based on priority
+    if (mapping.priority_level && *mapping.priority_level <= 15) {
+        // High priority services
+        med_comp["preemptCap"] = "MAY_PREEMPT";
+        med_comp["preemptVuln"] = "NOT_PREEMPTABLE";
+    } else {
+        // Lower priority services
+        med_comp["preemptCap"] = "NOT_PREEMPT";
+        med_comp["preemptVuln"] = "PREEMPTABLE";
+    }
+    
+    med_comps["1"] = med_comp;
     
     return med_comps;
 }
@@ -977,9 +1086,8 @@ nlohmann::json QodPcfHandler::build_subscription_info(const std::string& qod_ses
     
     // Events to subscribe to
     event_subscription["events"] = nlohmann::json::array();
-    event_subscription["events"].push_back("SESSION_TERMINATED");
-    event_subscription["events"].push_back("QOS_NOT_GUARANTEED");
-    event_subscription["events"].push_back("RESOURCES_RELEASED");
+    event_subscription["events"].push_back({ {"event", "QOS_NOTIF"} });
+    // TODO: add more events as needed
     
     // Notification URI
     event_subscription["notifUri"] = af_notification_uri_ + "/" + qod_session_id;
@@ -1019,15 +1127,8 @@ nlohmann::json QodPcfHandler::translate_device_to_ue_id(
 
 nlohmann::json QodPcfHandler::build_af_request_data(const af::common::qod::QodSession& qod_session) {
     nlohmann::json af_req_data;
-    
-    // Traffic routes (optional)
-    af_req_data["traffRoutRequ"] = nlohmann::json::array();
-    
-    // Application detection (optional)
-    // af_req_data["appDetectionInfo"] = ...;
-    
-    // Charging information (optional)
-    // af_req_data["chargingInfo"] = ...;
+
+    // Request type
     
     return af_req_data;
 }
@@ -1035,21 +1136,84 @@ nlohmann::json QodPcfHandler::build_af_request_data(const af::common::qod::QodSe
 nlohmann::json QodPcfHandler::map_ports_to_media_subcomponents(
     const std::optional<af::common::qod::PortsSpec>& device_ports,
     const std::optional<af::common::qod::PortsSpec>& server_ports) {
-    
-    nlohmann::json med_sub_comps = nlohmann::json::array();
-    
+
+    nlohmann::json med_sub_comps = nlohmann::json::object();
+
     int flow_number = 1;
     
     // Create sub-component for each port combination
-    auto add_subcomp = [&](uint16_t src_port, uint16_t dst_port, const std::string& dir) {
+    auto add_subcomp = [&](uint16_t src_port, uint16_t dst_port, const std::string& direction) {
         nlohmann::json sub_comp;
-        sub_comp["flowNumber"] = flow_number++;
-        sub_comp["flowDirection"] = dir;
         
-        // Flow usage (e.g., RTCP, RTP)
-        sub_comp["flowUsage"] = "GENERAL";
+        // Required field: fNum (flow number) - must be integer
+        sub_comp["fNum"] = flow_number;
         
-        med_sub_comps.push_back(sub_comp);
+        // Flow descriptions - array of flow description strings
+        nlohmann::json flow_descs = nlohmann::json::array();
+        std::string protocol = "any"; // any by default
+        
+        // TODO: use the build_flow_descriptions function to generate descriptions
+        // Build flow description strings based on ports
+        if (src_port != 0 && dst_port != 0) {
+            // Specific port flow descriptions
+            std::string uplink_flow = "permit out " + protocol + " from any " + 
+                                    std::to_string(src_port) + " to any " + std::to_string(dst_port);
+            std::string downlink_flow = "permit in " + protocol + " from any " + 
+                                      std::to_string(dst_port) + " to any " + std::to_string(src_port);
+            
+            flow_descs.push_back(uplink_flow);
+            if (direction == "BIDIRECTIONAL") {
+                flow_descs.push_back(downlink_flow);
+            }
+        } else {
+            // Generic flow descriptions (any port)
+            std::string uplink_flow = "permit out " + protocol + " from any to any";
+            std::string downlink_flow = "permit in " + protocol + " from any to any";
+            
+            flow_descs.push_back(uplink_flow);
+            if (direction == "BIDIRECTIONAL") {
+                flow_descs.push_back(downlink_flow);
+            }
+        }
+        
+        // Only add flow descriptions if we have them
+        if (!flow_descs.empty()) {
+            sub_comp["fDescs"] = flow_descs;
+        }
+        
+        // Flow status - optional
+        sub_comp["fStatus"] = "ENABLED";
+        
+        // Flow usage - optional (describes the type of flow)
+        if (src_port == 0 && dst_port == 0) {
+            sub_comp["flowUsage"] = "NO_INFO"; // Generic flow
+        } else {
+            // Check for known service ports
+            if (src_port == 5060 || dst_port == 5060 || 
+                src_port == 5061 || dst_port == 5061) {
+                sub_comp["flowUsage"] = "AF_SIGNALLING"; // SIP signaling
+            } else if (src_port >= 16384 && src_port <= 32767) {
+                sub_comp["flowUsage"] = "RTCP"; // Typical RTCP port range
+            } else {
+                sub_comp["flowUsage"] = "NO_INFO"; // General application data
+            }
+        }
+        
+        // TODO: Add optional fields as needed
+        // Maximum bandwidth (optional) - can be set based on QoS requirements
+        // These would typically come from QoS profile mapping
+        // sub_comp["marBwDl"] = "1000000"; // 1 Mbps downlink
+        // sub_comp["marBwUl"] = "1000000"; // 1 Mbps uplink
+        
+        // TOS/Traffic Class (optional) - for packet marking
+        // Format: "XX YY" where XX is ToS/Traffic Class, YY is mask
+        // sub_comp["tosTrCl"] = "46 FC"; // EF (Expedited Forwarding) marking
+        
+        // AF signaling protocol (optional) - for specific protocols
+        // sub_comp["afSigProtocol"] = "SIP"; // If this is SIP signaling
+        
+        med_sub_comps[std::to_string(flow_number)] = sub_comp;
+        flow_number++;
     };
     
     if (device_ports && server_ports) {
@@ -1060,15 +1224,40 @@ nlohmann::json QodPcfHandler::map_ports_to_media_subcomponents(
             }
         }
         
-        // Port ranges
+        // Port ranges - create representative flows for ranges
         for (const auto& dev_range : device_ports->ranges) {
             for (const auto& srv_range : server_ports->ranges) {
-                // Add representative flow for range
+                // Add flow for start of range
                 add_subcomp(dev_range.from, srv_range.from, "BIDIRECTIONAL");
+                
+                // Optionally add flow for end of range if range is large
+                if ((dev_range.to - dev_range.from) > 10 || 
+                    (srv_range.to - srv_range.from) > 10) {
+                    add_subcomp(dev_range.to, srv_range.to, "BIDIRECTIONAL");
+                }
             }
         }
-    } else {
-        // Default bidirectional flow
+    } 
+    else if (device_ports) {
+        // Only device ports specified
+        for (const auto& dev_port : device_ports->ports) {
+            add_subcomp(dev_port, 0, "BIDIRECTIONAL");
+        }
+        for (const auto& dev_range : device_ports->ranges) {
+            add_subcomp(dev_range.from, 0, "BIDIRECTIONAL");
+        }
+    }
+    else if (server_ports) {
+        // Only server ports specified
+        for (const auto& srv_port : server_ports->ports) {
+            add_subcomp(0, srv_port, "BIDIRECTIONAL");
+        }
+        for (const auto& srv_range : server_ports->ranges) {
+            add_subcomp(0, srv_range.from, "BIDIRECTIONAL");
+        }
+    }
+    else {
+        // No specific ports - create default bidirectional flow
         add_subcomp(0, 0, "BIDIRECTIONAL");
     }
     
@@ -1129,15 +1318,17 @@ std::optional<af::common::qod::QodDevice> QodPcfHandler::parse_device(const nloh
     
     af::common::qod::QodDevice device;
     
-    if (json.contains("phoneNumber")) {
-        device.phone_number = json["phoneNumber"];
+    if (json.contains("gpsi")) {
+        device.phone_number = json["gpsi"];
     }
     
-    if (json.contains("networkAccessIdentifier")) {
-        device.network_access_identifier = json["networkAccessIdentifier"];
+    if (json.contains("supi")) {
+        device.network_access_identifier = json["supi"];
     }
     
     if (json.contains("ipv4Address")) {
+        logger_->debug("Parsing IPv4 address from JSON {}", json["ipv4Address"].dump());
+        
         af::common::qod::DeviceIpv4Addr ipv4;
         auto& ipv4_json = json["ipv4Address"];
         
@@ -1156,6 +1347,7 @@ std::optional<af::common::qod::QodDevice> QodPcfHandler::parse_device(const nloh
         device.ipv4_address = ipv4;
     }
     
+    // TODO: check if ipv6 is being handled correctly
     if (json.contains("ipv6Address")) {
         device.ipv6_address = Ipv6Addr{json["ipv6Address"]};
     }
