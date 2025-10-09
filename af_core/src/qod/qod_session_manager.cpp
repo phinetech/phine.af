@@ -852,6 +852,7 @@ void QodSessionManager::cleanup_expired_sessions() {
     
     auto to_remove_sessions = qod_state_manager_->get_expired_sessions(now, config_.unavailable_session_ttl);
     for (const auto& session : to_remove_sessions) {
+        logger_->debug("Cleaning up expired session: {}", session.session_id);
         to_remove.push_back(session.session_id);
         qod_state_manager_->remove_session(session.session_id);
     }
@@ -866,7 +867,7 @@ void QodSessionManager::session_cleanup_thread() {
     
     while (cleanup_running_) {
         std::this_thread::sleep_for(config_.session_cleanup_interval);
-        
+
         if (!cleanup_running_) {
             break;
         }

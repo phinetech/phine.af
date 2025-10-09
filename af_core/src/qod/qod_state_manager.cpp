@@ -17,7 +17,7 @@ QodStateManager::QodStateManager() {
     
     // Initialize default QoS profile mappings
     initialize_default_mappings();
-    
+
     logger_->info("QoD State Manager created");
 }
 
@@ -137,7 +137,7 @@ std::optional<af::common::qod::QodSession> QodStateManager::get_session_by_id(co
 
 bool QodStateManager::remove_session(const std::string& session_id) {
     std::lock_guard<std::mutex> lock(mtx_);
-
+    // TODO: Update the southbound handlers when session is removed
     auto it = sessions_by_id_.find(session_id);
     if (it == sessions_by_id_.end()) {
         return false; // Session not found
@@ -282,6 +282,7 @@ std::vector<af::common::qod::QodSession> QodStateManager::get_expired_sessions(
             }
         }
     }
+    return expired_sessions;
 }
 
 void QodStateManager::update_pcf_session_map(

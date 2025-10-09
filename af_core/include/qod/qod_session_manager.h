@@ -256,6 +256,9 @@ private:
     
     /**
      * @brief Cleanup expired and terminated sessions
+     * 
+     * This method checks for sessions that have expired based on their
+     * expiration time and a configured grace period.
      */
     void cleanup_expired_sessions();
     
