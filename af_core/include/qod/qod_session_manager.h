@@ -235,13 +235,7 @@ private:
      */
     bool remove_session_from_pcf(const af::common::qod::QodSession& session);
     
-    /**
-     * @brief Update session in PCF (for extension)
-     * @param session Session to update
-     * @param new_duration New total duration
-     * @return true if successfully updated
-     */
-    bool update_session_in_pcf(af::common::qod::QodSession& session, std::chrono::seconds new_duration);
+    // TODO: Create an update_session_in_pcf method if needed in future
     
     /**
      * @brief Send notification for session status change

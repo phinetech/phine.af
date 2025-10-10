@@ -215,7 +215,7 @@ std::optional<af::common::qod::QodSession> QodSessionManager::create_session(
     }
     
     logger_->info("QoD session created with ID: {}", session.session_id);
-    
+
     // Return the session in REQUESTED state
     // PCF will asynchronously confirm when it's AVAILABLE
     return session;
@@ -317,9 +317,7 @@ std::optional<af::common::qod::QodSession> QodSessionManager::extend_session_dur
     }
     
     // Calculate new duration
-    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::system_clock::now() - *session.started_at);
-    auto new_total_duration = elapsed + request.requested_additional_duration;
+    auto new_total_duration = session.duration + request.requested_additional_duration;
     
     // Check against maximum duration for profile
     auto max_duration = get_max_duration_for_profile(session.qos_profile);
@@ -328,19 +326,18 @@ std::optional<af::common::qod::QodSession> QodSessionManager::extend_session_dur
         logger_->info("Capping extended duration to maximum: {} seconds", max_duration.count());
     }
     
-    // Update PCF session
-    if (!update_session_in_pcf(session, new_total_duration)) {
-        logger_->error("Failed to extend session in PCF");
-        return std::nullopt;
-    }
-    
     // Update session
     session.duration = new_total_duration;
     session.expires_at = *session.started_at + new_total_duration;
     
-    logger_->info("Session {} extended to {} seconds total duration", 
-                 request.session_id, new_total_duration.count());
-    
+    logger_->info("Session {} extended to {} seconds total duration now expires at {}", 
+                 request.session_id, new_total_duration.count(), session.expires_at->time_since_epoch().count());
+
+    // Update in state manager
+    {
+        qod_state_manager_->update_session(session);
+    }
+
     return session;
 }
 
@@ -397,17 +394,17 @@ std::vector<af::common::qod::QodSession> QodSessionManager::retrieve_sessions_by
 // === PCF Integration ===
 
 void QodSessionManager::handle_pcf_session_response(
-    const std::string& session_id,
+    const std::string& qod_session_id,
     const std::string& pcf_session_id,
     bool success,
     const std::string& error_message) {
     
     logger_->info("PCF response for session {}: success={}, pcf_id={}", 
-                 session_id, success, pcf_session_id);
-    
-    auto session_opt = qod_state_manager_->get_session_by_id(session_id);
+                 qod_session_id, success, pcf_session_id);
+
+    auto session_opt = qod_state_manager_->get_session_by_id(qod_session_id);
     if (!session_opt || !session_opt.has_value()) {
-        logger_->error("Session not found: {}", session_id);
+        logger_->error("Session not found: {}", qod_session_id);
         return;
     }
     
@@ -423,7 +420,7 @@ void QodSessionManager::handle_pcf_session_response(
         
         // Map PCF ID to QoD ID
         {
-            qod_state_manager_->update_pcf_session_map(pcf_session_id, session_id);
+            qod_state_manager_->update_pcf_session_map(pcf_session_id, qod_session_id);
         }
         
         // Send notification
@@ -440,6 +437,11 @@ void QodSessionManager::handle_pcf_session_response(
         if (session.sink && config_.enable_notifications) {
             send_status_change_notification(session, old_status, af::common::qod::StatusInfo::NETWORK_TERMINATED);
         }
+    }
+
+    // Update session in state manager
+    {
+        qod_state_manager_->update_session(session);
     }
 }
 
@@ -678,12 +680,13 @@ bool QodSessionManager::apply_session_to_pcf(af::common::qod::QodSession& sessio
             return false;
         }
         
+        // TODO: Create shared definition for PCF response message types
         // Process immediate response if synchronous
         if (response->message_type == "pcf_qod_session_created") {
             std::string response_str(response->payload.begin(), response->payload.end());
             auto response_json = nlohmann::json::parse(response_str);
             
-            std::string pcf_session_id = response_json.value("app_session_id", "");
+            std::string pcf_session_id = response_json.value("pcf_session_id", "");
             handle_pcf_session_response(session.session_id, pcf_session_id, true);
         } else if (response->message_type == "pcf_error") {
             std::string error_str(response->payload.begin(), response->payload.end());
@@ -753,63 +756,6 @@ bool QodSessionManager::remove_session_from_pcf(const af::common::qod::QodSessio
     }
     catch (const std::exception& e) {
         logger_->error("Error removing session from PCF: {}", e.what());
-        return false;
-    }
-}
-
-bool QodSessionManager::update_session_in_pcf(af::common::qod::QodSession& session, std::chrono::seconds new_duration) {
-    logger_->info("Updating QoD session {} in PCF with new duration: {} seconds", 
-                 session.session_id, new_duration.count());
-    
-    if (!session.pcf_session_id) {
-        logger_->error("No PCF session ID to update");
-        return false;
-    }
-    
-    if (!orchestrator_) {
-        logger_->error("Orchestrator not initialized");
-        return false;
-    }
-    
-    auto& comm_services = orchestrator_->get_communication_services();
-    auto pcf_comm_it = comm_services.find("pcf");
-    
-    if (pcf_comm_it == comm_services.end() || !pcf_comm_it->second) {
-        logger_->error("PCF communication service not available");
-        return false;
-    }
-    
-    auto& pcf_comm = pcf_comm_it->second;
-    
-    try {
-        // Create update request
-        nlohmann::json update_request = {
-            {"app_session_id", *session.pcf_session_id},
-            {"duration", new_duration.count()}
-        };
-        
-        // Create message for PCF
-        auto msg = std::make_shared<af::communication::Message>();
-        msg->message_type = "pcf_update_qod_session";
-        msg->correlation_id = session.session_id;
-        
-        std::string payload = update_request.dump();
-        msg->payload.assign(payload.begin(), payload.end());
-        
-        logger_->debug("Sending update request to PCF: {}", payload);
-        
-        // TODO: Use actual PCF address from config
-        auto response = pcf_comm->send_request("192.168.70.140:50055", msg);
-        
-        if (response && response->message_type == "pcf_qod_session_updated") {
-            logger_->info("QoD session updated in PCF successfully");
-            return true;
-        }
-        
-        return false;
-    }
-    catch (const std::exception& e) {
-        logger_->error("Error updating session in PCF: {}", e.what());
         return false;
     }
 }

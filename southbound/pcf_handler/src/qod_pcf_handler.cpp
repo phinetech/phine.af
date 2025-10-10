@@ -426,11 +426,13 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::create_pcf_session(
         store_session_mapping(qod_session.session_id, pcf_session_id, 
                             PcfSessionState::CREATING);
         
-        // Create message
+        // The interation is synchronous send pcf_qod_session_created
+        nlohmann::json response_json;
+        response_json["pcf_session_id"] = pcf_session_id;
         auto msg = create_success_response(
-            pcf_request,
+            response_json,
             200,
-            "pcf_create_app_session",
+            "pcf_qod_session_created",
             qod_session.session_id);
         
         // Store request for debugging
@@ -504,8 +506,10 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::update_pcf_session(
         update_session_state(pcf_info.pcf_session_id, PcfSessionState::UPDATING);
         
         // Create message
+        nlohmann::json response_json;
+        response_json["pcf_session_id"] = pcf_info.pcf_session_id;
         auto msg = create_success_response(
-            pcf_request,
+            response_json,
             200,
             "pcf_update_app_session",
             qod_session.session_id);
@@ -563,8 +567,10 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::delete_pcf_session(
         update_session_state(pcf_info.pcf_session_id, PcfSessionState::DELETING);
         
         // Create message
+        nlohmann::json response_json;
+        response_json["pcf_session_id"] = pcf_info.pcf_session_id;
         auto msg = create_success_response(
-            pcf_request,
+            response_json,
             200,
             "pcf_delete_app_session",
             qod_session.session_id);
