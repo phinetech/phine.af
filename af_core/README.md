@@ -294,3 +294,27 @@ docker run --rm --network host -v ./common/protos:/var/protos/ fullstorydev/grpc
 # Decode the response
 echo xxx |  base64 --decode
 ```
+
+## Retrieve sessions
+
+```bash
+# Send resquest
+docker run --rm --network host -v ./common/protos:/var/protos/ fullstorydev/grpcurl -plaintext \
+  -proto message.proto \
+  -import-path /var/protos \
+  -d '{
+    "message_type": "qod_retrieve_sessions",
+    "correlation_id": "12345",
+    "payload": "'$(cat ./af_core/tests/requests/qod/qod_retrieve_sessions.json | base64 -w 0)'",
+    "metadata": {
+      "source": "command_line",
+      "priority": "high",
+      "auth_type": "user"
+    }
+  }' \
+  192.168.70.141:50051 \
+  af.proto.InternalCommunication/SendMessage
+
+# Decode the response
+echo xxx |  base64 --decode
+```

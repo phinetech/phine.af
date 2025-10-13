@@ -7,8 +7,161 @@
 #include <optional>
 #include <functional> // Required for std::hash
 #include <unordered_set>
+#include <variant>
+#include <chrono>
+#include <stdexcept>
 #include "../../common/models/common.h"
 
+/**
+ * @brief Universal UE Key for state management
+ * @details Provides a flexible key system that can identify UEs by different identifiers
+ * when SUPI is not available. Uses a hierarchical approach where SUPI is preferred
+ * but IP addresses, GPSI, or other identifiers can serve as temporary keys.
+ */
+struct UeKey {
+    enum class KeyType {
+        SUPI_BASED,     // Primary: UE identified by SUPI
+        GPSI_BASED,     // Secondary: UE identified by GPSI (phone number)
+        IPV4_BASED,     // Tertiary: UE identified by IPv4 address
+        IPV6_BASED,     // Tertiary: UE identified by IPv6 address
+        IPV6_PREFIX_BASED, // Tertiary: UE identified by IPv6 prefix
+        MAC_ADDR_BASED, // Tertiary: UE identified by MAC address
+        COMPOSITE       // Multiple identifiers available
+    };
+    
+    KeyType type;
+    std::optional<std::string> supi_value;
+    std::optional<std::string> gpsi_value;
+    std::optional<std::string> ipv4_value;
+    std::optional<std::string> ipv6_value;
+    std::optional<std::string> ipv6_prefix_value;
+    std::optional<std::string> mac_addr_value; // Optional MAC address for Ethernet PDU sessions
+    
+    // Constructor for SUPI-based key (preferred)
+    explicit UeKey(const Supi& supi) 
+        : type(KeyType::SUPI_BASED), supi_value(supi.value) {}
+    
+    // Constructor for GPSI-based key
+    explicit UeKey(const Gpsi& gpsi) 
+        : type(KeyType::GPSI_BASED), gpsi_value(gpsi.value) {}
+    
+    // Constructor for IPv4-based key
+    explicit UeKey(const Ipv4Addr& ipv4) 
+        : type(KeyType::IPV4_BASED), ipv4_value(ipv4.value) {}
+    
+    // Constructor for IPv6-based key
+    explicit UeKey(const Ipv6Addr& ipv6) 
+        : type(KeyType::IPV6_BASED), ipv6_value(ipv6.value) {}
+
+    // Constructor for IPv6 Prefix-based key
+    explicit UeKey(const Ipv6Prefix& ipv6_prefix) 
+        : type(KeyType::IPV6_PREFIX_BASED), ipv6_prefix_value(ipv6_prefix.value) {}
+
+    // Constructor for MAC Address-based key
+    explicit UeKey(const MacAddr48& mac_addr) 
+        : type(KeyType::MAC_ADDR_BASED), mac_addr_value(mac_addr.value) {}
+
+    // Constructor with key as string and type
+    UeKey(const std::string& key, KeyType key_type) : type(key_type) {
+        switch (key_type) {
+            // TODO: Improve validation for each type
+            case KeyType::SUPI_BASED:
+                // validate if key is a valid SUPI format (basic check)
+                if (key.find("imsi") == 0 || key.find("nai") == 0) {
+                    supi_value = key;
+                } else {
+                    throw std::invalid_argument("Invalid SUPI format");
+                }
+                break;
+            case KeyType::GPSI_BASED:
+                // Basic validation for GPSI (phone number)
+                if (!key.empty()) {
+                    gpsi_value = key;
+                } else {
+                    throw std::invalid_argument("Invalid GPSI format");
+                }
+                break;
+            case KeyType::IPV4_BASED:
+                // Basic validation for IPv4 address
+                if (!key.empty() && key.find('.') != std::string::npos) {
+                    ipv4_value = key;
+                } else {
+                    throw std::invalid_argument("Invalid IPv4 address format");
+                }
+                break;
+            case KeyType::IPV6_BASED:
+                // Basic validation for IPv6 address
+                if (!key.empty() && key.find(':') != std::string::npos) {
+                    ipv6_value = key;
+                } else {
+                    throw std::invalid_argument("Invalid IPv6 address format");
+                }
+                break;
+            case KeyType::IPV6_PREFIX_BASED:
+                // Basic validation for IPv6 prefix
+                if (!key.empty() && key.find('/') != std::string::npos) {
+                    ipv6_prefix_value = key;
+                } else {
+                    throw std::invalid_argument("Invalid IPv6 prefix format");
+                }
+                break;
+            case KeyType::MAC_ADDR_BASED:
+                // Basic validation for MAC address
+                if (!key.empty() && key.find(':') != std::string::npos) {
+                    mac_addr_value = key;
+                } else {
+                    throw std::invalid_argument("Invalid MAC address format");
+                }
+                break;
+            case KeyType::COMPOSITE:
+                throw std::invalid_argument("Use specific constructors for composite keys");
+            default:
+                throw std::invalid_argument("Unknown key type");
+        }
+    }
+
+    // Get the primary key string for map indexing
+    std::string get_primary_key() const {
+        switch (type) {
+            case KeyType::SUPI_BASED: return "supi:" + supi_value.value_or("");
+            case KeyType::GPSI_BASED: return "gpsi:" + gpsi_value.value_or("");
+            case KeyType::IPV4_BASED: return "ipv4:" + ipv4_value.value_or("");
+            case KeyType::IPV6_BASED: return "ipv6:" + ipv6_value.value_or("");
+            case KeyType::IPV6_PREFIX_BASED: return "ipv6_prefix:" + ipv6_prefix_value.value_or("");
+            case KeyType::MAC_ADDR_BASED: return "mac:" + mac_addr_value.value_or("");
+            case KeyType::COMPOSITE: {
+                if (supi_value) return "supi:" + *supi_value;
+                if (gpsi_value) return "gpsi:" + *gpsi_value;
+                if (ipv4_value) return "ipv4:" + *ipv4_value;
+                if (ipv6_value) return "ipv6:" + *ipv6_value;
+                if (ipv6_prefix_value) return "ipv6_prefix:" + *ipv6_prefix_value;
+                if (mac_addr_value) return "mac:" + *mac_addr_value;
+                return "unknown";
+            }
+        }
+        return "unknown";
+    }
+    
+    // Check if this key can be promoted to SUPI-based
+    bool can_promote_to_supi() const {
+        return type != KeyType::SUPI_BASED && supi_value.has_value();
+    }
+    
+    // Promote to SUPI-based key
+    void promote_to_supi() {
+        if (can_promote_to_supi()) {
+            type = KeyType::SUPI_BASED;
+        }
+    }
+    
+    bool operator==(const UeKey& other) const {
+        return get_primary_key() == other.get_primary_key();
+    }
+    
+    bool operator<(const UeKey& other) const {
+        return get_primary_key() < other.get_primary_key();
+    }
+};
 
 // --- Hash specializations for custom structs to use with std::unordered_map ---
 /**
@@ -107,17 +260,34 @@ struct UeAccessMobilityData {
  * periodically updated UE subscription information.
  * @details This struct combines various UE-specific data points obtainable via
  * subscriptions, allowing the AF to have a holistic view of UE status,
- * IP addresses, and network context. It focuses on the requested
- * combination of UE status and IP address data.
+ * IP addresses, and network context. It uses a flexible key system to handle
+ * cases where SUPI is not initially available.
  */
 struct AfUeSubscriptionState {
-    // **Primary UE Identifiers**
-    Supi supi; // Subscription Permanent Identifier
+    // **UE Identity Management**
+    UeKey ue_key; // Primary key for this UE state
+    std::optional<Supi> supi; // Subscription Permanent Identifier (may be resolved later)
     std::optional<Gpsi> gpsi; // Generic Public Subscription Identifier (GPSI)
+    
+    // **Resolution State**
+    enum class ResolutionState {
+        PROVISIONAL,    // UE identified by IP/temporary identifier only
+        PARTIAL,        // UE has some identifiers but not SUPI
+        RESOLVED        // UE has SUPI and full identity
+    };
+    ResolutionState resolution_state;
+    std::optional<std::chrono::system_clock::time_point> supi_resolved_at; // When SUPI was resolved
+    
+    // **Alternative Identifiers** (for cross-referencing and promotion)
+    std::vector<std::string> known_ipv4_addresses; // All known IPv4 addresses for this UE
+    std::vector<std::string> known_ipv6_addresses; // All known IPv6 addresses for this UE
+    std::vector<std::string> known_gpsi_values;    // All known GPSI values for this UE
+    std::vector<std::string> known_ipv6_prefixes;  // All known IPv6 prefixes for this UE
+    std::vector<std::string> known_mac_addresses;   // All known MAC addresses for this UE
 
     // **UE Network Location and Access Information**
     std::optional<UeLocationInfo> location_info; // UE's last reported location and time zone
-    std::optional<DateTime> location_timestamp; // Timestamp when the location was last updated
+    std::optional<std::chrono::system_clock::time_point> location_timestamp; // Timestamp when the location was last updated
     std::optional<UeAccessMobilityData> access_mobility_data; // UE's access and mobility related data
 
     // **PDU Session(s) and Associated IP/MAC Addresses**
@@ -133,8 +303,109 @@ struct AfUeSubscriptionState {
     std::vector<ServiceAreaCoverageInfo> service_area_coverage_allowed; // List of Tracking Areas per serving network where service is allowed
     std::optional<bool> high_throughput_desired_for_ue_traffic; // Indicates if high throughput is desired for indicated UE traffic
 
+    // **State Management Metadata**
+    std::chrono::system_clock::time_point created_at; // When this state entry was first created
+    std::chrono::system_clock::time_point last_updated; // When this state was last modified
+    std::optional<std::chrono::system_clock::time_point> last_activity; // Last time UE had any network activity
+
+    // Constructor for IP-based provisional state
+    explicit AfUeSubscriptionState(const UeKey& key) 
+        : ue_key(key), resolution_state(ResolutionState::PROVISIONAL),
+          created_at(std::chrono::system_clock::now()), last_updated(std::chrono::system_clock::now()) {}
+    
+    // Constructor for SUPI-based resolved state  
+    explicit AfUeSubscriptionState(const Supi& supi_val)
+        : ue_key(UeKey(supi_val)), supi(supi_val), resolution_state(ResolutionState::RESOLVED),
+          supi_resolved_at(std::chrono::system_clock::now()), created_at(std::chrono::system_clock::now()), last_updated(std::chrono::system_clock::now()) {}
+
+    // Method to promote provisional state when SUPI is resolved
+    void resolve_supi(const Supi& supi_val) {
+        if (!supi.has_value()) {
+            supi = supi_val;
+            resolution_state = ResolutionState::RESOLVED;
+            supi_resolved_at = std::chrono::system_clock::now();
+            
+            // Update the key if it can be promoted
+            if (ue_key.can_promote_to_supi()) {
+                ue_key.supi_value = supi_val.value;
+                ue_key.promote_to_supi();
+            }
+        }
+    }
+    
+    // Method to add alternative identifiers for cross-referencing
+    void add_known_identifier(const std::string& type, const std::string& value) {
+        if (type == "ipv4" && std::find(known_ipv4_addresses.begin(), known_ipv4_addresses.end(), value) == known_ipv4_addresses.end()) {
+            known_ipv4_addresses.push_back(value);
+        } else if (type == "ipv6" && std::find(known_ipv6_addresses.begin(), known_ipv6_addresses.end(), value) == known_ipv6_addresses.end()) {
+            known_ipv6_addresses.push_back(value);
+        } else if (type == "gpsi" && std::find(known_gpsi_values.begin(), known_gpsi_values.end(), value) == known_gpsi_values.end()) {
+            known_gpsi_values.push_back(value);
+        } else if (type == "ipv6_prefix" && std::find(known_ipv6_prefixes.begin(), known_ipv6_prefixes.end(), value) == known_ipv6_prefixes.end()) {
+            known_ipv6_prefixes.push_back(value);
+        } else if (type == "mac" && std::find(known_mac_addresses.begin(), known_mac_addresses.end(), value) == known_mac_addresses.end()) {
+            known_mac_addresses.push_back(value);
+        }
+    }
+
+    bool remove_known_identifier(const std::string& identifier_type, const std::string& identifier_value) {
+        if (identifier_type == "ipv4") {
+            auto it = std::find(known_ipv4_addresses.begin(), known_ipv4_addresses.end(), identifier_value);
+            if (it != known_ipv4_addresses.end()) {
+                known_ipv4_addresses.erase(it);
+                // If the UeKey is IPv4-based and this was the last known IPv4, we might need to update the key type
+                if (ue_key.type == UeKey::KeyType::IPV4_BASED && known_ipv4_addresses.empty()) {
+                    ue_key.type = UeKey::KeyType::COMPOSITE; // Downgrade to composite if no other identifiers
+                }
+                return true;
+            }
+        } else if (identifier_type == "ipv6") {
+            auto it = std::find(known_ipv6_addresses.begin(), known_ipv6_addresses.end(), identifier_value);
+            if (it != known_ipv6_addresses.end()) {
+                known_ipv6_addresses.erase(it);
+                // If the UeKey is IPv6-based and this was the last known IPv6, we might need to update the key type
+                if (ue_key.type == UeKey::KeyType::IPV6_BASED && known_ipv6_addresses.empty()) {
+                    ue_key.type = UeKey::KeyType::COMPOSITE; // Downgrade to composite if no other identifiers
+                }
+                return true;
+            }
+        } else if (identifier_type == "gpsi") {
+            auto it = std::find(known_gpsi_values.begin(), known_gpsi_values.end(), identifier_value);
+            if (it != known_gpsi_values.end()) {
+                known_gpsi_values.erase(it);
+                // If the UeKey is GPSI-based and this was the last known GPSI, we might need to update the key type
+                if (ue_key.type == UeKey::KeyType::GPSI_BASED && known_gpsi_values.empty()) {
+                    ue_key.type = UeKey::KeyType::COMPOSITE; // Downgrade to composite if no other identifiers
+                }
+                return true;
+            }
+        } else if (identifier_type == "ipv6_prefix") {
+            auto it = std::find(known_ipv6_prefixes.begin(), known_ipv6_prefixes.end(), identifier_value);
+            if (it != known_ipv6_prefixes.end()) {
+                known_ipv6_prefixes.erase(it);
+                // If the UeKey is IPv6-prefix-based and this was the last known IPv6-prefix, we might need to update the key type
+                if (ue_key.type == UeKey::KeyType::IPV6_PREFIX_BASED && known_ipv6_prefixes.empty()) {
+                    ue_key.type = UeKey::KeyType::COMPOSITE; // Downgrade to composite if no other identifiers
+                }
+                return true;
+            }
+        } else if (identifier_type == "mac") {
+            auto it = std::find(known_mac_addresses.begin(), known_mac_addresses.end(), identifier_value);
+            if (it != known_mac_addresses.end()) {
+                known_mac_addresses.erase(it);
+                // If the UeKey is MAC-based and this was the last known MAC, we might need to update the key type
+                if (ue_key.type == UeKey::KeyType::MAC_ADDR_BASED && known_mac_addresses.empty()) {
+                    ue_key.type = UeKey::KeyType::COMPOSITE; // Downgrade to composite if no other identifiers
+                }
+                return true;
+            }
+        }
+        return false; // Identifier not found
+    }
+
     bool operator==(const AfUeSubscriptionState& other) const {
-        return supi == other.supi &&
+        return ue_key == other.ue_key &&
+               supi == other.supi &&
                gpsi == other.gpsi &&
                location_info == other.location_info &&
                location_timestamp == other.location_timestamp &&
@@ -150,6 +421,12 @@ struct AfUeSubscriptionState {
 
 // --- Hash specializations for custom structs to use with std::unordered_map ---
 namespace std {
+
+template<> struct hash<UeKey> {
+    size_t operator()(const UeKey& key) const {
+        return hash<string>{}(key.get_primary_key());
+    }
+};
 
 template<> struct hash<Snssai> {
     size_t operator()(const Snssai& s) const {

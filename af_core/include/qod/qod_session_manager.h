@@ -197,13 +197,32 @@ private:
     // === Internal Methods ===
     
     /**
+     * @brief Create or get UE key from session
+     * @param session QoD session
+     * @return UE key or nullopt if cannot be determined
+     */
+    std::optional<UeKey> create_or_get_ue_key(const af::common::qod::QodSession& session);
+
+    /**
      * @brief Resolve device to internal identifiers
      * @param device QoD device specification
      * @return Resolved SUPI and PDU session info if found
      */
     std::pair<std::optional<Supi>, std::optional<std::string>> 
         resolve_device(const af::common::qod::QodDevice& device);
-    
+
+    /**
+     * @brief Create or update UE state in the UE State Manager
+     * @param session QoD session containing device info and identifiers
+     */
+    void create_or_update_ue_state(const af::common::qod::QodSession& session);
+
+    /**
+     * @brief Update UE state from PCF response (promotion/merging when SUPI resolved)
+     * @param session QoD session with potentially new UE information from PCF
+     */
+    void update_ue_state_from_pcf_response(const af::common::qod::QodSession& session);
+
     /**
      * @brief Validate QoS profile
      * @param profile QoS profile name

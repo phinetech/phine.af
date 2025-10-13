@@ -10,6 +10,7 @@
 #include <sstream>
 #include <iomanip>
 #include "af_orchestrator.h"
+#include "models/ue_state.h"
 
 namespace af {
 namespace qod {
@@ -174,14 +175,12 @@ std::optional<af::common::qod::QodSession> QodSessionManager::create_session(
         }
     }
     
-    // Store session
+    // Store session and create/update UE state
     {
         qod_state_manager_->add_session(session);
-        // TODO: handle case when supi is not resolved
-        if (session.ue_supi.has_value() && session.pdu_session_id.has_value()) {
-            logger_->debug("Adding QoD session to PDU session with SUPI: {}, PDU session ID {}", session.ue_supi.value().value, session.pdu_session_id.value());
-            ue_state_manager_->add_qod_session_to_pdu_session(session.ue_supi.value(), session.pdu_session_id.value(), session.session_id);
-        }
+        
+        // Create or update UE state in the UE State Manager
+        create_or_update_ue_state(session);
     }
     
     // Apply to PCF
@@ -275,6 +274,18 @@ bool QodSessionManager::delete_session(
     session.status_info = af::common::qod::StatusInfo::DELETE_REQUESTED;
     session.expires_at = std::chrono::system_clock::now();
     
+    // Remove QoD session from UE state
+    if (session.pdu_session_id && ue_state_manager_) {
+        std::optional<UeKey> key = create_or_get_ue_key(session);
+        if (!key) {
+            logger_->error("Failed to create UE key for session: {}", session.session_id);
+            return false;
+        }
+        ue_state_manager_->remove_qod_session_from_pdu_session(
+            *key, *session.pdu_session_id, session.session_id);
+        logger_->debug("Removed QoD session {} from UE state", session_id);
+    }
+    
     // Send notification if configured
     if (session.sink && config_.enable_notifications && old_status == af::common::qod::QosStatus::AVAILABLE) {
         send_status_change_notification(session, old_status, af::common::qod::StatusInfo::DELETE_REQUESTED);
@@ -348,42 +359,65 @@ std::vector<af::common::qod::QodSession> QodSessionManager::retrieve_sessions_by
     
     std::vector<af::common::qod::QodSession> result;
     
-    // Resolve device if provided
-    std::optional<Supi> resolved_supi;
-    if (request.device) {
-        auto [supi, pdu_id] = resolve_device(*request.device);
-        resolved_supi = supi;
-    }
-    std::string resolved_supi_str = resolved_supi.has_value() ? resolved_supi.value().value : "";
-
-    std::vector<std::string> sessions = qod_state_manager_->get_sessions_by_supi(resolved_supi_str);
-    for (const auto& session_id : sessions) {
-        auto session_opt = qod_state_manager_->get_session_by_id(session_id);
-        if (session_opt && session_opt.has_value()) {
-            const auto& session = session_opt.value();
-            if (session.api_consumer_id == request.api_consumer_id) {
-                // Match device
-                bool matches = false;
-                if (!request.device) {
-                    // No device specified, return all for this consumer
-                    matches = true;
-                } else if (resolved_supi && session.ue_supi) {
-                    // Match by SUPI
-                    matches = (*resolved_supi == *session.ue_supi);
-                } else if (request.device && session.device) {
-                    // Match by device identifiers
-                    if (request.device->phone_number && session.device->phone_number) {
-                        matches = (*request.device->phone_number == *session.device->phone_number);
-                    } else if (request.device->ipv4_address && session.device->ipv4_address) {
-                        matches = (*request.device->ipv4_address == *session.device->ipv4_address);
-                    } else if (request.device->ipv6_address && session.device->ipv6_address) {
-                        matches = (*request.device->ipv6_address == *session.device->ipv6_address);
-                    }
-                }
-                if (matches) {
-                    result.push_back(session);
+    // Get all sessions from state manager
+    auto all_sessions = qod_state_manager_->get_all_sessions();
+    
+    for (const auto& session : all_sessions) {
+        // Skip sessions that don't belong to this API consumer
+        if (session.api_consumer_id != request.api_consumer_id) {
+            continue;
+        }
+        
+        // Skip unavailable sessions (only return REQUESTED or AVAILABLE)
+        if (session.qos_status == af::common::qod::QosStatus::UNAVAILABLE) {
+            continue;
+        }
+        
+        // If no device filter specified, include all sessions for this API consumer
+        if (!request.device) {
+            result.push_back(session);
+            continue;
+        }
+        
+        // Device filter specified - check if session matches the device
+        if (!session.device) {
+            // Session has no device info, skip it
+            continue;
+        }
+        
+        bool device_matches = false;
+        
+        // Check phone number match
+        if (request.device->phone_number && session.device->phone_number) {
+            if (*request.device->phone_number == *session.device->phone_number) {
+                device_matches = true;
+            }
+        }
+        
+        // Check IPv4 address match
+        if (!device_matches && request.device->ipv4_address && session.device->ipv4_address) {
+            // Compare public addresses
+            if (request.device->ipv4_address->public_address.value == session.device->ipv4_address->public_address.value) {
+                device_matches = true;
+            }
+            // Compare private addresses if both present
+            else if (request.device->ipv4_address->private_address && session.device->ipv4_address->private_address) {
+                if (request.device->ipv4_address->private_address->value == session.device->ipv4_address->private_address->value) {
+                    device_matches = true;
                 }
             }
+        }
+        
+        // Check IPv6 address match
+        if (!device_matches && request.device->ipv6_address && session.device->ipv6_address) {
+            if (request.device->ipv6_address->value == session.device->ipv6_address->value) {
+                device_matches = true;
+            }
+        }
+        
+        // If device matches, include this session
+        if (device_matches) {
+            result.push_back(session);
         }
     }
     
@@ -393,6 +427,7 @@ std::vector<af::common::qod::QodSession> QodSessionManager::retrieve_sessions_by
 
 // === PCF Integration ===
 
+// TODO: Add optional payload that might be passed by PCF i.e., the UE Identifiers
 void QodSessionManager::handle_pcf_session_response(
     const std::string& qod_session_id,
     const std::string& pcf_session_id,
@@ -417,6 +452,10 @@ void QodSessionManager::handle_pcf_session_response(
         session.pcf_session_id = pcf_session_id;
         session.started_at = std::chrono::system_clock::now();
         session.expires_at = *session.started_at + session.duration;
+        
+        // Update UE state when PCF confirms the session
+        // This might provide additional UE information from network
+        update_ue_state_from_pcf_response(session);
         
         // Map PCF ID to QoD ID
         {
@@ -465,6 +504,36 @@ void QodSessionManager::handle_pcf_session_terminated(
         session.qos_status = af::common::qod::QosStatus::UNAVAILABLE;
         session.status_info = af::common::qod::StatusInfo::NETWORK_TERMINATED;
         session.expires_at = std::chrono::system_clock::now();
+        
+        // Remove QoD session from UE state when terminated by network
+        if (session.pdu_session_id && ue_state_manager_) {
+            std::optional<UeKey> key = create_or_get_ue_key(session);
+            if (!key) {
+                logger_->error("Failed to create UE key for session: {}", session.session_id);
+                return;
+            }
+            ue_state_manager_->remove_qod_session_from_pdu_session(
+                *key, *session.pdu_session_id, session.session_id);
+            logger_->debug("Removed QoD session {} from UE state", session.session_id);
+        }
+
+        // Assume the non-primary indentifier of IPv4/IPv6 are no longer valid
+        // TODO: This might not always be the case if UE has multiple PDU sessions
+        // TODO [3GPP]: Verify if the identifier is still used by other sessions before removing
+        // and what the 3GPP spec says about this
+        if (session.device && ue_state_manager_) {
+            std::optional<UeKey> key = create_or_get_ue_key(session);
+            if (key) {
+                // Check for IPv4 or IPv6 address and remove
+                if (session.device->ipv4_address) {
+                    ue_state_manager_->remove_non_primary_ue_identifier(*key, "ipv4", session.device->ipv4_address->public_address.value);
+                }
+                if (session.device->ipv6_address) {
+                    ue_state_manager_->remove_non_primary_ue_identifier(*key, "ipv6", session.device->ipv6_address->value);
+                }
+                logger_->debug("Removed non-primary UE identifier for session {}", session.session_id);
+            }
+        }
         
         // Send notification
         if (session.sink && config_.enable_notifications) {
@@ -515,7 +584,7 @@ QodSessionManager::resolve_device(const af::common::qod::QodDevice& device) {
     
     std::optional<AfUeSubscriptionState> ue_state;
     
-    // Try to resolve by different identifiers
+    // Try to resolve by different identifiers using the new UE State Manager
     if (device.phone_number) {
         // Convert phone number to GPSI format
         Gpsi gpsi{*device.phone_number};
@@ -527,7 +596,7 @@ QodSessionManager::resolve_device(const af::common::qod::QodDevice& device) {
     
     if (!ue_state && device.ipv4_address.has_value()) {
         logger_->debug("Attempting to resolve by IPv4 address");
-        if (device.ipv4_address->public_address.value.empty() == false) {
+        if (!device.ipv4_address->public_address.value.empty()) {
             Ipv4Addr addr{device.ipv4_address->public_address.value};
             ue_state = ue_state_manager_->get_ue_state_by_ipv4(addr);
         }
@@ -565,6 +634,225 @@ QodSessionManager::resolve_device(const af::common::qod::QodDevice& device) {
     }
     
     return {std::nullopt, std::nullopt};
+}
+
+std::optional<UeKey> QodSessionManager::create_or_get_ue_key(const af::common::qod::QodSession& session) {
+    if (!ue_state_manager_ || !session.device) {
+        logger_->error("UE State Manager not initialized or session has no device");
+        return std::nullopt;
+    }
+    
+    // Determine the best UeKey for this session
+    std::optional<UeKey> ue_key;
+    
+    // Priority: SUPI > GPSI (phone_number) > IPv4 > IPv6
+    if (session.ue_supi) {
+        ue_key = UeKey(*session.ue_supi);
+        logger_->debug("Using SUPI-based UeKey: {}", session.ue_supi->value);
+    } else if (session.device->phone_number) {
+        Gpsi gpsi{*session.device->phone_number};
+        ue_key = UeKey(gpsi);
+        logger_->debug("Using GPSI-based UeKey: {}", *session.device->phone_number);
+    } else if (session.device->ipv4_address) {
+        Ipv4Addr ipv4{session.device->ipv4_address->public_address.value};
+        ue_key = UeKey(ipv4);
+        logger_->debug("Using IPv4-based UeKey: {}", session.device->ipv4_address->public_address.value);
+    } else if (session.device->ipv6_address) {
+        Ipv6Addr ipv6{session.device->ipv6_address->value};
+        ue_key = UeKey(ipv6);
+        logger_->debug("Using IPv6-based UeKey: {}", session.device->ipv6_address->value);
+    }
+    
+    if (!ue_key) {
+        logger_->error("No valid identifier found to create UE key for session: {}", session.session_id);
+        return std::nullopt;
+    }
+    
+    return *ue_key;
+}
+
+void QodSessionManager::create_or_update_ue_state(const af::common::qod::QodSession& session) {
+    if (!ue_state_manager_ || !session.device) {
+        return;
+    }
+    
+    logger_->debug("Creating/updating UE state for QoD session: {}", session.session_id);
+    
+    try {
+        // Determine the best UeKey for this session
+        std::optional<UeKey> ue_key;
+        
+        // Priority: SUPI > GPSI (phone_number) > IPv4 > IPv6
+        if (session.ue_supi) {
+            ue_key = UeKey(*session.ue_supi);
+            logger_->debug("Using SUPI-based UeKey: {}", session.ue_supi->value);
+        } else if (session.device->phone_number) {
+            Gpsi gpsi{*session.device->phone_number};
+            ue_key = UeKey(gpsi);
+            logger_->debug("Using GPSI-based UeKey: {}", *session.device->phone_number);
+        } else if (session.device->ipv4_address) {
+            Ipv4Addr ipv4{session.device->ipv4_address->public_address.value};
+            ue_key = UeKey(ipv4);
+            logger_->debug("Using IPv4-based UeKey: {}", session.device->ipv4_address->public_address.value);
+        } else if (session.device->ipv6_address) {
+            Ipv6Addr ipv6{session.device->ipv6_address->value};
+            ue_key = UeKey(ipv6);
+            logger_->debug("Using IPv6-based UeKey: {}", session.device->ipv6_address->value);
+        }
+        
+        if (!ue_key) {
+            logger_->warn("No valid identifier found to create UE key for session: {}", session.session_id);
+            return;
+        }
+        
+        // Create initial UE state data
+        AfUeSubscriptionState initial_state(*ue_key);
+        
+        // Set SUPI if available
+        if (session.ue_supi) {
+            initial_state.supi = *session.ue_supi;
+            initial_state.resolution_state = AfUeSubscriptionState::ResolutionState::RESOLVED;
+            initial_state.supi_resolved_at = std::chrono::system_clock::now();
+        } else {
+            initial_state.resolution_state = AfUeSubscriptionState::ResolutionState::PROVISIONAL;
+        }
+        
+        // Set GPSI if available
+        if (session.device->phone_number) {
+            Gpsi gpsi{*session.device->phone_number};
+            initial_state.gpsi = gpsi;
+        }
+        
+        // Add known identifiers for cross-referencing
+        if (session.device->ipv4_address) {
+            initial_state.add_known_identifier("ipv4", session.device->ipv4_address->public_address.value);
+            if (session.device->ipv4_address->private_address) {
+                initial_state.add_known_identifier("ipv4", session.device->ipv4_address->private_address->value);
+            }
+        }
+        if (session.device->ipv6_address) {
+            initial_state.add_known_identifier("ipv6", session.device->ipv6_address->value);
+        }
+        if (session.device->phone_number) {
+            initial_state.add_known_identifier("gpsi", *session.device->phone_number);
+        }
+        
+        // Create or update the UE state
+        auto& ue_state = ue_state_manager_->create_or_update_provisional_ue_state(*ue_key, initial_state);
+        
+        logger_->info("UE state created/updated for session {} with key type: {}", 
+                     session.session_id, static_cast<int>(ue_key->type));
+        
+        // If we have a PDU session, add it to the UE state
+        if (session.pdu_session_id && (session.device->ipv4_address || session.device->ipv6_address)) {
+            PduSessionData pdu_data;
+            pdu_data.pdu_session_id = *session.pdu_session_id;
+            pdu_data.status = "ACTIVE"; // Assume active for QoD sessions
+            pdu_data.pdu_session_type = "IPV4"; // Default, could be IPV6 or ETHERNET
+            
+            if (session.device->ipv4_address) {
+                pdu_data.ue_ipv4_address = Ipv4Addr{session.device->ipv4_address->public_address.value};
+                pdu_data.pdu_session_type = "IPV4";
+            }
+            if (session.device->ipv6_address) {
+                pdu_data.ue_ipv6_addresses.push_back(Ipv6Addr{session.device->ipv6_address->value});
+                pdu_data.pdu_session_type = session.device->ipv4_address ? "IPV4V6" : "IPV6";
+            }
+            
+            // Add QoD session to the PDU session
+            pdu_data.active_qod_session_ids.insert(session.session_id);
+            
+            ue_state_manager_->add_or_update_pdu_session(*ue_key, pdu_data);
+            
+            logger_->debug("PDU session {} added to UE state for QoD session {}", 
+                          *session.pdu_session_id, session.session_id);
+        }
+        
+    } catch (const std::exception& e) {
+        logger_->error("Error creating/updating UE state for session {}: {}", 
+                      session.session_id, e.what());
+    }
+}
+
+void QodSessionManager::update_ue_state_from_pcf_response(const af::common::qod::QodSession& session) {
+    if (!ue_state_manager_ || !session.device) {
+        return;
+    }
+    
+    logger_->debug("Updating UE state from PCF response for session: {}", session.session_id);
+    
+    try {
+        // If we now have a SUPI from PCF response but didn't before, promote the state
+        if (session.ue_supi) {
+            // Try to find existing provisional state by other identifiers and promote it
+            std::optional<UeKey> current_key;
+            
+            // Find current provisional state by device identifiers in their priority order
+            // Priority: GPSI (phone_number) > IPv4 > IPv6
+            if (session.device->phone_number) {
+                Gpsi gpsi{*session.device->phone_number};
+                current_key = UeKey(gpsi);
+            } else if (session.device->ipv4_address) {
+                Ipv4Addr ipv4{session.device->ipv4_address->public_address.value};
+                current_key = UeKey(ipv4);
+            } else if (session.device->ipv6_address) {
+                Ipv6Addr ipv6{session.device->ipv6_address->value};
+                current_key = UeKey(ipv6);
+            }
+            
+            if (current_key) {
+                // Check if we need to promote from provisional to SUPI-based
+                UeKey supi_key(*session.ue_supi);
+                if (current_key->get_primary_key() != supi_key.get_primary_key()) {
+                    bool promoted = ue_state_manager_->promote_ue_state_to_resolved(*current_key, *session.ue_supi);
+                    if (promoted) {
+                        logger_->info("Promoted UE state from {} to SUPI-based for session {}", 
+                                     current_key->get_primary_key(), session.session_id);
+                    } else {
+                        // If promotion failed, there might be a conflict, try merging
+                        auto existing_supi_state = ue_state_manager_->get_ue_state_by_supi(*session.ue_supi);
+                        if (existing_supi_state) {
+                            bool merged = ue_state_manager_->merge_ue_states(supi_key, *current_key);
+                            if (merged) {
+                                logger_->info("Merged UE states for session {}: {} -> {}", 
+                                             session.session_id, current_key->get_primary_key(), supi_key.get_primary_key());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Update QoD session association with PDU session if we have the information
+        if (session.pdu_session_id) {
+            // Determine the best UeKey for this session
+            std::optional<UeKey> ue_key;
+            // Priority: SUPI > GPSI (phone_number) > IPv4 > IPv6
+            if (session.ue_supi) {
+                ue_key = UeKey(*session.ue_supi);
+            } else if (session.device->phone_number) {
+                Gpsi gpsi{*session.device->phone_number};
+                ue_key = UeKey(gpsi);
+            } else if (session.device->ipv4_address) {
+                Ipv4Addr ipv4{session.device->ipv4_address->public_address.value};
+                ue_key = UeKey(ipv4);
+            } else if (session.device->ipv6_address) {
+                Ipv6Addr ipv6{session.device->ipv6_address->value};
+                ue_key = UeKey(ipv6);
+            }
+            if (ue_key) {
+                ue_state_manager_->add_qod_session_to_pdu_session(
+                    *ue_key, *session.pdu_session_id, session.session_id);
+                
+                logger_->debug("Updated QoD session association in UE state for key: {}, PDU: {}, QoD: {}", 
+                              ue_key->get_primary_key(), *session.pdu_session_id, session.session_id);
+            }
+        }
+
+    } catch (const std::exception& e) {
+        logger_->error("Error updating UE state from PCF response for session {}: {}", 
+                      session.session_id, e.what());
+    }
 }
 
 bool QodSessionManager::validate_qos_profile(const std::string& profile) {
