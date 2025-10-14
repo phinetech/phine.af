@@ -608,7 +608,7 @@ af::communication::MessagePtr PcfHandler::delete_app_session(
         }
         
         // Call PCF client to delete the app session
-        bool success = pcf_client_->delete_app_session(app_session_id);
+        bool success = pcf_client_->delete_app_session(app_session_id, {});
         
         if (success) {
             // Success

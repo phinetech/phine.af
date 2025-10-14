@@ -29,7 +29,14 @@ PcfClientWrapper::PcfClientWrapper(const std::string& base_url,
     logger_->info("PCF Client Wrapper created");
     
     // Parse base URL
-    parse_url(base_url_);
+    if (!parse_url(base_url_)) {
+        logger_->error("Failed to parse base URL: {}", base_url_);
+    }
+    
+    // Initialize nghttp2 session
+    if (!initialize_nghttp2()) {
+        logger_->error("Failed to initialize nghttp2 session");
+    }
 }
 
 PcfClientWrapper::~PcfClientWrapper() {
@@ -258,6 +265,78 @@ bool PcfClientWrapper::connect() {
     }
 }
 
+void PcfClientWrapper::disconnect() {
+    logger_->debug("Disconnecting from PCF server");
+    
+    // Close socket if connected
+    if (socket_.is_open()) {
+        boost::system::error_code ec;
+        socket_.close(ec);
+        if (ec) {
+            logger_->warn("Error closing socket: {}", ec.message());
+        }
+    }
+    
+    // Reset connection state
+    connected_ = false;
+    
+    // Clear any pending responses
+    {
+        std::lock_guard<std::mutex> lock(responses_mutex_);
+        responses_.clear();
+    }
+    
+    // Reset nghttp2 session
+    if (session_) {
+        std::lock_guard<std::mutex> lock(session_mutex_);
+        nghttp2_session_del(session_);
+        session_ = nullptr;
+    }
+    
+    // Reinitialize nghttp2 for next connection
+    initialize_nghttp2();
+    
+    logger_->debug("Disconnected from PCF server");
+}
+
+bool PcfClientWrapper::is_connection_alive() {
+    if (!connected_ || !socket_.is_open()) {
+        return false;
+    }
+    
+    // Try to check socket state without blocking
+    boost::system::error_code ec;
+    socket_.non_blocking(true, ec);
+    if (ec) {
+        logger_->warn("Failed to set socket non-blocking: {}", ec.message());
+        return false;
+    }
+    
+    // Try to peek at the socket to see if it's still connected
+    char buffer[1];
+    size_t bytes_read = socket_.receive(boost::asio::buffer(buffer, 1), 
+                                       boost::asio::socket_base::message_peek, ec);
+    
+    // Reset to blocking mode
+    socket_.non_blocking(false);
+    
+    if (ec == boost::asio::error::would_block) {
+        // No data available but connection is alive
+        return true;
+    } else if (ec == boost::asio::error::eof || ec == boost::asio::error::connection_reset) {
+        // Connection closed
+        logger_->debug("Connection closed by peer");
+        return false;
+    } else if (ec) {
+        // Other error
+        logger_->warn("Socket error during connection check: {}", ec.message());
+        return false;
+    }
+    
+    // If we got here, there's data available or connection is fine
+    return true;
+}
+
 std::pair<bool, nlohmann::json> PcfClientWrapper::create_app_session(
     const nlohmann::json& app_session_context) {
     
@@ -283,14 +362,14 @@ std::pair<bool, nlohmann::json> PcfClientWrapper::update_app_session(
     return perform_request("PATCH", path, update_data);
 }
 
-bool PcfClientWrapper::delete_app_session(const std::string& app_session_id) {
+bool PcfClientWrapper::delete_app_session(const std::string& app_session_id, const nlohmann::json& delete_data) {
     logger_->info("Deleting application session: {}", app_session_id);
     
     // Construct path
-    std::string path = "app-sessions/" + app_session_id;
-    
+    std::string path = "app-sessions/" + app_session_id + "/delete";
+
     // Perform DELETE request
-    auto result = perform_request("DELETE", path);
+    auto result = perform_request("POST", path, delete_data);
     return result.first;
 }
 
@@ -314,9 +393,13 @@ std::pair<bool, nlohmann::json> PcfClientWrapper::perform_request(
     std::string full_path = path_prefix_ + path;
     logger_->debug("Performing {} request to {}", method, full_path);
     
-    // Ensure we're connected
-    if (!connected_ && !connect()) {
-        return {false, {{"error", "connection_failed"}}};
+    // Ensure we're connected - reconnect if needed
+    if (!connected_ || !is_connection_alive()) {
+        logger_->debug("Connection not alive, reconnecting...");
+        disconnect();
+        if (!connect()) {
+            return {false, {{"error", "connection_failed"}}};
+        }
     }
     
     // Set headers
@@ -335,8 +418,6 @@ std::pair<bool, nlohmann::json> PcfClientWrapper::perform_request(
         request_body = request_data.dump();
         headers["content-length"] = std::to_string(request_body.length());
     }
-
-    logger_->debug("Request body: {}", request_body);
     
     // Submit the request
     int32_t stream_id = submit_request(method, full_path, headers, request_body);
@@ -348,8 +429,15 @@ std::pair<bool, nlohmann::json> PcfClientWrapper::perform_request(
 
     // Wait for response
     // TODO: define a proper timeout mechanism
-    if (!wait_for_response(stream_id, 1000)) {
-        logger_->error("Request timed out");
+    if (!wait_for_response(stream_id, 5000)) {
+        logger_->error("Request timed out for stream {}", stream_id);
+        
+        // Clean up the response entry
+        {
+            std::lock_guard<std::mutex> lock(responses_mutex_);
+            responses_.erase(stream_id);
+        }
+        
         return {false, {{"error", "request_timeout"}}};
     }
 
@@ -386,8 +474,12 @@ std::pair<bool, nlohmann::json> PcfClientWrapper::perform_request(
         response_json["headers"] = headers_json;
 
         if (!success) {
-            logger_->error("Request failed with HTTP code {}: {}", 
-                          response.status_code, response.body);
+            if (response.status_code == 0) {
+                logger_->error("Request failed with HTTP code 0 (connection error): {}", response.body);
+            } else {
+                logger_->error("Request failed with HTTP code {}: {}", 
+                              response.status_code, response.body);
+            }
         }
         
         // Remove response data
@@ -439,10 +531,11 @@ int32_t PcfClientWrapper::submit_request(
 
     // Setup data provider for body
     nghttp2_data_provider2 data_provider;
+    StreamData* stream_data = nullptr;
     
     if (!body.empty()) {
         // Non-empty body, set up data provider
-        auto stream_data = new StreamData();
+        stream_data = new StreamData();
         stream_data->body = std::make_shared<std::string>(body);
         data_provider.source.ptr = stream_data;
 
@@ -490,7 +583,16 @@ int32_t PcfClientWrapper::submit_request(
     if (stream_id <= 0) {
         logger_->error("Failed to submit request headers: {}", 
                     nghttp2_strerror((int)stream_id));
+        // Clean up stream data if request submission failed
+        if (stream_data) {
+            delete stream_data;
+        }
         return -1;
+    }
+    
+    // Set stream user data for cleanup tracking
+    if (stream_data) {
+        nghttp2_session_set_stream_user_data(session_, stream_id, stream_data);
     }
     
     // Initialize response data structure
@@ -574,7 +676,7 @@ bool PcfClientWrapper::wait_for_response(int32_t stream_id, int timeout_ms) {
         catch (const boost::system::system_error& e) {
             if (e.code() == boost::asio::error::eof) {
                 // Connection closed
-                logger_->debug("Connection closed by server");
+                logger_->debug("Connection closed by server for stream {}", stream_id);
                 connected_ = false;
                 
                 // Check if response is completed
@@ -586,9 +688,13 @@ bool PcfClientWrapper::wait_for_response(int32_t stream_id, int timeout_ms) {
                 }
                 
                 return false;
+            } else if (e.code() == boost::asio::error::would_block) {
+                // No data available, continue waiting
+                continue;
             }
             
-            logger_->error("Read error: {}", e.what());
+            logger_->error("Read error for stream {}: {}", stream_id, e.what());
+            connected_ = false;
             return false;
         }
         catch (const std::exception& e) {
@@ -704,31 +810,37 @@ int PcfClientWrapper::on_stream_close_callback(nghttp2_session *session,
                                              void *user_data) {
     PcfClientWrapper* client = static_cast<PcfClientWrapper*>(user_data);
     
-    std::lock_guard<std::mutex> lock(client->responses_mutex_);
+    // Clean up stream data first
     void *stream_userdata = nghttp2_session_get_stream_user_data(session, stream_id);
     if (stream_userdata) {
         client->logger_->debug("Cleaning up stream data for stream {}", 
                              stream_id);
         auto* sd = static_cast<StreamData*>(stream_userdata);
-        // Check if stream data exists before deleting
-        // TODO: fix deletion logic, right now if you delete sd the application throws an error
-        // delete sd;  // cleanup here
-        // Crucial: Clear the user data pointer to prevent double-free
-        // nghttp2_session_set_stream_user_data(session, stream_id, nullptr);
+        delete sd;  // Clean up the allocated stream data
+        // Clear the user data pointer to prevent double-free
+        nghttp2_session_set_stream_user_data(session, stream_id, nullptr);
         client->logger_->debug("Stream data cleaned up for stream {}", 
                              stream_id);
     }
 
-    auto it = client->responses_.find(stream_id);
+    // Mark response as completed
+    {
+        std::lock_guard<std::mutex> lock(client->responses_mutex_);
+        auto it = client->responses_.find(stream_id);
 
-    if (it != client->responses_.end()) {
-        it->second.completed = true;
-        
-        if (error_code != 0) {
-            client->logger_->warn("Stream {} closed with error: {}", 
-                                stream_id, error_code);
-        } else {
-            client->logger_->debug("Stream {} completed successfully", stream_id);
+        if (it != client->responses_.end()) {
+            it->second.completed = true;
+            
+            if (error_code != 0) {
+                client->logger_->warn("Stream {} closed with error: {}", 
+                                    stream_id, error_code);
+                // For error cases, mark the response with error info
+                if (it->second.status_code == 0) {
+                    it->second.status_code = 0; // Indicate connection error
+                }
+            } else {
+                client->logger_->debug("Stream {} completed successfully", stream_id);
+            }
         }
     }
 

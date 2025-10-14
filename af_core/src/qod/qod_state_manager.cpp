@@ -314,7 +314,13 @@ bool QodStateManager::remove_pcf_to_qod_session_mapping(
     const std::string& pcf_session_id) {
     
     std::lock_guard<std::mutex> lock(pcf_mapping_mutex_);
+    // Find and erase the mapping
+    if (pcf_session_mapping_.find(pcf_session_id) == pcf_session_mapping_.end()) {
+        logger_->warn("No mapping found for PCF session ID: {}", pcf_session_id);
+        return false; // Not found
+    }
     pcf_session_mapping_.erase(pcf_session_id);
+    return true;
 }
 
 // === QoS Profile Mapping ===

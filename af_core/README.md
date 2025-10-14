@@ -318,3 +318,22 @@ docker run --rm --network host -v ./common/protos:/var/protos/ fullstorydev/grpc
 # Decode the response
 echo xxx |  base64 --decode
 ```
+
+## Delete session
+
+```bash
+docker run --rm --network host -v ./common/protos:/var/protos/ fullstorydev/grpcurl -plaintext \
+  -proto message.proto \
+  -import-path /var/protos \
+  -d '{
+    "message_type": "qod_delete_session",
+    "correlation_id": "12345",
+    "metadata": {
+      "session_id": "0a24d13b-fe51-4644-a061-095ce8448f6e",
+      "source": "command_line",
+      "priority": "high"
+    }
+  }' \
+  192.168.70.141:50051 \
+  af.proto.InternalCommunication/SendMessage
+```

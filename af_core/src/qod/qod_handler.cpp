@@ -241,8 +241,8 @@ af::communication::MessagePtr QodHandler::handle_delete_session(
         bool deleted = session_manager_->delete_session(session_id, context.api_consumer_id);
         
         if (!deleted) {
-            return create_error_response(404, ErrorCode::NOT_FOUND,
-                "Session not found", context.correlation_id);
+            return create_error_response(400, ErrorCode::NOT_FOUND,
+                "Session deletion failed", context.correlation_id);
         }
         
         logger_->info("Session deleted successfully: {}", session_id);

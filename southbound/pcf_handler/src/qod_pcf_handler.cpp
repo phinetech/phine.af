@@ -548,10 +548,12 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::delete_pcf_session(
     
     try {
         // Build PCF delete request
-        nlohmann::json pcf_request;
-        pcf_request["appSessionId"] = pcf_info.pcf_session_id;
-        
-        bool success = pcf_client_->delete_app_session(pcf_info.pcf_session_id);
+        nlohmann::json pcf_request = nlohmann::json::object();
+        pcf_request["events"] = nlohmann::json::array();
+        pcf_request["events"].push_back({ {"event", "QOS_NOTIF"} });
+        pcf_request["notifUri"] = af_notification_uri_ + "/" + qod_session.session_id;
+
+        bool success = pcf_client_->delete_app_session(pcf_info.pcf_session_id, pcf_request);
         if (!success) {
             logger_->error("Failed to send delete app session request to PCF");
             return create_error_response(

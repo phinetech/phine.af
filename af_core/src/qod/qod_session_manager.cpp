@@ -264,9 +264,15 @@ bool QodSessionManager::delete_session(
     // af::common::qod::QodSession& session = it->second;
     af::common::qod::QosStatus old_status = session.qos_status;
     
+    bool deleted = false;
     // Remove from PCF if active
     if (session.qos_status == af::common::qod::QosStatus::AVAILABLE) {
-        remove_session_from_pcf(session);
+        deleted = remove_session_from_pcf(session);
+    }
+
+    if (!deleted) {
+        logger_->error("Failed to remove session {} from PCF", session_id);
+        return false;
     }
     
     // Update status
@@ -543,7 +549,11 @@ void QodSessionManager::handle_pcf_session_terminated(
     
     // Remove PCF mapping
     {
+        qod_state_manager_->remove_session(session.session_id);
+        logger_->debug("Removed QoD session {} after PCF termination", session.session_id);
+
         qod_state_manager_->remove_pcf_to_qod_session_mapping(pcf_session_id);
+        logger_->debug("Removed PCF to QoD session mapping for PCF ID: {}", pcf_session_id);
     }
 }
 
@@ -976,6 +986,14 @@ bool QodSessionManager::apply_session_to_pcf(af::common::qod::QodSession& sessio
             
             std::string pcf_session_id = response_json.value("pcf_session_id", "");
             handle_pcf_session_response(session.session_id, pcf_session_id, true);
+        } else if (response->message_type == "pcf_delete_app_session") {
+            // Call handle_pcf_session_terminated
+            std::string response_str(response->payload.begin(), response->payload.end());
+            auto response_json = nlohmann::json::parse(response_str);
+            std::string pcf_session_id = response_json.value("pcf_session_id", "");
+            std::string reason = response_json.value("reason", "Requested by user");
+            handle_pcf_session_terminated(pcf_session_id, reason);
+
         } else if (response->message_type == "pcf_error") {
             std::string error_str(response->payload.begin(), response->payload.end());
             auto error_json = nlohmann::json::parse(error_str);
@@ -983,6 +1001,8 @@ bool QodSessionManager::apply_session_to_pcf(af::common::qod::QodSession& sessio
             std::string error_message = error_json.value("message", "Unknown error");
             handle_pcf_session_response(session.session_id, "", false, error_message);
             return false;
+        } else {
+            logger_->warn("Received unexpected response from PCF: {}", response->message_type);
         }
         
         return true;
@@ -1019,7 +1039,8 @@ bool QodSessionManager::remove_session_from_pcf(const af::common::qod::QodSessio
     try {
         // Create delete request
         nlohmann::json delete_request = {
-            {"app_session_id", *session.pcf_session_id}
+            {"pcf_session_id", *session.pcf_session_id},
+            {"session_id", session.session_id}
         };
         
         // Create message for PCF
@@ -1035,7 +1056,14 @@ bool QodSessionManager::remove_session_from_pcf(const af::common::qod::QodSessio
         // TODO: Use actual PCF address from config
         auto response = pcf_comm->send_request("192.168.70.140:50055", msg);
         
-        if (response && response->message_type == "pcf_qod_session_deleted") {
+        if (response && response->message_type == "pcf_delete_app_session") {
+
+            std::string response_str(response->payload.begin(), response->payload.end());
+            auto response_json = nlohmann::json::parse(response_str);
+            std::string pcf_session_id = response_json.value("pcf_session_id", "");
+            std::string reason = response_json.value("reason", "Requested by user");
+            handle_pcf_session_terminated(pcf_session_id, reason);
+
             logger_->info("QoD session removed from PCF successfully");
             return true;
         }
