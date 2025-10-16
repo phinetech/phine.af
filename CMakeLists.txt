@@ -8,12 +8,15 @@
 # are implemented, they'll be added to this file.
 
 cmake_minimum_required(VERSION 3.14)
-project(oai-cn5g-af VERSION 0.1.0 LANGUAGES CXX)
+project(phine.af VERSION 0.1.0 LANGUAGES CXX)
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Enable position independent code for all targets
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Add CMake modules path
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/build/cmake)

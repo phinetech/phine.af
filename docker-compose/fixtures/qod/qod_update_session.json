@@ -1,0 +1,5 @@
+{
+  "sessionId": "{{sessionId}}",
+  "qosProfile": "{{qos}}",
+  "duration": 7200
+}

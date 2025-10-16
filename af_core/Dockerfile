@@ -18,15 +18,53 @@ RUN apt-get update && \
   && rm -rf /var/lib/apt/lists/*
 
   
-COPY ./common/build/scripts /app/common/build/scripts/
-COPY ./common/build/cmake/FindgRPC.cmake /app/common/build/cmake/FindgRPC.cmake
-COPY ./common/build/cmake/Protobuf.cmake /app/common/build/cmake/Protobuf.cmake
-COPY ./build/scripts /app/build/scripts/
-# COPY ./build/cmake /app/build/cmake/
+# Install gRPC and protobuf
+WORKDIR /tmp
+RUN git clone --recurse-submodules -b v1.58.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc && \
+    cd grpc && \
+    mkdir -p cmake/build && \
+    cd cmake/build && \
+    cmake -DgRPC_INSTALL=ON \
+          -DgRPC_BUILD_TESTS=OFF \
+          -DCMAKE_INSTALL_PREFIX=/usr/local \
+          -DCMAKE_BUILD_TYPE=Release \
+          ../.. && \
+    make -j$(nproc) && \
+    make install && \
+    ldconfig && \
+    cd /tmp && rm -rf grpc
 
-WORKDIR /app/build/scripts
-RUN chmod +x build_core.sh && \
-    ./build_core.sh --clean --deps-only --force-deps
+# Install nlohmann_json
+RUN git clone https://github.com/nlohmann/json.git && \
+    cd json && \
+    mkdir build && cd build && \
+    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local && \
+    make -j$(nproc) && \
+    make install && \
+    cd /tmp && rm -rf json
+
+# Install spdlog
+RUN git clone https://github.com/gabime/spdlog.git && \
+    cd spdlog && \
+    mkdir build && cd build && \
+    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local \
+             -DSPDLOG_BUILD_EXAMPLE=OFF \
+             -DSPDLOG_BUILD_TESTS=OFF \
+             -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+             -DSPDLOG_BUILD_SHARED=ON && \
+    make -j$(nproc) && \
+    make install && \
+    cd /tmp && rm -rf spdlog
+
+# Install yaml-cpp
+RUN git clone https://github.com/jbeder/yaml-cpp.git && \
+    cd yaml-cpp && \
+    git checkout yaml-cpp-0.7.0 && \
+    mkdir build && cd build && \
+    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local -DYAML_BUILD_TESTS=OFF -DYAML_BUILD_SHARED_LIBS=ON && \
+    make -j$(nproc) && \
+    make install && \
+    cd /tmp && rm -rf yaml-cpp
 
 # Ensure packages are properly installed
 RUN ldconfig
@@ -43,19 +81,23 @@ RUN apt-get update && \
       build-essential \
       libssl-dev \
       cmake \
+      git \
       libboost-all-dev \
   && rm -rf /var/lib/apt/lists/*
 
-# Copy the .proto files
-COPY ./common /app/common
-COPY ./common/build/cmake/FindgRPC.cmake /app/common/build/cmake/FindgRPC.cmake
-COPY ./common/build/cmake/Protobuf.cmake /app/common/build/cmake/Protobuf.cmake
-COPY ./build/scripts /app/build/scripts/
-# COPY ./build/cmake /app/build/cmake/
+# Build common runtime libraries
+COPY ./common/ /app/common/
 
-WORKDIR /app/build/scripts
-RUN chmod +x build_core.sh && \
-    ./build_core.sh --clean --common-only
+RUN cd /app/common && \
+    mkdir -p build && \
+    cd build && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release \
+             -DUSE_SYSTEM_GRPC=ON \
+             -DUSE_SYSTEM_PROTOBUF=ON \
+             -DCMAKE_INSTALL_PREFIX=/usr/local && \
+    make -j$(nproc) && \
+    make install && \
+    ldconfig
 
 
 # Builder stage - build the API component
@@ -65,7 +107,9 @@ WORKDIR /app
 # Copy the libraries built in the builder stage
 # Copy libraries from previous stages
 COPY --from=dependencies /usr/local/ /usr/local/
-COPY --from=common-runtime /app/build-output/lib/ /usr/local/lib/
+COPY --from=common-runtime /app/common/build/lib/ /usr/local/lib/
+# Copy generated headers from common-runtime stage
+COPY --from=common-runtime /app/common/build/generated/ /app/build-output/generated/
 
 
 # Ensure libraries are properly linked
@@ -80,23 +124,28 @@ RUN apt-get update && \
       libboost-all-dev \
       libc6-dev \
       linux-libc-dev \
+      git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy generated headers from common-runtime stage
-COPY --from=common-runtime /app/build-output/generated/ /app/build-output/generated/
 
 RUN ls /app/build-output/generated/ || echo "Generated headers not found"
 
 COPY ./common/ /app/common/
-COPY ./build/scripts /app/build/scripts/
-# COPY ./build/cmake /app/build/cmake/
 COPY ./src /app/src/
 COPY ./include /app/include/
 COPY ./CMakeLists.txt /app/CMakeLists.txt
 
-WORKDIR /app/build/scripts
-RUN chmod +x build_core.sh && \
-    ./build_core.sh
+# Build the af_core component
+RUN cd /app && \
+    mkdir -p build-output && \
+    cd build-output && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release \
+             -DUSE_SYSTEM_GRPC=ON \
+             -DUSE_SYSTEM_PROTOBUF=ON \
+             -DCMAKE_INSTALL_PREFIX=/usr/local && \
+    make -j$(nproc) && \
+    make install && \
+    ldconfig
 
 # Final runtime stage
 FROM base AS runtime
@@ -111,9 +160,11 @@ COPY --from=builder /usr/local/lib/libboost* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libssl* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libcrypto* /usr/local/lib/
 
-# Copy only necessary runtime libraries
-COPY --from=builder /app/build-output/lib/libaf_common* /usr/local/lib/
-COPY --from=builder /app/build-output/lib/libaf_core_lib.so* /usr/local/lib/
+# Copy only necessary runtime libraries  
+COPY --from=builder /app/build-output/lib/libaf_communication_factory* /usr/local/lib/
+COPY --from=builder /app/build-output/lib/libaf_direct_communication* /usr/local/lib/
+COPY --from=builder /app/build-output/lib/libaf_grpc_communication* /usr/local/lib/
+COPY --from=builder /app/build-output/lib/libaf_common_component* /usr/local/lib/
 
 RUN ldconfig
 

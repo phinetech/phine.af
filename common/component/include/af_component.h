@@ -24,6 +24,10 @@ public:
     
     /**
      * @brief Virtual destructor
+     * 
+     * Note: Derived classes should call stop() in their own destructors
+     * if the component might still be running when destroyed, as the base
+     * class destructor cannot call pure virtual methods.
      */
     virtual ~AfComponent();
     

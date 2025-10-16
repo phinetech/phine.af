@@ -14,12 +14,12 @@ AfComponent::AfComponent(const std::string& name)
 
 AfComponent::~AfComponent() {
     // If the component is still running, stop it
+    // Note: We can't call the pure virtual stop() method from the destructor
+    // as the derived class has already been destroyed. Derived classes should
+    // ensure they call stop() in their own destructors if needed.
     if (running_) {
-        try {
-            stop();
-        } catch (const std::exception& e) {
-            logger_->error("Exception during component shutdown: {}", e.what());
-        }
+        logger_->warn("Component '{}' destroyed while still running - derived class should call stop() in destructor", name_);
+        running_ = false; // Force set to false to indicate stopped state
     }
     
     logger_->info("Component '{}' destroyed", name_);

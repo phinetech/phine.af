@@ -1,0 +1,48 @@
+{
+  "device": {
+    "phoneNumber": "+123456789",
+    "networkAccessIdentifier": "123456789@domain.com",
+    "ipv4Address": {
+      "publicAddress": "10.60.0.1",
+      "publicPort": 59765
+    },
+    "ipv6Address": "2001:db8:85a3:8d3:1319:8a2e:370:7344"
+  },
+  "applicationServer": {
+    "ipv4Address": "198.51.100.0/24",
+    "ipv6Address": "2001:db8:85a3:8d3:1319:8a2e:370:7344"
+  },
+  "devicePorts": {
+    "ranges": [
+      {
+        "from": 5010,
+        "to": 5020
+      }
+    ],
+    "ports": [
+      5060,
+      5070
+    ]
+  },
+  "applicationServerPorts": {
+    "ranges": [
+      {
+        "from": 5010,
+        "to": 5020
+      }
+    ],
+    "ports": [
+      5060,
+      5070
+    ]
+  },
+  "qosProfile": "INVALID_QOS_PROFILE",
+  "sink": "https://endpoint.example.com/sink",
+  "sinkCredential": {
+    "credentialType": "ACCESSTOKEN",
+    "accessToken" : "abcdef123456",
+    "accessTokenType": "bearer",
+    "accessTokenExpiresUtc": "2026-12-31T23:59:59Z"
+  },
+  "duration": 3600
+}

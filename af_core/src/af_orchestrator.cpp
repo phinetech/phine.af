@@ -168,6 +168,22 @@ void AfOrchestrator::register_handlers() {
         // Register generic message handler
         main_comm->register_handler("*", message_handler_);
         
+        // Register handler for health check messages that return "OK"
+        // Handler must be a MessageHandlerPtr, so wrap the lambda in a MessageHandler implementation
+        class HealthCheckHandler : public af::communication::MessageHandler {
+        public:
+            af::communication::MessagePtr handle_message(const af::communication::MessagePtr& msg) override {
+                auto response = std::make_shared<af::communication::Message>();
+                response->message_type = "health_check_response";
+                response->correlation_id = msg->correlation_id;
+                std::string payload_str = "OK";
+                response->payload = std::vector<uint8_t>(payload_str.begin(), payload_str.end());
+                return response;
+            }
+        };
+        static std::shared_ptr<af::communication::MessageHandler> health_check_handler = std::make_shared<HealthCheckHandler>();
+        main_comm->register_handler("health_check", health_check_handler);
+        
         // Register specific message type handlers
         main_comm->register_handler("qos_request", message_handler_);
         main_comm->register_handler("get_subscriptions", message_handler_);
