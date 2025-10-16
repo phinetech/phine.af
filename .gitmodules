@@ -10,3 +10,6 @@
 [submodule "southbound/oai-cn5g-common-src"]
 	path = southbound/oai-cn5g-common-src
 	url = https://gitlab.eurecom.fr/oai/cn5g/oai-cn5g-common-src.git
+[submodule "af_core/tests/integration/common"]
+	path = af_core/tests/integration/common
+	url = https://github.com/phinetech/oai-cn5g-common.git
