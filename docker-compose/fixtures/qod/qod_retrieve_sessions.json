@@ -1,0 +1,11 @@
+{
+  "device": {
+    "phoneNumber": "{{phoneNumber}}",
+    "networkAccessIdentifier": "{{networkAccessIdentifier}}",
+    "ipv4Address": {
+      "publicAddress": "{{publicAddress}}",
+      "publicPort": {{publicPort}}
+    },
+    "ipv6Address": "2001:db8:85a3:8d3:1319:8a2e:370:7344"
+  }
+}

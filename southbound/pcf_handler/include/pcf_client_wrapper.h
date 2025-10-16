@@ -21,6 +21,8 @@
 namespace af {
 namespace southbound {
 
+// TODO: Resolve issue with connection reuse, currently a new connection is made for each request
+
 /**
  * @brief Wrapper for the PCF client API
  */
@@ -102,6 +104,7 @@ private:
     
     // Connection state
     bool connected_;
+    bool connection_error_; // Track if connection had an error
     std::mutex session_mutex_;
     
     // Response data

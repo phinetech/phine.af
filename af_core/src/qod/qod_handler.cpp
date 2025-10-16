@@ -156,7 +156,7 @@ af::communication::MessagePtr QodHandler::handle_create_session(
         if (!session) {
             // Check reason for failure
             // TODO: Get more specific error from session manager
-            return create_error_response(409, ErrorCode::CONFLICT,
+            return create_error_response(400, ErrorCode::INVALID_ARGUMENT,
                 "Failed to create session - possible conflict with existing session",
                 context.correlation_id);
         }
@@ -823,8 +823,9 @@ af::communication::MessagePtr QodHandler::create_error_response(
     std::string payload = error_json.dump();
     response->payload.assign(payload.begin(), payload.end());
     
-    // Add HTTP status to metadata
-    response->metadata["http_status"] = std::to_string(status);
+    // Add status code to metadata (can be HTTP/gRPC status or custom)
+    // TODO: create AF specific error codes, these will be mapped to HTTP/gRPC codes at API gateway layer
+    response->metadata["status"] = std::to_string(status);
     response->metadata["x-correlator"] = correlation_id;
     
     logger_->debug("Error response: {} - {} - {}", status, code, message);
@@ -843,9 +844,10 @@ af::communication::MessagePtr QodHandler::create_success_response(
     
     std::string payload = data.dump();
     response->payload.assign(payload.begin(), payload.end());
-    
-    // Add HTTP status to metadata
-    response->metadata["http_status"] = std::to_string(status);
+
+    // Add status code to metadata (can be HTTP/gRPC status or custom)
+    // TODO: create AF specific error codes, these will be mapped to HTTP/gRPC codes at API gateway layer
+    response->metadata["status"] = std::to_string(status);
     response->metadata["x-correlator"] = correlation_id;
     
     return response;

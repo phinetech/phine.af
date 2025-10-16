@@ -21,7 +21,7 @@ PcfClientWrapper::PcfClientWrapper(const std::string& base_url,
                                  bool use_tls,
                                  const std::string& api_version)
     : base_url_(base_url), use_tls_(use_tls), api_version_(api_version), 
-      session_(nullptr), socket_(io_context_), connected_(false) {
+      session_(nullptr), socket_(io_context_), connected_(false), connection_error_(false) {
     
     // Setup logger
     initializeLogger(spdlog::level::debug);
@@ -252,6 +252,7 @@ bool PcfClientWrapper::connect() {
         }
         
         connected_ = true;
+        connection_error_ = false; // Reset error flag on successful connection
         logger_->info("HTTP/2 connection established successfully");
         
         // Initialize response map for future requests
@@ -279,6 +280,7 @@ void PcfClientWrapper::disconnect() {
     
     // Reset connection state
     connected_ = false;
+    connection_error_ = false;
     
     // Clear any pending responses
     {
@@ -300,7 +302,13 @@ void PcfClientWrapper::disconnect() {
 }
 
 bool PcfClientWrapper::is_connection_alive() {
-    if (!connected_ || !socket_.is_open()) {
+    if (!connected_ || !socket_.is_open() || !session_ || connection_error_) {
+        return false;
+    }
+    
+    // Check if nghttp2 session wants to terminate the connection
+    if (nghttp2_session_want_read(session_) == 0 && nghttp2_session_want_write(session_) == 0) {
+        logger_->debug("HTTP/2 session wants to terminate");
         return false;
     }
     
@@ -834,6 +842,11 @@ int PcfClientWrapper::on_stream_close_callback(nghttp2_session *session,
             if (error_code != 0) {
                 client->logger_->warn("Stream {} closed with error: {}", 
                                     stream_id, error_code);
+                // For critical errors, mark connection as unusable
+                if (error_code == 7 || error_code == 2 || error_code == 8) { // PROTOCOL_ERROR, INTERNAL_ERROR, CANCEL
+                    client->logger_->warn("Critical error {}, marking connection for reset", error_code);
+                    client->connection_error_ = true;
+                }
                 // For error cases, mark the response with error info
                 if (it->second.status_code == 0) {
                     it->second.status_code = 0; // Indicate connection error
