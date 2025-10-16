@@ -180,15 +180,22 @@ phine.af/
 |   |           ├── qod_state_manager.h # Manages state for CAMARA QualityOnDemand sessions
 │   │           └── qod_api_mapper.h    # Maps incoming CAMARA API data models to the application's internal domain models.
 │   │
-│   └── src/                        # Source file implementations for the core application.
-│       ├── state/                  # Implementations for state management logic.
-│       │   ├── ue_state_manager.cpp
-│       │   └── subscription_manager.cpp
-│       └── services/
-│           └── qod/                # Implementations for the QoD service logic.
-│               ├── qod_service.cpp
-│               ├── qod_session_manager.cpp
-│               └── qod_api_mapper.cpp
+│   ├── src/                        # Source file implementations for the core application.
+│   |   ├── state/                  # Implementations for state management logic.
+│   |   │   ├── ue_state_manager.cpp
+│   |   │   └── subscription_manager.cpp
+│   |   └── services/
+│   |        └── qod/                # Implementations for the QoD service logic.
+│   |           ├── qod_service.cpp
+│   |           ├── qod_session_manager.cpp
+│   |           └── qod_api_mapper.cpp
+|   └── tests/                     # See tests README for detailed structure
+|       └── integration/
+|           ├── fixtures/          # Test data (JSON request/response fixtures)
+|           ├── framework/         # Core test framework classes
+|           ├── suites/            # Test suite implementations
+|           ├── config/            # Test configuration files
+|           └── scripts/           # Helper scripts for running tests
 │
 ├── southbound/                     # Connectors responsible for communicating with external network functions (NFs) in the 5G core.
 │   ├── pcf_connector/              # Connector for the Policy Control Function (PCF).

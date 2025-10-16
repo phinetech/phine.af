@@ -354,6 +354,9 @@ services:
     depends_on:
       - af_core
       - ue
+    build:
+      context: ../af_core/tests/integration
+      dockerfile: Dockerfile
     environment:
       - GRPC_HOST=192.168.70.141
       - GRPC_PORT=50051
