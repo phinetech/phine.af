@@ -1,5 +1,5 @@
 # Base image with common settings
-FROM debian:bullseye-slim AS base
+FROM debian:bookworm-slim AS base
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV IS_DOCKERFILE=1
@@ -65,10 +65,24 @@ RUN git clone https://github.com/jbeder/yaml-cpp.git && \
     cd yaml-cpp && \
     git checkout yaml-cpp-0.7.0 && \
     mkdir build && cd build && \
-    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local -DYAML_BUILD_TESTS=OFF -DYAML_BUILD_SHARED_LIBS=ON && \
+    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local \
+             -DYAML_BUILD_TESTS=OFF \
+             -DYAML_BUILD_SHARED_LIBS=ON \
+             -DYAML_CPP_BUILD_TESTS=OFF \
+             -DYAML_CPP_BUILD_TOOLS=OFF \
+             -DYAML_CPP_BUILD_CONTRIB=OFF && \
     make -j$(nproc) && \
     make install && \
     cd /tmp && rm -rf yaml-cpp
+
+# Install fmt
+RUN git clone --recurse-submodules -b 9.0.0 https://github.com/fmtlib/fmt.git && \
+    cd fmt && \
+    mkdir _build && cd _build && \
+    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local && \
+    make -j$(nproc) && \
+    make install && \
+    cd /tmp && rm -rf fmt
 
 # Install nghttp2 with ASIO support
 # Note: ENABLE_LIB_ONLY=OFF is required to install ASIO headers
@@ -107,9 +121,9 @@ RUN ldconfig
 # Create symlinks for nghttp2_asio libraries
 RUN ln -sf /usr/local/lib/libnghttp2_asio.so /usr/lib/libnghttp2_asio.so
 
-# Common runtime libraries stage
-FROM base AS common-runtime
-WORKDIR /app
+# OAI CN5G Common Libraries stage - build OAI libraries separately
+FROM base AS oai-builder
+WORKDIR /build
 
 COPY --from=dependencies /usr/local/ /usr/local/
 
@@ -125,8 +139,52 @@ RUN apt-get update && \
       libboost-all-dev \
   && rm -rf /var/lib/apt/lists/*
 
-# Build common runtime libraries
-COPY ./common/ /app/common/
+# Copy OAI common source
+COPY ./southbound/oai-cn5g-common-src /build/oai-cn5g-common-src
+
+# Copy the cmake files needed for building OAI CN5G common libraries
+COPY ./southbound/common/cmake/CMakeLists.oai-cn5g-common-src.txt /build/oai-cn5g-common-src/CMakeLists.txt
+COPY ./southbound/common/cmake/oai_cn5g_common_config.cmake.in /build/oai-cn5g-common-src/oai_cn5g_common_config.cmake.in
+
+# Build and install OAI CN5G common libraries
+RUN cd /build/oai-cn5g-common-src && \
+    mkdir -p build && \
+    cd build && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release \
+             -DCMAKE_INSTALL_PREFIX=/usr/local && \
+    make -j$(nproc) && \
+    make install && \
+    ldconfig
+
+# Common runtime libraries stage
+FROM base AS common-runtime
+WORKDIR /app
+
+COPY --from=dependencies /usr/local/ /usr/local/
+COPY --from=oai-builder /usr/local/lib/libCONFIG.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libPCF.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libCOMMON_MODEL.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libLOGGER.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libNAS.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libCOMMON.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libUTILS.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/include/oai /usr/local/include/oai
+COPY --from=oai-builder /usr/local/lib/cmake/oai_cn5g_common /usr/local/lib/cmake/oai_cn5g_common
+
+# Install build dependencies
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends \
+      build-essential \
+      libssl-dev \
+      cmake \
+      git \
+      libboost-system-dev \
+      libboost-thread-dev \
+      libboost-all-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+# Build common runtime libraries (AF common components)
+COPY ./southbound/common/ /app/common/
 
 RUN cd /app/common && \
     mkdir -p build && \
@@ -143,13 +201,23 @@ RUN cd /app/common && \
     make install && \
     ldconfig
 
-# Builder stage - build the API component
+# Builder stage - build the PCF Handler using pre-built OAI libraries
 FROM base AS builder
 WORKDIR /app
 
-# Copy the libraries built in the builder stage
-# Copy libraries from previous stages
+# Copy all dependencies and OAI libraries
 COPY --from=dependencies /usr/local/ /usr/local/
+COPY --from=oai-builder /usr/local/lib/libCONFIG.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libPCF.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libCOMMON_MODEL.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libLOGGER.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libNAS.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libCOMMON.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libUTILS.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/include/oai /usr/local/include/oai
+COPY --from=oai-builder /usr/local/lib/cmake/oai_cn5g_common /usr/local/lib/cmake/oai_cn5g_common
+
+# Copy AF common libraries
 COPY --from=common-runtime /app/common/build/lib/ /usr/local/lib/
 # Copy generated headers from common-runtime stage
 COPY --from=common-runtime /app/common/build/generated/ /app/build-output/generated/
@@ -172,12 +240,14 @@ RUN apt-get update && \
 
 RUN ls /app/build-output/generated/ || echo "Generated headers not found"
 
-COPY ./common/ /app/common/
-# COPY ./common/build/cmake /app/build/cmake/
-COPY ./oai-cn5g-common-src /app/oai-cn5g-common-src
-COPY ./pcf_handler/src /app/src/
-COPY ./pcf_handler/include /app/include/
-COPY ./pcf_handler/CMakeLists.txt /app/CMakeLists.txt
+# Copy AF common source (needed for headers/includes)
+COPY ./southbound/common/ /app/common/
+
+# Copy PCF Handler source files
+COPY ./southbound/pcf_handler/src /app/src/
+COPY ./southbound/pcf_handler/build/cmake /app/build/cmake/
+COPY ./southbound/pcf_handler/include /app/include/
+COPY ./southbound/pcf_handler/CMakeLists.txt /app/CMakeLists.txt
 
 # Build the af_core component
 RUN cd /app && \
@@ -209,9 +279,18 @@ COPY --from=builder /usr/local/lib/libssl* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libcrypto* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libfmt* /usr/local/lib/
 
-# Copy only necessary runtime libraries
+# Copy OAI CN5G common libraries (static libraries, not needed at runtime but included for completeness)
+COPY --from=oai-builder /usr/local/lib/libCONFIG.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libPCF.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libCOMMON_MODEL.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libLOGGER.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libNAS.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libCOMMON.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libUTILS.a /usr/local/lib/
+
+# Copy AF common runtime libraries
 COPY --from=builder /app/build-output/lib/libaf_common* /usr/local/lib/
-COPY --from=builder /app/build-output/lib/libpcf_handler.so* /usr/local/lib/
+COPY --from=builder /app/build-output/lib/libpcf_handler.a /usr/local/lib/
 
 RUN ldconfig
 
@@ -224,7 +303,7 @@ RUN apt-get update && \
       libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY ./pcf_handler/config/pcf_handler.yaml /etc/oai/af/pcf_handler.yaml
+COPY ./southbound/pcf_handler/config/pcf_handler.yaml /etc/oai/af/pcf_handler.yaml
 
 # Create a non-root user
 RUN groupadd -r afpcfuser && useradd -r -g afpcfuser afpcfuser && \

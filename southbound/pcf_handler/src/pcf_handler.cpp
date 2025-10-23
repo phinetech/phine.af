@@ -329,7 +329,7 @@ af::communication::MessagePtr PcfHandler::create_app_session(
         to_json(json_data, app_session);
 
         // Call PCF client to create the app session
-        logger_->debug("App session request data: {}", json_data);
+        logger_->debug("App session request data: {}", json_data.dump());
         auto pcf_response = pcf_client_->create_app_session(json_data);
         
         if (pcf_response.first) {

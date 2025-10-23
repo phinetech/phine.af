@@ -22,9 +22,9 @@
 #include "pcf_client_wrapper.h"
 #include "qod_pcf_handler.h"
 
-#include "AppSessionContext.h"
-#include "AppSessionContextReqData.h"
-#include "MediaComponent.h"
+#include <oai/model/pcf/AppSessionContext.h>
+#include <oai/model/pcf/AppSessionContextReqData.h>
+#include <oai/model/pcf/MediaComponent.h>
 
 namespace af {
 namespace southbound {

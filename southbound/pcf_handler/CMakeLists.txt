@@ -1,7 +1,13 @@
 # CMakeLists.txt for PCF Handler module
+# This version uses pre-installed OAI CN5G Common libraries
 
 cmake_minimum_required(VERSION 3.14)
 project(pcf_handler VERSION 1.0.0 LANGUAGES CXX)
+
+set(GIT_BRANCH        "UNKNOWN")
+set(GIT_COMMIT_HASH   "UNKNOWN")
+set(GIT_COMMIT_DATE   "UNKNOWN")
+add_definitions("-DPACKAGE_VERSION=\"Branch: ${GIT_BRANCH} Abrev. Hash: ${GIT_COMMIT_HASH} Date: ${GIT_COMMIT_DATE}\"")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -74,23 +80,24 @@ message(STATUS "Protobuf include: ${Protobuf_INCLUDE_DIRS}")
 # Find dependencies
 find_package(gRPC REQUIRED)
 find_package(nlohmann_json REQUIRED)
+set(OPENSSL_USE_STATIC_LIBS TRUE)
 find_package(OpenSSL REQUIRED)
-
-# Set OPENSSL_ROOT_DIR for nghttp2 if needed
-if(DEFINED OpenSSL_ROOT_DIR)
-    set(OPENSSL_ROOT_DIR ${OpenSSL_ROOT_DIR} CACHE PATH "Path to OpenSSL root directory" FORCE)
-endif()
 
 find_package(spdlog REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system thread)
 find_package(NGHTTP2 REQUIRED)
-# TODO: enable once FindNGHTTP2_ASIO.cmake is finalised
-# find_package(NGHTTP2_ASIO REQUIRED)
+find_package(NGHTTP2_ASIO REQUIRED)
+
+# Find OAI CN5G Common libraries
+find_package(OAI REQUIRED)
+message(STATUS "Found OAI libraries: ${OAI_LIBRARIES}")
+message(STATUS "OAI include dirs: ${OAI_INCLUDE_DIRS}")
 
 # Try to find the installed af_common library
 find_library(AF_COMMON_LIB NAMES af_common libaf_common)
 find_library(AF_PROTOS_LIB NAMES af_protos libaf_protos)
+find_library(AF_COMMUNICATION_LIB NAMES af_communication libaf_communication)
 find_path(AF_COMMON_INCLUDE_DIR NAMES af/common PATHS /usr/local/include NO_DEFAULT_PATH)
 
 if(AF_COMMON_LIB AND AF_COMMON_INCLUDE_DIR)
@@ -104,20 +111,9 @@ else()
     set(USE_INSTALLED_AF_COMMON FALSE)
 endif()
 
-# Set path variables used in compilation
-set (SRC_TOP_DIR   "${CMAKE_CURRENT_SOURCE_DIR}")
-set (MOUNTED_COMMON      oai-cn5g-common-src)
-set (LOGGER_DIR     ${SRC_TOP_DIR}/${MOUNTED_COMMON}/logger)
-set (CONFIG_DIR     ${SRC_TOP_DIR}/${MOUNTED_COMMON}/config)
-set (COMMON_DIR     ${SRC_TOP_DIR}/${MOUNTED_COMMON}/common)
-set (UTILS_DIR      ${SRC_TOP_DIR}/${MOUNTED_COMMON}/utils)
-set (3GPP_DIR      ${SRC_TOP_DIR}/${MOUNTED_COMMON}/3gpp)
-set (NAS_DIR        ${SRC_TOP_DIR}/${MOUNTED_COMMON}/nas)
-set (PCF_MODEL_DIR  ${SRC_TOP_DIR}/${MOUNTED_COMMON}/model/pcf)
-
-# Define source files
+# Define source files (only pcf_handler specific sources)
 set(SOURCES
-    ${CONFIG_SRC_FILES}
+    src/main.cpp
     src/helpers.cpp
     src/qod_pcf_handler.cpp
     src/request_router.cpp
@@ -126,24 +122,8 @@ set(SOURCES
     src/pcf_client_wrapper.cpp
 )
 
-include_directories(${SRC_TOP_DIR}/${MOUNTED_COMMON}/3gpp)
-include_directories(${SRC_TOP_DIR}/${MOUNTED_COMMON}/utils)
-include_directories(${SRC_TOP_DIR}/${MOUNTED_COMMON}/config)
-include_directories(${SRC_TOP_DIR}/${MOUNTED_COMMON}/logger)
-include_directories(${SRC_TOP_DIR}/${MOUNTED_COMMON}/nas)
-include_directories(${SRC_TOP_DIR}/${MOUNTED_COMMON}/model/pcf)
-include_directories(${SRC_TOP_DIR}/${MOUNTED_COMMON}/model/common_model)
-include(${SRC_TOP_DIR}/${MOUNTED_COMMON}/3gpp/3gpp.cmake)
-include(${SRC_TOP_DIR}/${MOUNTED_COMMON}/http/http.cmake)
-include(${SRC_TOP_DIR}/${MOUNTED_COMMON}/logger/logger.cmake)
-include(${SRC_TOP_DIR}/${MOUNTED_COMMON}/utils/utils.cmake)
-include(${SRC_TOP_DIR}/${MOUNTED_COMMON}/config/config.cmake)
-include(${SRC_TOP_DIR}/${MOUNTED_COMMON}/model/common_model/common_model.cmake)
-include(${SRC_TOP_DIR}/${MOUNTED_COMMON}/model/pcf/pcf_model.cmake)
-include(${CMAKE_CURRENT_SOURCE_DIR}/build/cmake/used_common_files.cmake)
-
-# Create test executable
-add_executable(pcf_handler ${SOURCES})
+# Create shared library
+add_library(pcf_handler STATIC ${SOURCES})
 
 # Set include directories based on whether we're using installed library or not
 if(USE_INSTALLED_AF_COMMON)
@@ -151,11 +131,13 @@ if(USE_INSTALLED_AF_COMMON)
         PRIVATE
             include
             ${AF_COMMON_INCLUDE_DIR}
+            ${OAI_INCLUDE_DIRS}
     )
 else()
     target_include_directories(pcf_handler
         PRIVATE
             include
+            ${OAI_INCLUDE_DIRS}
     )
 endif()
 
@@ -165,30 +147,118 @@ if(USE_INSTALLED_AF_COMMON)
         PRIVATE
             ${AF_COMMON_LIB}
             ${AF_PROTOS_LIB}
+            ${AF_COMMUNICATION_LIB}
+            oai::PCF
+            oai::COMMON_MODEL
+            oai::CONFIG
+            oai::COMMON
+            oai::UTILS
+            oai::LOGGER
+            oai::NAS
+            fmt
+            spdlog::spdlog
             gRPC::grpc++
             gRPC::grpc++_reflection
+            gRPC::gpr
             protobuf::libprotobuf
             nlohmann_json::nlohmann_json
-            OpenSSL::SSL
+            yaml-cpp
             OpenSSL::Crypto
+            OpenSSL::SSL
             nghttp2::nghttp2
-            nghttp2_asio::nghttp2_asio
+            nghttp2::asio_http2
             Boost::system
             Boost::thread
+            crypto
     )
 else()
     target_link_libraries(pcf_handler
         PRIVATE
             af_common
+            af_common_component
+            af_communication
+            oai::PCF
+            oai::COMMON_MODEL
+            oai::CONFIG
+            oai::COMMON
+            oai::UTILS
+            oai::LOGGER
+            oai::NAS
+            fmt
+            spdlog::spdlog
             gRPC::grpc++
             gRPC::grpc++_reflection
+            gRPC::gpr
             protobuf::libprotobuf
             nlohmann_json::nlohmann_json
-            OpenSSL::SSL
+            yaml-cpp
             OpenSSL::Crypto
+            OpenSSL::SSL
             nghttp2::nghttp2
-            nghttp2_asio::nghttp2_asio
+            nghttp2::asio_http2
             Boost::system
             Boost::thread
+            crypto
     )
 endif()
+
+# Create executable
+add_executable(pcf_server src/main.cpp)
+
+# Add include directories for the executable
+target_include_directories(pcf_server
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/common
+        ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp_utils
+        ${CMAKE_CURRENT_SOURCE_DIR}/common/models
+        ${CMAKE_CURRENT_SOURCE_DIR}/common/communication/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/common/component/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/common/di/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp_utils/include
+        ${OAI_INCLUDE_DIRS}
+)
+
+# Link library to executable
+target_link_libraries(pcf_server
+    PUBLIC
+        pcf_handler
+        ${NGHTTP2_LIBRARIES}
+        Boost::system
+        Boost::thread
+        nghttp2_asio
+        ssl
+        crypto
+        upb
+        utf8_range
+        -Wl,-Bdynamic # TODO remove this
+)
+
+# Install targets
+install(TARGETS pcf_handler
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION bin
+)
+
+# Install headers
+install(DIRECTORY include/
+    DESTINATION include/oai/af/southbound
+    FILES_MATCHING PATTERN "*.h*"
+)
+
+install(TARGETS pcf_server
+    RUNTIME DESTINATION bin
+)
+
+# Add tests if testing is enabled
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
+
+message(STATUS "==========================================================")
+message(STATUS "PCF Handler Configuration:")
+message(STATUS "  Version: ${PROJECT_VERSION}")
+message(STATUS "  Using OAI libraries: ${OAI_FOUND}")
+message(STATUS "  Using AF common: ${USE_INSTALLED_AF_COMMON}")
+message(STATUS "==========================================================")
