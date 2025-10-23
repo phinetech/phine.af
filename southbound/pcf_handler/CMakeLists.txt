@@ -83,7 +83,20 @@ find_package(nlohmann_json REQUIRED)
 set(OPENSSL_USE_STATIC_LIBS TRUE)
 find_package(OpenSSL REQUIRED)
 
+# Find spdlog - use same mode as OAI libraries (header-only by default)
 find_package(spdlog REQUIRED)
+
+# Prefer header-only mode to match OAI library build
+if(TARGET spdlog::spdlog_header_only)
+    set(SPDLOG_TARGET spdlog::spdlog_header_only)
+    message(STATUS "Using spdlog header-only mode")
+elseif(TARGET spdlog::spdlog)
+    set(SPDLOG_TARGET spdlog::spdlog)
+    message(STATUS "Using spdlog compiled library mode")
+else()
+    message(FATAL_ERROR "spdlog target not found")
+endif()
+
 find_package(yaml-cpp REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system thread)
 find_package(NGHTTP2 REQUIRED)
@@ -128,14 +141,14 @@ add_library(pcf_handler STATIC ${SOURCES})
 # Set include directories based on whether we're using installed library or not
 if(USE_INSTALLED_AF_COMMON)
     target_include_directories(pcf_handler
-        PRIVATE
+        PUBLIC
             include
             ${AF_COMMON_INCLUDE_DIR}
             ${OAI_INCLUDE_DIRS}
     )
 else()
     target_include_directories(pcf_handler
-        PRIVATE
+        PUBLIC
             include
             ${OAI_INCLUDE_DIRS}
     )
@@ -144,23 +157,22 @@ endif()
 # Link libraries
 if(USE_INSTALLED_AF_COMMON)
     target_link_libraries(pcf_handler
-        PRIVATE
+        PUBLIC
             ${AF_COMMON_LIB}
             ${AF_PROTOS_LIB}
             ${AF_COMMUNICATION_LIB}
+            oai::CONFIG
             oai::PCF
             oai::COMMON_MODEL
-            oai::CONFIG
-            oai::COMMON
-            oai::UTILS
             oai::LOGGER
             oai::NAS
-            fmt
-            spdlog::spdlog
+            oai::COMMON
+            oai::UTILS
             gRPC::grpc++
             gRPC::grpc++_reflection
             gRPC::gpr
             protobuf::libprotobuf
+            ${SPDLOG_TARGET}
             nlohmann_json::nlohmann_json
             yaml-cpp
             OpenSSL::Crypto
@@ -173,23 +185,23 @@ if(USE_INSTALLED_AF_COMMON)
     )
 else()
     target_link_libraries(pcf_handler
-        PRIVATE
+        PUBLIC
             af_common
             af_common_component
             af_communication
+            oai::CONFIG
             oai::PCF
             oai::COMMON_MODEL
-            oai::CONFIG
-            oai::COMMON
-            oai::UTILS
             oai::LOGGER
             oai::NAS
-            fmt
-            spdlog::spdlog
+            oai::COMMON
+            oai::UTILS
             gRPC::grpc++
             gRPC::grpc++_reflection
             gRPC::gpr
             protobuf::libprotobuf
+            ${SPDLOG_TARGET}
+            fmt
             nlohmann_json::nlohmann_json
             yaml-cpp
             OpenSSL::Crypto
@@ -219,18 +231,19 @@ target_include_directories(pcf_server
         ${OAI_INCLUDE_DIRS}
 )
 
-# Link library to executable
+# Link library to executable  
 target_link_libraries(pcf_server
     PUBLIC
         pcf_handler
+        gRPC::grpc
+        gRPC::grpc++
         ${NGHTTP2_LIBRARIES}
         Boost::system
         Boost::thread
         nghttp2_asio
         ssl
         crypto
-        upb
-        utf8_range
+        z
         -Wl,-Bdynamic # TODO remove this
 )
 
