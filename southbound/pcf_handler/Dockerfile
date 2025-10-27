@@ -20,16 +20,21 @@ RUN apt-get update && \
       libboost-dev \
       pkg-config \
       git \
+      libspdlog-dev \
+      libyaml-cpp-dev \
+      libfmt-dev \
+      nlohmann-json3-dev \
   && rm -rf /var/lib/apt/lists/*
 
   # Install gRPC and protobuf
 WORKDIR /tmp
-RUN git clone --recurse-submodules -b v1.58.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc && \
+RUN git clone --recurse-submodules -b v1.46.3 https://github.com/grpc/grpc && \
     cd grpc && \
     mkdir -p cmake/build && \
     cd cmake/build && \
     cmake -DgRPC_INSTALL=ON \
           -DgRPC_BUILD_TESTS=OFF \
+          -DBUILD_SHARED_LIBS=ON \
           -DCMAKE_INSTALL_PREFIX=/usr/local \
           -DCMAKE_BUILD_TYPE=Release \
           ../.. && \
@@ -37,52 +42,6 @@ RUN git clone --recurse-submodules -b v1.58.0 --depth 1 --shallow-submodules htt
     make install && \
     ldconfig && \
     cd /tmp && rm -rf grpc
-
-# Install nlohmann_json
-RUN git clone https://github.com/nlohmann/json.git && \
-    cd json && \
-    mkdir build && cd build && \
-    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local && \
-    make -j$(nproc) && \
-    make install && \
-    cd /tmp && rm -rf json
-
-# Install spdlog
-RUN git clone https://github.com/gabime/spdlog.git && \
-    cd spdlog && \
-    mkdir build && cd build && \
-    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local \
-             -DSPDLOG_BUILD_EXAMPLE=OFF \
-             -DSPDLOG_BUILD_TESTS=OFF \
-             -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-             -DSPDLOG_BUILD_SHARED=ON && \
-    make -j$(nproc) && \
-    make install && \
-    cd /tmp && rm -rf spdlog
-
-# Install yaml-cpp
-RUN git clone https://github.com/jbeder/yaml-cpp.git && \
-    cd yaml-cpp && \
-    git checkout yaml-cpp-0.7.0 && \
-    mkdir build && cd build && \
-    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local \
-             -DYAML_BUILD_TESTS=OFF \
-             -DYAML_BUILD_SHARED_LIBS=ON \
-             -DYAML_CPP_BUILD_TESTS=OFF \
-             -DYAML_CPP_BUILD_TOOLS=OFF \
-             -DYAML_CPP_BUILD_CONTRIB=OFF && \
-    make -j$(nproc) && \
-    make install && \
-    cd /tmp && rm -rf yaml-cpp
-
-# Install fmt
-RUN git clone --recurse-submodules -b 9.0.0 https://github.com/fmtlib/fmt.git && \
-    cd fmt && \
-    mkdir _build && cd _build && \
-    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local && \
-    make -j$(nproc) && \
-    make install && \
-    cd /tmp && rm -rf fmt
 
 # Install nghttp2 with ASIO support
 # Note: ENABLE_LIB_ONLY=OFF is required to install ASIO headers
@@ -126,6 +85,16 @@ FROM base AS oai-builder
 WORKDIR /build
 
 COPY --from=dependencies /usr/local/ /usr/local/
+# Copy the dependencies install with apt-get to avoid reinstalling
+COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libfmt.so* /usr/lib/x86_64-linux-gnu/libfmt.so
+COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libspdlog.so* /usr/lib/x86_64-linux-gnu/libspdlog.so
+COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libyaml-cpp.so* /usr/lib/x86_64-linux-gnu/libyaml-cpp.so
+
+# Copy headers/libs installed by dependencies stage
+COPY --from=dependencies /usr/include/nlohmann /usr/include/nlohmann
+COPY --from=dependencies /usr/include/fmt /usr/include/fmt
+COPY --from=dependencies /usr/include/spdlog /usr/include/spdlog
+COPY --from=dependencies /usr/include/yaml-cpp /usr/include/yaml-cpp
 
 # Install build dependencies
 RUN apt-get update && \
@@ -161,15 +130,15 @@ FROM base AS common-runtime
 WORKDIR /app
 
 COPY --from=dependencies /usr/local/ /usr/local/
-COPY --from=oai-builder /usr/local/lib/libCONFIG.a /usr/local/lib/
-COPY --from=oai-builder /usr/local/lib/libPCF.a /usr/local/lib/
-COPY --from=oai-builder /usr/local/lib/libCOMMON_MODEL.a /usr/local/lib/
-COPY --from=oai-builder /usr/local/lib/libLOGGER.a /usr/local/lib/
-COPY --from=oai-builder /usr/local/lib/libNAS.a /usr/local/lib/
-COPY --from=oai-builder /usr/local/lib/libCOMMON.a /usr/local/lib/
-COPY --from=oai-builder /usr/local/lib/libUTILS.a /usr/local/lib/
-COPY --from=oai-builder /usr/local/include/oai /usr/local/include/oai
-COPY --from=oai-builder /usr/local/lib/cmake/oai_cn5g_common /usr/local/lib/cmake/oai_cn5g_common
+COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libfmt.so* /usr/lib/x86_64-linux-gnu/libfmt.so
+COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libspdlog.so* /usr/lib/x86_64-linux-gnu/libspdlog.so
+COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libyaml-cpp.so* /usr/lib/x86_64-linux-gnu/libyaml-cpp.so
+
+# Copy headers/libs installed by dependencies stage
+COPY --from=dependencies /usr/include/nlohmann /usr/include/nlohmann
+COPY --from=dependencies /usr/include/fmt /usr/include/fmt
+COPY --from=dependencies /usr/include/spdlog /usr/include/spdlog
+COPY --from=dependencies /usr/include/yaml-cpp /usr/include/yaml-cpp
 
 # Install build dependencies
 RUN apt-get update && \
@@ -203,27 +172,6 @@ RUN cd /app/common && \
 
 # Builder stage - build the PCF Handler using pre-built OAI libraries
 FROM base AS builder
-WORKDIR /app
-
-# Copy all dependencies and OAI libraries
-COPY --from=dependencies /usr/local/ /usr/local/
-COPY --from=oai-builder /usr/local/lib/libCONFIG.a /usr/local/lib/
-COPY --from=oai-builder /usr/local/lib/libPCF.a /usr/local/lib/
-COPY --from=oai-builder /usr/local/lib/libCOMMON_MODEL.a /usr/local/lib/
-COPY --from=oai-builder /usr/local/lib/libLOGGER.a /usr/local/lib/
-COPY --from=oai-builder /usr/local/lib/libNAS.a /usr/local/lib/
-COPY --from=oai-builder /usr/local/lib/libCOMMON.a /usr/local/lib/
-COPY --from=oai-builder /usr/local/lib/libUTILS.a /usr/local/lib/
-COPY --from=oai-builder /usr/local/include/oai /usr/local/include/oai
-COPY --from=oai-builder /usr/local/lib/cmake/oai_cn5g_common /usr/local/lib/cmake/oai_cn5g_common
-
-# Copy AF common libraries
-COPY --from=common-runtime /app/common/build/lib/ /usr/local/lib/
-# Copy generated headers from common-runtime stage
-COPY --from=common-runtime /app/common/build/generated/ /app/build-output/generated/
-
-# Ensure libraries are properly linked
-RUN ldconfig
 
 # Install minimal build dependencies
 RUN apt-get update && \
@@ -236,7 +184,46 @@ RUN apt-get update && \
       libboost-all-dev \
       libc6-dev \
       linux-libc-dev \
+      git \
     && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy all dependencies and OAI libraries
+COPY --from=dependencies /usr/local/ /usr/local/
+COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libfmt.so /usr/lib/x86_64-linux-gnu/libfmt.so
+COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libspdlog.so /usr/lib/x86_64-linux-gnu/libspdlog.so
+COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libyaml-cpp.so /usr/lib/x86_64-linux-gnu/libyaml-cpp.so
+
+COPY --from=oai-builder /usr/local/lib/libCONFIG.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libPCF.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libCOMMON_MODEL.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libLOGGER.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libNAS.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libCOMMON.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libUTILS.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/include/oai /usr/local/include/oai
+COPY --from=oai-builder /usr/local/lib/cmake/oai_cn5g_common /usr/local/lib/cmake/oai_cn5g_common
+
+# Copy AF common libraries
+COPY --from=common-runtime /app/common/build/lib/ /usr/local/lib/
+# Copy AF common headers
+COPY --from=common-runtime /usr/local/include/af /usr/local/include/af
+COPY --from=common-runtime /usr/local/include/oai/af /usr/local/include/oai/af
+# Copy headers of the dependencies installed in dependencies stage
+COPY --from=dependencies /usr/include/nlohmann /usr/include/nlohmann
+COPY --from=dependencies /usr/include/fmt /usr/include/fmt
+COPY --from=dependencies /usr/include/spdlog /usr/include/spdlog
+COPY --from=dependencies /usr/include/yaml-cpp /usr/include/yaml-cpp
+
+# Copy headers for gRPC and protobuf
+COPY --from=dependencies /usr/local/include/ /usr/local/include/
+
+# Copy generated headers from common-runtime stage
+COPY --from=common-runtime /app/common/build/generated/ /app/build-output/generated/
+
+# Ensure libraries are properly linked
+RUN ldconfig
 
 RUN ls /app/build-output/generated/ || echo "Generated headers not found"
 
@@ -271,13 +258,24 @@ FROM base AS runtime
 # Copy necessary runtime dependencies from the builder image
 COPY --from=builder /usr/local/lib/libnghttp2* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libgrpc* /usr/local/lib/
+COPY --from=builder /usr/local/lib/libgpr* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libprotobuf* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libspdlog* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libyaml-cpp* /usr/local/lib/
-COPY --from=builder /usr/local/lib/libboost* /usr/local/lib/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libboost* /usr/lib/x86_64-linux-gnu/
 COPY --from=builder /usr/local/lib/libssl* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libcrypto* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libfmt* /usr/local/lib/
+COPY --from=builder /usr/local/lib/libabsl_* /usr/local/lib/
+COPY --from=builder /usr/local/lib/libupb* /usr/local/lib/
+COPY --from=builder /usr/local/lib/libre2* /usr/local/lib/
+COPY --from=builder /usr/local/lib/libaddress_sorting* /usr/local/lib/
+COPY --from=builder /usr/local/lib/libz.so* /usr/local/lib/
+
+# Copy system libraries from builder
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libfmt.so /usr/lib/x86_64-linux-gnu/libfmt.so
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libspdlog.so /usr/lib/x86_64-linux-gnu/libspdlog.so
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libyaml-cpp.so /usr/lib/x86_64-linux-gnu/libyaml-cpp.so
 
 # Copy OAI CN5G common libraries (static libraries, not needed at runtime but included for completeness)
 COPY --from=oai-builder /usr/local/lib/libCONFIG.a /usr/local/lib/
@@ -290,7 +288,8 @@ COPY --from=oai-builder /usr/local/lib/libUTILS.a /usr/local/lib/
 
 # Copy AF common runtime libraries
 COPY --from=builder /app/build-output/lib/libaf_common* /usr/local/lib/
-COPY --from=builder /app/build-output/lib/libpcf_handler.a /usr/local/lib/
+COPY --from=builder /app/build-output/lib/libaf_communication_factory.so /usr/local/lib/
+COPY --from=builder /app/build-output/lib/libaf_direct_communication.so /usr/local/lib/
 
 RUN ldconfig
 

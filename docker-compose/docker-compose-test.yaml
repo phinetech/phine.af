@@ -395,8 +395,8 @@ services:
       - free5gc-pcf
       - af_core
     build:
-      context: ../southbound/
-      dockerfile: ./pcf_handler/Dockerfile
+      context: ../
+      dockerfile: ./southbound/pcf_handler/Dockerfile
     volumes:
       - ./conf/pcf_handler.yaml:/etc/oai/af/pcf_handler.yaml
     networks:

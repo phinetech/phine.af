@@ -79,28 +79,131 @@ message(STATUS "Protobuf include: ${Protobuf_INCLUDE_DIRS}")
 
 # Find dependencies
 find_package(gRPC REQUIRED)
-find_package(nlohmann_json REQUIRED)
+
+# Find additional gRPC libraries manually
+find_library(GPR_LIB NAMES gpr PATHS /usr/local/lib)
+if(GPR_LIB AND NOT TARGET gRPC::gpr)
+    add_library(gRPC::gpr STATIC IMPORTED)
+    set_target_properties(gRPC::gpr PROPERTIES IMPORTED_LOCATION "${GPR_LIB}")
+endif()
+
+# Find nlohmann_json - use system installation from Debian package
+if(NOT TARGET nlohmann_json::nlohmann_json)
+    find_path(NLOHMANN_JSON_INCLUDE_DIR nlohmann/json.hpp)
+    if(NLOHMANN_JSON_INCLUDE_DIR)
+        # Create imported target for nlohmann_json (header-only)
+        add_library(nlohmann_json::nlohmann_json INTERFACE IMPORTED)
+        set_target_properties(nlohmann_json::nlohmann_json PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${NLOHMANN_JSON_INCLUDE_DIR}"
+        )
+        message(STATUS "Found nlohmann_json: ${NLOHMANN_JSON_INCLUDE_DIR}")
+    else()
+        message(FATAL_ERROR "nlohmann_json not found. Please install nlohmann-json3-dev")
+    endif()
+else()
+    message(STATUS "Using existing nlohmann_json target")
+endif()
+
 set(OPENSSL_USE_STATIC_LIBS TRUE)
 find_package(OpenSSL REQUIRED)
 
-# Find spdlog - use same mode as OAI libraries (header-only by default)
-find_package(spdlog REQUIRED)
+# Find spdlog - use system installation from Debian package
+if(NOT TARGET spdlog::spdlog)
+    find_path(SPDLOG_INCLUDE_DIR spdlog/spdlog.h)
+    find_library(SPDLOG_LIBRARY NAMES spdlog)
 
-# Prefer header-only mode to match OAI library build
-if(TARGET spdlog::spdlog_header_only)
-    set(SPDLOG_TARGET spdlog::spdlog_header_only)
-    message(STATUS "Using spdlog header-only mode")
-elseif(TARGET spdlog::spdlog)
-    set(SPDLOG_TARGET spdlog::spdlog)
-    message(STATUS "Using spdlog compiled library mode")
+    if(SPDLOG_INCLUDE_DIR AND SPDLOG_LIBRARY)
+        # Create imported target for spdlog
+        add_library(spdlog::spdlog UNKNOWN IMPORTED)
+        set_target_properties(spdlog::spdlog PROPERTIES
+            IMPORTED_LOCATION "${SPDLOG_LIBRARY}"
+            INTERFACE_INCLUDE_DIRECTORIES "${SPDLOG_INCLUDE_DIR}"
+        )
+        set(SPDLOG_TARGET spdlog::spdlog)
+        message(STATUS "Found spdlog: ${SPDLOG_LIBRARY}")
+        message(STATUS "spdlog include: ${SPDLOG_INCLUDE_DIR}")
+    else()
+        message(FATAL_ERROR "spdlog not found. Please install libspdlog-dev")
+    endif()
 else()
-    message(FATAL_ERROR "spdlog target not found")
+    set(SPDLOG_TARGET spdlog::spdlog)
+    message(STATUS "Using existing spdlog target")
 endif()
 
-find_package(yaml-cpp REQUIRED)
+# Find yaml-cpp - use system installation from Debian package
+if(NOT TARGET yaml-cpp)
+    find_path(YAML_CPP_INCLUDE_DIR yaml-cpp/yaml.h)
+    find_library(YAML_CPP_LIBRARY NAMES yaml-cpp)
+
+    if(YAML_CPP_INCLUDE_DIR AND YAML_CPP_LIBRARY)
+        # Create imported target for yaml-cpp
+        add_library(yaml-cpp UNKNOWN IMPORTED)
+        set_target_properties(yaml-cpp PROPERTIES
+            IMPORTED_LOCATION "${YAML_CPP_LIBRARY}"
+            INTERFACE_INCLUDE_DIRECTORIES "${YAML_CPP_INCLUDE_DIR}"
+        )
+        message(STATUS "Found yaml-cpp: ${YAML_CPP_LIBRARY}")
+        message(STATUS "yaml-cpp include: ${YAML_CPP_INCLUDE_DIR}")
+    else()
+        message(FATAL_ERROR "yaml-cpp not found. Please install libyaml-cpp-dev")
+    endif()
+else()
+    message(STATUS "Using existing yaml-cpp target")
+endif()
+
 find_package(Boost REQUIRED COMPONENTS system thread)
 find_package(NGHTTP2 REQUIRED)
 find_package(NGHTTP2_ASIO REQUIRED)
+
+# Find Abseil libraries required by gRPC
+set(ABSL_LIBRARIES
+    absl_synchronization
+    absl_strings
+    absl_base
+    absl_time
+    absl_int128
+    absl_status
+    absl_statusor
+    absl_cord
+    absl_raw_hash_set
+    absl_hash
+    absl_throw_delegate
+)
+
+foreach(ABSL_LIB ${ABSL_LIBRARIES})
+    find_library(${ABSL_LIB}_LIBRARY NAMES ${ABSL_LIB} PATHS /usr/local/lib)
+    if(${ABSL_LIB}_LIBRARY)
+        message(STATUS "Found ${ABSL_LIB}: ${${ABSL_LIB}_LIBRARY}")
+    else()
+        message(WARNING "${ABSL_LIB} not found")
+    endif()
+endforeach()
+
+# Set the list of Abseil libraries to link (with -l prefix for direct linking)
+set(ABSL_LINK_LIBRARIES
+    -labsl_synchronization
+    -labsl_strings
+    -labsl_base
+    -labsl_time
+    -labsl_int128
+    -labsl_status
+    -labsl_statusor
+    -labsl_cord
+    -labsl_raw_hash_set
+    -labsl_hash
+    -labsl_throw_delegate
+    -labsl_strings_internal
+    -labsl_graphcycles_internal
+    -labsl_stacktrace
+    -labsl_symbolize
+    -labsl_malloc_internal
+    -labsl_debugging_internal
+    -labsl_demangle_internal
+    -labsl_time_zone
+    -labsl_raw_logging_internal
+    -labsl_log_severity
+    -labsl_spinlock_wait
+)
 
 # Find OAI CN5G Common libraries
 find_package(OAI REQUIRED)
@@ -136,27 +239,42 @@ set(SOURCES
 )
 
 # Create shared library
-add_library(pcf_handler STATIC ${SOURCES})
+# add_library(pcf_handler STATIC ${SOURCES})
+# Create test executable
+add_executable(pcf_server ${SOURCES})
 
 # Set include directories based on whether we're using installed library or not
 if(USE_INSTALLED_AF_COMMON)
-    target_include_directories(pcf_handler
+    target_include_directories(pcf_server
         PUBLIC
-            include
-            ${AF_COMMON_INCLUDE_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/common
+            ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp_utils
+            ${CMAKE_CURRENT_SOURCE_DIR}/common/models
+            ${CMAKE_CURRENT_SOURCE_DIR}/common/communication/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/common/component/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/common/di/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp_utils/include
             ${OAI_INCLUDE_DIRS}
     )
 else()
-    target_include_directories(pcf_handler
+    target_include_directories(pcf_server
         PUBLIC
-            include
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/common
+            ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp_utils
+            ${CMAKE_CURRENT_SOURCE_DIR}/common/models
+            ${CMAKE_CURRENT_SOURCE_DIR}/common/communication/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/common/component/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/common/di/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp_utils/include
             ${OAI_INCLUDE_DIRS}
     )
 endif()
 
 # Link libraries
 if(USE_INSTALLED_AF_COMMON)
-    target_link_libraries(pcf_handler
+    target_link_libraries(pcf_server
         PUBLIC
             ${AF_COMMON_LIB}
             ${AF_PROTOS_LIB}
@@ -182,13 +300,16 @@ if(USE_INSTALLED_AF_COMMON)
             Boost::system
             Boost::thread
             crypto
+            # Abseil libraries required by gRPC
+            ${ABSL_LINK_LIBRARIES}
     )
 else()
-    target_link_libraries(pcf_handler
+    target_link_libraries(pcf_server
         PUBLIC
             af_common
             af_common_component
             af_communication
+            af_protos
             oai::CONFIG
             oai::PCF
             oai::COMMON_MODEL
@@ -211,47 +332,15 @@ else()
             Boost::system
             Boost::thread
             crypto
+            # Abseil libraries required by gRPC - must come after static libs
+            ${ABSL_LINK_LIBRARIES}
     )
 endif()
 
-# Create executable
-add_executable(pcf_server src/main.cpp)
-
-# Add include directories for the executable
-target_include_directories(pcf_server
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/common
-        ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp_utils
-        ${CMAKE_CURRENT_SOURCE_DIR}/common/models
-        ${CMAKE_CURRENT_SOURCE_DIR}/common/communication/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/common/component/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/common/di/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp_utils/include
-        ${OAI_INCLUDE_DIRS}
-)
-
-# Link library to executable  
-target_link_libraries(pcf_server
-    PUBLIC
-        pcf_handler
-        gRPC::grpc
-        gRPC::grpc++
-        ${NGHTTP2_LIBRARIES}
-        Boost::system
-        Boost::thread
-        nghttp2_asio
-        ssl
-        crypto
-        z
-        -Wl,-Bdynamic # TODO remove this
-)
-
-# Install targets
-install(TARGETS pcf_handler
-    LIBRARY DESTINATION lib
-    ARCHIVE DESTINATION lib
-    RUNTIME DESTINATION bin
+# Add linker options to ensure Abseil libraries are properly linked
+target_link_options(pcf_server PRIVATE
+    -Wl,--no-as-needed
+    -L/usr/local/lib
 )
 
 # Install headers
