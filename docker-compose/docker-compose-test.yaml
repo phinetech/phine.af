@@ -327,26 +327,6 @@ services:
       - free5gc-amf
       - free5gc-upf
 
-  af:
-    container_name: "af"
-    image: ubuntu:22.04
-    expose:
-      - 80/tcp
-      - 8080/tcp
-    environment:
-      - TZ=Europe/Paris
-    depends_on:
-      - free5gc-pcf
-    command: 
-    - /bin/bash
-    - -c
-    - |
-        apt update -y && apt install curl -y
-        tail -f /dev/null
-    networks:
-      privnet:
-        ipv4_address: 192.168.70.143
-
   af_integration_tests:
     image: tariromukute/af-integration-tests:${TAG:-latest}
     container_name: af-integration-tests
@@ -414,20 +394,6 @@ services:
     networks:
       privnet:
         ipv4_address: 192.168.70.141
-
-  # Northbound Components
-  api_component:
-    image: tariromukute/af-api:${TAG:-latest}
-    container_name: af-north-api
-    depends_on:
-      - af_core
-    build:
-      context: ../northbound/api_component
-      dockerfile: Dockerfile
-    networks:
-      privnet:
-        ipv4_address: 192.168.70.142
-
 
 networks:
   privnet:

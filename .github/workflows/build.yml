@@ -56,9 +56,9 @@ jobs:
           - name: pcf-handler
             path: southbound/pcf_handler
             dockerfile: southbound/pcf_handler/Dockerfile
-          - name: api-component
-            path: northbound/api_component
-            dockerfile: northbound/api_component/Dockerfile
+          # - name: api-component
+          #   path: northbound/api_component
+          #   dockerfile: northbound/api_component/Dockerfile
 
     steps:
       - name: Checkout code

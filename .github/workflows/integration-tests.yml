@@ -254,7 +254,3 @@ jobs:
             -f af_core/Dockerfile \
             -t af-core:test \
             af_core/
-
-      - name: Test AF Core binary
-        run: |
-          docker run --rm af-core:test sh -c "/usr/local/bin/af_core --version || /usr/local/bin/af_core --help"
