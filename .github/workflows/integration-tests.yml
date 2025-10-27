@@ -158,6 +158,15 @@ jobs:
           echo "=== PCF Logs ===" > logs/pcf.log
           docker logs pcf >> logs/pcf.log 2>&1 || echo "Failed to get pcf logs"
 
+          echo "=== UE Logs ===" > logs/ue.log
+          docker logs ue >> logs/ue.log 2>&1 || echo "Failed to get ue logs"
+
+          echo "=== gNB Logs ===" > logs/gnb.log
+          docker logs gnb >> logs/gnb.log 2>&1 || echo "Failed to get gnb logs"
+
+          echo "=== db Logs ===" > logs/db.log
+          docker logs db >> logs/db.log 2>&1 || echo "Failed to get db logs"
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
