@@ -71,7 +71,6 @@ jobs:
           docker compose -f docker-compose-test.yaml build \
             af_core \
             pcf_handler \
-            api_component \
             af_integration_tests
 
       - name: Start infrastructure services
@@ -118,7 +117,6 @@ jobs:
           docker compose -f docker-compose-test.yaml up -d \
             af_core \
             pcf_handler \
-            api_component
 
       - name: Wait for AF Core to be ready
         run: |
