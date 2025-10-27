@@ -1,5 +1,7 @@
+FROM phinetech/grpc-builder:v1.72.2 AS grpc-builder
+
 # Base image with common settings
-FROM debian:bullseye-slim AS base
+FROM debian:bookworm-slim AS base
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV IS_DOCKERFILE=1
@@ -15,56 +17,15 @@ RUN apt-get update && \
       cmake \
       psmisc \
       git \
+      libspdlog-dev \
+      libyaml-cpp-dev \
+      libfmt-dev \
+      nlohmann-json3-dev \
   && rm -rf /var/lib/apt/lists/*
 
   
 # Install gRPC and protobuf
 WORKDIR /tmp
-RUN git clone --recurse-submodules -b v1.58.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc && \
-    cd grpc && \
-    mkdir -p cmake/build && \
-    cd cmake/build && \
-    cmake -DgRPC_INSTALL=ON \
-          -DgRPC_BUILD_TESTS=OFF \
-          -DCMAKE_INSTALL_PREFIX=/usr/local \
-          -DCMAKE_BUILD_TYPE=Release \
-          ../.. && \
-    make -j$(nproc) && \
-    make install && \
-    ldconfig && \
-    cd /tmp && rm -rf grpc
-
-# Install nlohmann_json
-RUN git clone https://github.com/nlohmann/json.git && \
-    cd json && \
-    mkdir build && cd build && \
-    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local && \
-    make -j$(nproc) && \
-    make install && \
-    cd /tmp && rm -rf json
-
-# Install spdlog
-RUN git clone https://github.com/gabime/spdlog.git && \
-    cd spdlog && \
-    mkdir build && cd build && \
-    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local \
-             -DSPDLOG_BUILD_EXAMPLE=OFF \
-             -DSPDLOG_BUILD_TESTS=OFF \
-             -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-             -DSPDLOG_BUILD_SHARED=ON && \
-    make -j$(nproc) && \
-    make install && \
-    cd /tmp && rm -rf spdlog
-
-# Install yaml-cpp
-RUN git clone https://github.com/jbeder/yaml-cpp.git && \
-    cd yaml-cpp && \
-    git checkout yaml-cpp-0.7.0 && \
-    mkdir build && cd build && \
-    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local -DYAML_BUILD_TESTS=OFF -DYAML_BUILD_SHARED_LIBS=ON && \
-    make -j$(nproc) && \
-    make install && \
-    cd /tmp && rm -rf yaml-cpp
 
 # Ensure packages are properly installed
 RUN ldconfig
@@ -73,7 +34,20 @@ RUN ldconfig
 FROM base AS common-runtime
 WORKDIR /app
 
+COPY --from=grpc-builder /usr/local/ /usr/local/
 COPY --from=dependencies /usr/local/ /usr/local/
+COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libfmt.so* /usr/lib/x86_64-linux-gnu/libfmt.so
+COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libspdlog.so* /usr/lib/x86_64-linux-gnu/libspdlog.so
+COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libyaml-cpp.so* /usr/lib/x86_64-linux-gnu/libyaml-cpp.so
+
+# Copy headers/libs installed by dependencies stage
+COPY --from=dependencies /usr/include/nlohmann /usr/include/nlohmann
+COPY --from=dependencies /usr/include/fmt /usr/include/fmt
+COPY --from=dependencies /usr/include/spdlog /usr/include/spdlog
+COPY --from=dependencies /usr/include/yaml-cpp /usr/include/yaml-cpp
+
+# Ensure all libraries are registered
+RUN ldconfig
 
 # Install build dependencies
 RUN apt-get update && \
@@ -106,8 +80,22 @@ WORKDIR /app
 
 # Copy the libraries built in the builder stage
 # Copy libraries from previous stages
+COPY --from=grpc-builder /usr/local/ /usr/local/
 COPY --from=dependencies /usr/local/ /usr/local/
+COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libfmt.so /usr/lib/x86_64-linux-gnu/libfmt.so
+COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libspdlog.so /usr/lib/x86_64-linux-gnu/libspdlog.so
+COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libyaml-cpp.so /usr/lib/x86_64-linux-gnu/libyaml-cpp.so
+
+# Copy headers/libs installed by dependencies stage
+COPY --from=dependencies /usr/include/nlohmann /usr/include/nlohmann
+COPY --from=dependencies /usr/include/fmt /usr/include/fmt
+COPY --from=dependencies /usr/include/spdlog /usr/include/spdlog
+COPY --from=dependencies /usr/include/yaml-cpp /usr/include/yaml-cpp
+
 COPY --from=common-runtime /app/common/build/lib/ /usr/local/lib/
+# Copy AF common headers
+COPY --from=common-runtime /usr/local/include/af /usr/local/include/af
+COPY --from=common-runtime /usr/local/include/oai/af /usr/local/include/oai/af
 # Copy generated headers from common-runtime stage
 COPY --from=common-runtime /app/common/build/generated/ /app/build-output/generated/
 
@@ -125,6 +113,10 @@ RUN apt-get update && \
       libc6-dev \
       linux-libc-dev \
       git \
+      libspdlog-dev \
+      libyaml-cpp-dev \
+      libfmt-dev \
+      nlohmann-json3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 
@@ -160,11 +152,27 @@ COPY --from=builder /usr/local/lib/libboost* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libssl* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libcrypto* /usr/local/lib/
 
+# Copy system libraries (fmt is from Debian packages)
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libfmt.so* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libspdlog.so* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libyaml-cpp.so* /usr/lib/x86_64-linux-gnu/
+
 # Copy only necessary runtime libraries  
 COPY --from=builder /app/build-output/lib/libaf_communication_factory* /usr/local/lib/
 COPY --from=builder /app/build-output/lib/libaf_direct_communication* /usr/local/lib/
 COPY --from=builder /app/build-output/lib/libaf_grpc_communication* /usr/local/lib/
 COPY --from=builder /app/build-output/lib/libaf_common_component* /usr/local/lib/
+
+# COPY the gRPC dependencies built in the grpc-builder stage
+COPY --from=grpc-builder /usr/local/lib/libgrpc* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libgpr* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libupb* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libre2* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libaddress_sorting* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libz.so* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libutf8* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libabsl* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libprotobuf* /usr/local/lib/
 
 RUN ldconfig
 

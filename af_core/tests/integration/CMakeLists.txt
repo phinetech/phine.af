@@ -53,8 +53,25 @@ message(STATUS "Protobuf include: ${Protobuf_INCLUDE_DIRS}")
 # Now find dependencies that depend on Protobuf
 find_package(GTest REQUIRED)
 find_package(gRPC REQUIRED)
-find_package(nlohmann_json REQUIRED)
 find_package(OpenSSL REQUIRED)
+
+# Find nlohmann_json - use system installation from Debian package
+if(NOT TARGET nlohmann_json::nlohmann_json)
+    find_path(NLOHMANN_JSON_INCLUDE_DIR nlohmann/json.hpp)
+    if(NLOHMANN_JSON_INCLUDE_DIR)
+        # Create imported target for nlohmann_json (header-only)
+        add_library(nlohmann_json::nlohmann_json INTERFACE IMPORTED)
+        set_target_properties(nlohmann_json::nlohmann_json PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${NLOHMANN_JSON_INCLUDE_DIR}"
+        )
+        message(STATUS "Found nlohmann_json: ${NLOHMANN_JSON_INCLUDE_DIR}")
+    else()
+        message(FATAL_ERROR "nlohmann_json not found. Please install nlohmann-json3-dev")
+    endif()
+else()
+    message(STATUS "Using existing nlohmann_json target")
+endif()
+
 
 # Try to find the installed af_common library
 find_library(AF_COMMON_LIB NAMES af_common libaf_common)

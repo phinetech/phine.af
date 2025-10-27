@@ -864,6 +864,9 @@ QodRequestContext QodHandler::extract_context(const af::communication::MessagePt
             std::chrono::steady_clock::now().time_since_epoch().count());
     }
 
+    // Set default to 2-legged
+    context.is_three_legged = false;
+
     // Extract metadata
     if (!message->metadata.empty()) {
         try {
@@ -877,7 +880,9 @@ QodRequestContext QodHandler::extract_context(const af::communication::MessagePt
                 // Default for testing
                 context.api_consumer_id = "default_consumer";
             }
+
             
+            logger_->debug("Message metadata: {}", metadata_json.dump());
             // Determine if 3-legged authentication
             if (metadata_json.contains("auth_type")) {
                 context.is_three_legged = (metadata_json["auth_type"] == "3-legged");

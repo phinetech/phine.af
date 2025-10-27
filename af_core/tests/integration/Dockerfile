@@ -1,5 +1,7 @@
 # Multi-stage build for AF Core Integration Tests
-FROM ubuntu:22.04 AS builder
+FROM phinetech/grpc-builder:v1.72.2 AS grpc-builder
+
+FROM debian:bookworm-slim AS builder
 
 # Avoid interactive prompts during build
 ENV DEBIAN_FRONTEND=noninteractive
@@ -19,32 +21,11 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     libyaml-cpp-dev \
     libspdlog-dev \
+    nlohmann-json3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install gRPC and protobuf
 WORKDIR /tmp
-RUN git clone --recurse-submodules -b v1.58.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc && \
-    cd grpc && \
-    mkdir -p cmake/build && \
-    cd cmake/build && \
-    cmake -DgRPC_INSTALL=ON \
-          -DgRPC_BUILD_TESTS=OFF \
-          -DCMAKE_INSTALL_PREFIX=/usr/local \
-          -DCMAKE_BUILD_TYPE=Release \
-          ../.. && \
-    make -j$(nproc) && \
-    make install && \
-    ldconfig && \
-    cd /tmp && rm -rf grpc
-
-# Install nlohmann_json
-RUN git clone https://github.com/nlohmann/json.git && \
-    cd json && \
-    mkdir build && cd build && \
-    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local && \
-    make -j$(nproc) && \
-    make install && \
-    cd /tmp && rm -rf json
 
 # Install Google Test
 RUN git clone https://github.com/google/googletest.git -b v1.14.0 && \
@@ -60,6 +41,11 @@ WORKDIR /workspace
 
 # Copy common library first and build it
 COPY common/ common/
+
+COPY --from=grpc-builder /usr/local/ /usr/local/
+
+# Ensure all libraries are registered with the dynamic linker
+RUN ldconfig
 
 # Build and install common library with system gRPC
 RUN cd common && \
@@ -90,7 +76,7 @@ RUN mkdir -p build && cd build && \
     cmake --build . --target af_integration_tests -j$(nproc)
 
 # Runtime stage
-FROM ubuntu:22.04
+FROM debian:bookworm-slim
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
@@ -98,6 +84,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     curl \
     netcat-traditional \
+    nlohmann-json3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for running tests
@@ -106,6 +93,8 @@ RUN useradd -m -u 1000 -s /bin/bash testuser && \
     chown -R testuser:testuser /app
 
 WORKDIR /app
+
+COPY --from=grpc-builder /usr/local/ /usr/local/
 
 # Copy built test executable and dependencies
 COPY --from=builder /workspace/build/af_integration_tests /app/

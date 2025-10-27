@@ -1,4 +1,6 @@
 # Base image with common settings
+FROM phinetech/grpc-builder:v1.72.2 AS grpc-builder
+
 FROM debian:bookworm-slim AS base
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -24,24 +26,16 @@ RUN apt-get update && \
       libyaml-cpp-dev \
       libfmt-dev \
       nlohmann-json3-dev \
+      autoconf \
+      automake \
+      libtool \
+      curl \
+      make \
+      g++ \
+      unzip \
   && rm -rf /var/lib/apt/lists/*
 
-  # Install gRPC and protobuf
 WORKDIR /tmp
-RUN git clone --recurse-submodules -b v1.46.3 https://github.com/grpc/grpc && \
-    cd grpc && \
-    mkdir -p cmake/build && \
-    cd cmake/build && \
-    cmake -DgRPC_INSTALL=ON \
-          -DgRPC_BUILD_TESTS=OFF \
-          -DBUILD_SHARED_LIBS=ON \
-          -DCMAKE_INSTALL_PREFIX=/usr/local \
-          -DCMAKE_BUILD_TYPE=Release \
-          ../.. && \
-    make -j$(nproc) && \
-    make install && \
-    ldconfig && \
-    cd /tmp && rm -rf grpc
 
 # Install nghttp2 with ASIO support
 # Note: ENABLE_LIB_ONLY=OFF is required to install ASIO headers
@@ -129,6 +123,8 @@ RUN cd /build/oai-cn5g-common-src && \
 FROM base AS common-runtime
 WORKDIR /app
 
+# Copy built dependencies from dependencies stage
+COPY --from=grpc-builder /usr/local/ /usr/local/
 COPY --from=dependencies /usr/local/ /usr/local/
 COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libfmt.so* /usr/lib/x86_64-linux-gnu/libfmt.so
 COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libspdlog.so* /usr/lib/x86_64-linux-gnu/libspdlog.so
@@ -151,6 +147,8 @@ RUN apt-get update && \
       libboost-thread-dev \
       libboost-all-dev \
   && rm -rf /var/lib/apt/lists/*
+
+RUN ldconfig
 
 # Build common runtime libraries (AF common components)
 COPY ./southbound/common/ /app/common/
@@ -190,6 +188,7 @@ RUN apt-get update && \
 WORKDIR /app
 
 # Copy all dependencies and OAI libraries
+COPY --from=grpc-builder /usr/local/ /usr/local/
 COPY --from=dependencies /usr/local/ /usr/local/
 COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libfmt.so /usr/lib/x86_64-linux-gnu/libfmt.so
 COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libspdlog.so /usr/lib/x86_64-linux-gnu/libspdlog.so
@@ -266,11 +265,16 @@ COPY --from=builder /usr/lib/x86_64-linux-gnu/libboost* /usr/lib/x86_64-linux-gn
 COPY --from=builder /usr/local/lib/libssl* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libcrypto* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libfmt* /usr/local/lib/
-COPY --from=builder /usr/local/lib/libabsl_* /usr/local/lib/
-COPY --from=builder /usr/local/lib/libupb* /usr/local/lib/
-COPY --from=builder /usr/local/lib/libre2* /usr/local/lib/
-COPY --from=builder /usr/local/lib/libaddress_sorting* /usr/local/lib/
-COPY --from=builder /usr/local/lib/libz.so* /usr/local/lib/
+# COPY the gRPC dependencies built in the grpc-builder stage
+COPY --from=grpc-builder /usr/local/lib/libgrpc* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libgpr* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libupb* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libre2* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libaddress_sorting* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libz.so* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libutf8* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libabsl* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libprotobuf* /usr/local/lib/
 
 # Copy system libraries from builder
 COPY --from=builder /usr/lib/x86_64-linux-gnu/libfmt.so /usr/lib/x86_64-linux-gnu/libfmt.so
