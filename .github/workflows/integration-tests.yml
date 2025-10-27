@@ -62,12 +62,12 @@ jobs:
       - name: Pull base images
         run: |
           cd docker-compose
-          docker-compose -f docker-compose-test.yaml pull mongodb free5gc-nrf free5gc-amf free5gc-upf
+          docker compose -f docker-compose-test.yaml pull mongodb free5gc-nrf free5gc-amf free5gc-upf
 
       - name: Build AF components
         run: |
           cd docker-compose
-          docker-compose -f docker-compose-test.yaml build \
+          docker compose -f docker-compose-test.yaml build \
             af_core \
             pcf_handler \
             api_component \
@@ -76,7 +76,7 @@ jobs:
       - name: Start infrastructure services
         run: |
           cd docker-compose
-          docker-compose -f docker-compose-test.yaml up -d \
+          docker compose -f docker-compose-test.yaml up -d \
             db \
             free5gc-nrf \
             free5gc-amf \
@@ -107,14 +107,14 @@ jobs:
       - name: Start UE and gNB
         run: |
           cd docker-compose
-          docker-compose -f docker-compose-test.yaml up -d gnb ue
+          docker compose -f docker-compose-test.yaml up -d gnb ue
           echo "Waiting for UE to establish connection..."
           sleep 20
 
       - name: Start AF components
         run: |
           cd docker-compose
-          docker-compose -f docker-compose-test.yaml up -d \
+          docker compose -f docker-compose-test.yaml up -d \
             af_core \
             pcf_handler \
             api_component
@@ -137,7 +137,7 @@ jobs:
       - name: Run integration tests
         run: |
           cd docker-compose
-          docker-compose -f docker-compose-test.yaml up --exit-code-from af_integration_tests af_integration_tests
+          docker compose -f docker-compose-test.yaml up --exit-code-from af_integration_tests af_integration_tests
         continue-on-error: true
         id: run_tests
 
@@ -195,7 +195,7 @@ jobs:
         if: always()
         run: |
           cd docker-compose
-          docker-compose -f docker-compose-test.yaml down -v
+          docker compose -f docker-compose-test.yaml down -v
           docker system prune -f
 
   build-pcf-handler:
