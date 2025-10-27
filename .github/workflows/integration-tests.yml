@@ -63,7 +63,7 @@ jobs:
       - name: Pull base images
         run: |
           cd docker-compose
-          docker compose -f docker-compose-test.yaml pull mongodb free5gc-nrf free5gc-amf free5gc-upf
+          docker compose -f docker-compose-test.yaml pull db free5gc-nrf free5gc-amf free5gc-upf
 
       - name: Build AF components
         run: |

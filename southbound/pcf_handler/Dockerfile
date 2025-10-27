@@ -1,6 +1,8 @@
 # Base image with common settings
 FROM phinetech/grpc-builder:v1.72.2 AS grpc-builder
 
+FROM phinetech/oai-cn5g-common-src:latest AS oai-builder
+
 FROM debian:bookworm-slim AS base
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -73,51 +75,6 @@ RUN ldconfig
 
 # Create symlinks for nghttp2_asio libraries
 RUN ln -sf /usr/local/lib/libnghttp2_asio.so /usr/lib/libnghttp2_asio.so
-
-# OAI CN5G Common Libraries stage - build OAI libraries separately
-FROM base AS oai-builder
-WORKDIR /build
-
-COPY --from=dependencies /usr/local/ /usr/local/
-# Copy the dependencies install with apt-get to avoid reinstalling
-COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libfmt.so* /usr/lib/x86_64-linux-gnu/libfmt.so
-COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libspdlog.so* /usr/lib/x86_64-linux-gnu/libspdlog.so
-COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libyaml-cpp.so* /usr/lib/x86_64-linux-gnu/libyaml-cpp.so
-
-# Copy headers/libs installed by dependencies stage
-COPY --from=dependencies /usr/include/nlohmann /usr/include/nlohmann
-COPY --from=dependencies /usr/include/fmt /usr/include/fmt
-COPY --from=dependencies /usr/include/spdlog /usr/include/spdlog
-COPY --from=dependencies /usr/include/yaml-cpp /usr/include/yaml-cpp
-
-# Install build dependencies
-RUN apt-get update && \
-    apt-get install --yes --no-install-recommends \
-      build-essential \
-      libssl-dev \
-      cmake \
-      git \
-      libboost-system-dev \
-      libboost-thread-dev \
-      libboost-all-dev \
-  && rm -rf /var/lib/apt/lists/*
-
-# Copy OAI common source
-COPY ./southbound/oai-cn5g-common-src /build/oai-cn5g-common-src
-
-# Copy the cmake files needed for building OAI CN5G common libraries
-COPY ./southbound/common/cmake/CMakeLists.oai-cn5g-common-src.txt /build/oai-cn5g-common-src/CMakeLists.txt
-COPY ./southbound/common/cmake/oai_cn5g_common_config.cmake.in /build/oai-cn5g-common-src/oai_cn5g_common_config.cmake.in
-
-# Build and install OAI CN5G common libraries
-RUN cd /build/oai-cn5g-common-src && \
-    mkdir -p build && \
-    cd build && \
-    cmake .. -DCMAKE_BUILD_TYPE=Release \
-             -DCMAKE_INSTALL_PREFIX=/usr/local && \
-    make -j$(nproc) && \
-    make install && \
-    ldconfig
 
 # Common runtime libraries stage
 FROM base AS common-runtime
