@@ -1,0 +1,257 @@
+name: Integration Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+      - 'feat-*'
+    paths:
+      - 'af_core/**'
+      - 'northbound/**'
+      - 'southbound/**'
+      - 'common/**'
+      - 'docker-compose/**'
+      - '.github/workflows/integration-tests.yml'
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+
+jobs:
+  integration-tests:
+    name: Run AF Core Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Login to Docker Hub (optional, for avoiding rate limits)
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+        continue-on-error: true
+
+      - name: Create results directory
+        run: |
+          mkdir -p docker-compose/results
+          chmod 777 docker-compose/results
+
+      - name: Pull base images
+        run: |
+          cd docker-compose
+          docker-compose -f docker-compose-test.yaml pull mongodb free5gc-nrf free5gc-amf free5gc-upf
+
+      - name: Build AF components
+        run: |
+          cd docker-compose
+          docker-compose -f docker-compose-test.yaml build \
+            af_core \
+            pcf_handler \
+            api_component \
+            af_integration_tests
+
+      - name: Start infrastructure services
+        run: |
+          cd docker-compose
+          docker-compose -f docker-compose-test.yaml up -d \
+            db \
+            free5gc-nrf \
+            free5gc-amf \
+            free5gc-ausf \
+            free5gc-nssf \
+            free5gc-pcf \
+            free5gc-smf \
+            free5gc-udm \
+            free5gc-udr \
+            free5gc-upf \
+            free5gc-webui
+
+      - name: Wait for infrastructure to be ready
+        run: |
+          echo "Waiting for Free5GC services to be ready..."
+          sleep 30
+          
+          # Check if NRF is responding
+          for i in {1..30}; do
+            if docker exec nrf curl -s http://localhost:8000/nnrf-nfm/v1/nf-instances > /dev/null 2>&1; then
+              echo "NRF is ready!"
+              break
+            fi
+            echo "Waiting for NRF... ($i/30)"
+            sleep 2
+          done
+
+      - name: Start UE and gNB
+        run: |
+          cd docker-compose
+          docker-compose -f docker-compose-test.yaml up -d gnb ue
+          echo "Waiting for UE to establish connection..."
+          sleep 20
+
+      - name: Start AF components
+        run: |
+          cd docker-compose
+          docker-compose -f docker-compose-test.yaml up -d \
+            af_core \
+            pcf_handler \
+            api_component
+
+      - name: Wait for AF Core to be ready
+        run: |
+          echo "Waiting for AF Core to be ready..."
+          for i in {1..30}; do
+            if docker exec af-core grpcurl -plaintext localhost:50051 list > /dev/null 2>&1; then
+              echo "AF Core is ready!"
+              break
+            fi
+            echo "Waiting for AF Core... ($i/30)"
+            sleep 2
+          done
+
+      - name: Show running containers
+        run: docker ps -a
+
+      - name: Run integration tests
+        run: |
+          cd docker-compose
+          docker-compose -f docker-compose-test.yaml up --exit-code-from af_integration_tests af_integration_tests
+        continue-on-error: true
+        id: run_tests
+
+      - name: Collect container logs
+        if: always()
+        run: |
+          cd docker-compose
+          mkdir -p logs
+          
+          echo "=== AF Core Logs ===" > logs/af_core.log
+          docker logs af-core >> logs/af_core.log 2>&1 || echo "Failed to get af_core logs"
+          
+          echo "=== PCF Handler Logs ===" > logs/pcf_handler.log
+          docker logs af-pcf-handler >> logs/pcf_handler.log 2>&1 || echo "Failed to get pcf_handler logs"
+          
+          echo "=== Integration Tests Logs ===" > logs/integration_tests.log
+          docker logs af-integration-tests >> logs/integration_tests.log 2>&1 || echo "Failed to get integration_tests logs"
+          
+          echo "=== PCF Logs ===" > logs/pcf.log
+          docker logs pcf >> logs/pcf.log 2>&1 || echo "Failed to get pcf logs"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: |
+            docker-compose/results/
+            docker-compose/logs/
+          retention-days: 30
+
+      - name: Parse test results
+        if: always()
+        run: |
+          if [ -f docker-compose/results/test_results.xml ]; then
+            echo "Test results found!"
+            # Display summary
+            if command -v xmllint > /dev/null; then
+              xmllint --format docker-compose/results/test_results.xml | grep -E "(tests=|failures=|errors=)" || true
+            fi
+            cat docker-compose/results/test_results.xml
+          else
+            echo "No test results file found!"
+          fi
+
+      - name: Check test exit code
+        if: always()
+        run: |
+          if [ "${{ steps.run_tests.outcome }}" != "success" ]; then
+            echo "::error::Integration tests failed!"
+            exit 1
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          cd docker-compose
+          docker-compose -f docker-compose-test.yaml down -v
+          docker system prune -f
+
+  build-pcf-handler:
+    name: Build PCF Handler
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build PCF Handler
+        run: |
+          docker build \
+            -f southbound/pcf_handler/Dockerfile \
+            -t pcf-handler:test \
+            .
+
+      - name: Test PCF Handler binary
+        run: |
+          docker run --rm pcf-handler:test sh -c "ldd /usr/local/bin/pcf_server | grep 'not found' && exit 1 || exit 0"
+
+      - name: Verify dependencies
+        run: |
+          echo "Checking AF libraries..."
+          docker run --rm pcf-handler:test sh -c "ls -la /usr/local/lib/libaf* 2>/dev/null || echo 'AF libs missing'"
+          
+          echo "Checking Abseil libraries..."
+          docker run --rm pcf-handler:test sh -c "ls -la /usr/local/lib/libabsl* 2>/dev/null | head -10"
+
+  build-af-core:
+    name: Build AF Core
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build AF Core
+        run: |
+          docker build \
+            -f af_core/Dockerfile \
+            -t af-core:test \
+            af_core/
+
+      - name: Test AF Core binary
+        run: |
+          docker run --rm af-core:test sh -c "/usr/local/bin/af_core --version || /usr/local/bin/af_core --help"

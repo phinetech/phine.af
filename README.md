@@ -229,6 +229,49 @@ After a successful build:
 
 *Note: This section will be expanded as the microservice components are implemented.*
 
+## Testing Locally
+
+### Quick Validation
+
+Before pushing changes, run the local validation script to execute the same checks as CI/CD:
+
+```bash
+./.github/scripts/validate-locally.sh
+```
+
+This script will:
+1. Check code quality (trailing whitespace, script permissions)
+2. Build all components (AF Core, PCF Handler, API Component)
+3. Build integration test suite
+4. Run integration tests with Free5GC environment (~10-15 minutes)
+
+### Viewing Test Results
+
+Logs are saved to `/tmp/` for debugging:
+
+```bash
+# View build logs
+tail -f /tmp/af-core-build.log
+tail -f /tmp/pcf-handler-build.log
+
+# View integration test logs
+tail -f /tmp/integration-tests.log
+```
+
+### Running Specific Tests
+
+```bash
+cd docker-compose
+
+# Run specific test suite
+docker-compose -f docker-compose-test.yaml run --rm \
+  -e GTEST_FILTER='QodIntegrationTest.*' \
+  af_integration_tests
+
+# Cleanup
+docker-compose -f docker-compose-test.yaml down -v
+```
+
 ## Development
 
 ### Code Structure

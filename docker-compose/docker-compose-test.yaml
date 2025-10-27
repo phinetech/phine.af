@@ -374,19 +374,20 @@ services:
         aliases:
           - af-integration-tests
     # Wait for 20 seconds to allow UE to establish connection before running tests
-    command: >
-      sh -c "
-        echo 'Waiting for services to be ready...' &&
-        sleep 20 &&
-        /app/af_integration_tests
-          --grpc-host=192.168.70.141
-          --grpc-port=50051
-          --fixtures-path=/app/fixtures
-          --gtest_output=xml:/app/results/test_results.xml
-          --gtest_filter=$${GTEST_FILTER}
-          --gtest_repeat=$${GTEST_REPEAT}
+    command:
+      - sh
+      - -c
+      - |
+        echo 'Waiting for services to be ready...'
+        sleep 20
+        /app/af_integration_tests \
+          --grpc-host=192.168.70.141 \
+          --grpc-port=50051 \
+          --fixtures-path=/app/fixtures \
+          --gtest_output=xml:/app/results/test_results.xml \
+          --gtest_filter=$${GTEST_FILTER} \
+          --gtest_repeat=$${GTEST_REPEAT} \
           --gtest_color=yes
-      "
     # Southbound Handlers
   pcf_handler:
     image: tariromukute/pcf-handler:${TAG:-latest}
