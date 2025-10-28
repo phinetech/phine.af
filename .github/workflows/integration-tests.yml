@@ -113,7 +113,7 @@ jobs:
       - name: Wait for infrastructure to be ready
         run: |
           echo "Waiting for Free5GC services to be ready..."
-          sleep 30
+          sleep 5
           
           # Check if NRF is responding
           for i in {1..4}; do
@@ -166,6 +166,9 @@ jobs:
         run: |
           cd docker-compose
           mkdir -p logs
+
+          echo "=== Status of all containers ===" >> logs/container_status.log
+          docker ps -a >> logs/container_status.log 2>&1 || echo "Failed to get container status"
           
           echo "=== AF Core Logs ===" > logs/af_core.log
           docker logs af-core >> logs/af_core.log 2>&1 || echo "Failed to get af_core logs"
