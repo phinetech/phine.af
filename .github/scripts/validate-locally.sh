@@ -190,10 +190,18 @@ if docker wait "$CONTAINER_NAME" > /dev/null 2>&1; then
     # Stop background log following
     kill $LOG_PID 2>/dev/null || true
     wait $LOG_PID 2>/dev/null || true
-    
+
     # Get exit code
     EXIT_CODE=$(docker inspect "$CONTAINER_NAME" --format='{{.State.ExitCode}}')
-    
+
+    # Collect docker logs for all containers
+    echo "Collecting logs from all containers..."
+    mkdir -p /tmp/container-logs
+    for container in $(docker-compose -f docker-compose-test.yaml ps -q); do
+        cname=$(docker inspect --format='{{.Name}}' "$container" | sed 's/^\/\(.*\)/\1/')
+        docker logs "$container" > "/tmp/container-logs/${cname}.log" 2>&1
+    done
+
     if [ "$EXIT_CODE" -eq 0 ]; then
         print_status 0 "Integration tests passed"
         echo "Full logs available at: /tmp/integration-tests.log"
@@ -208,6 +216,8 @@ if docker wait "$CONTAINER_NAME" > /dev/null 2>&1; then
     fi
 else
     kill $LOG_PID 2>/dev/null || true
+    echo "Full test logs: /tmp/integration-tests.log"
+
     print_status 1 "Failed to wait for integration tests container"
     exit 1
 fi
