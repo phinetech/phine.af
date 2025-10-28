@@ -164,8 +164,29 @@ jobs:
           echo "=== gNB Logs ===" > logs/gnb.log
           docker logs gnb >> logs/gnb.log 2>&1 || echo "Failed to get gnb logs"
 
-          echo "=== db Logs ===" > logs/db.log
-          docker logs db >> logs/db.log 2>&1 || echo "Failed to get db logs"
+          echo "=== mongodb Logs ===" > logs/mongodb.log
+          docker logs mongodb >> logs/mongodb.log 2>&1 || echo "Failed to get mongodb logs"
+
+          echo "=== NRF Logs ===" > logs/nrf.log
+          docker logs nrf >> logs/nrf.log 2>&1 || echo "Failed to get nrf logs"
+
+          echo "=== AMF Logs ===" > logs/amf.log
+          docker logs amf >> logs/amf.log 2>&1 || echo "Failed to get amf logs"
+
+          echo "=== SMF Logs ===" > logs/smf.log
+          docker logs smf >> logs/smf.log 2>&1 || echo "Failed to get smf logs"
+
+          echo "=== UDR Logs ===" > logs/udr.log
+          docker logs udr >> logs/udr.log 2>&1 || echo "Failed to get udr logs"
+
+          echo "=== UDM Logs ===" > logs/udm.log
+          docker logs udm >> logs/udm.log 2>&1 || echo "Failed to get udm logs"
+
+          echo "=== AUSF Logs ===" > logs/ausf.log
+          docker logs ausf >> logs/ausf.log 2>&1 || echo "Failed to get ausf logs"
+
+          echo "=== UPF Logs ===" > logs/upf.log
+          docker logs upf >> logs/upf.log 2>&1 || echo "Failed to get upf logs"
 
       - name: Upload test results
         if: always()
