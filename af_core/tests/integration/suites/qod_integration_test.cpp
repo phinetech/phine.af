@@ -6,8 +6,9 @@ namespace af::test {
 
 /**
  * Test: Create a QoD session successfully
+ * Note: This test runs first (alphabetically) and creates a session for subsequent tests
  */
-TEST_F(QodIntegrationTest, CreateQodSession_Success) {
+TEST_F(QodIntegrationTest, A_CreateQodSession_Success) {
     // Arrange
     auto correlation_id = GenerateCorrelationId();
     auto request_json = fixture_loader_->LoadFixtureWithVars(
@@ -44,8 +45,9 @@ TEST_F(QodIntegrationTest, CreateQodSession_Success) {
 
 /**
  * Test: Create QoD session with invalid parameters
+ * Independent test - can run in any order
  */
-TEST_F(QodIntegrationTest, CreateQodSession_InvalidQosProfile) {
+TEST_F(QodIntegrationTest, B_CreateQodSession_InvalidQosProfile) {
     // Arrange
     auto correlation_id = GenerateCorrelationId();
     auto request_json = fixture_loader_->LoadFixture("qod/qod_create_session_invalid_qos_profile.json");
@@ -63,8 +65,9 @@ TEST_F(QodIntegrationTest, CreateQodSession_InvalidQosProfile) {
 
 /**
  * Test: Extend an existing QoD session
+ * Depends on: A_CreateQodSession_Success (runs after due to alphabetical ordering)
  */
-TEST_F(QodIntegrationTest, ExtendQodSession_Success) {
+TEST_F(QodIntegrationTest, B_ExtendQodSession_Success) {
     // Arrange: Use session from previous test OR create new one
     std::string session_id = QodIntegrationTest::shared_session_id_.empty() 
         ? CreateQodSession() 
@@ -93,8 +96,9 @@ TEST_F(QodIntegrationTest, ExtendQodSession_Success) {
 
 /**
  * Test: Get an existing QoD session
+ * Depends on: A_CreateQodSession_Success (runs after due to alphabetical ordering)
  */
-TEST_F(QodIntegrationTest, GetQodSession_Success) {
+TEST_F(QodIntegrationTest, C_GetQodSession_Success) {
     // Arrange: Use session from previous test OR create new one
     std::string session_id = QodIntegrationTest::shared_session_id_.empty() 
         ? CreateQodSession() 
@@ -117,8 +121,9 @@ TEST_F(QodIntegrationTest, GetQodSession_Success) {
 
 /**
  * Test: Retrieve list of QoD sessions
+ * Depends on: A_CreateQodSession_Success (runs after due to alphabetical ordering)
  */
-TEST_F(QodIntegrationTest, GetQodSessions_Success) {
+TEST_F(QodIntegrationTest, D_GetQodSessions_Success) {
     // Arrange
     auto request_json = fixture_loader_->LoadFixtureWithVars(
         "qod/qod_retrieve_sessions.json",
@@ -161,8 +166,9 @@ TEST_F(QodIntegrationTest, GetQodSessions_Success) {
 
 /**
  * Test: Delete a QoD session
+ * Depends on: A_CreateQodSession_Success (runs last due to alphabetical ordering)
  */
-TEST_F(QodIntegrationTest, DeleteQodSession_Success) {
+TEST_F(QodIntegrationTest, E_DeleteQodSession_Success) {
     // Arrange
     std::string session_id = QodIntegrationTest::shared_session_id_.empty() 
         ? CreateQodSession() 
