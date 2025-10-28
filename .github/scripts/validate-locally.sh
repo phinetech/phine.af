@@ -31,6 +31,44 @@ cd "$(git rev-parse --show-toplevel)"
 echo -e "${YELLOW}Step 1: Code Quality Checks${NC}"
 echo "----------------------------"
 
+# Check for gtp5g kernel module
+echo "Checking for gtp5g kernel module..."
+if ! lsmod | grep -q gtp5g; then
+    echo -e "${YELLOW}gtp5g module not found. Installing...${NC}"
+    echo "This requires sudo privileges and will install kernel module dependencies."
+
+    # Check if running with sudo
+    if [ "$EUID" -ne 0 ]; then
+        echo -e "${RED}Please run this script with sudo to install gtp5g module${NC}"
+        echo "Usage: sudo $0"
+        exit 1
+    fi
+
+    apt-get update
+    apt-get install -y git build-essential linux-headers-$(uname -r)
+
+    cd /tmp
+    git clone --depth 1 https://github.com/free5gc/gtp5g.git
+    cd gtp5g/
+    make
+    make install
+
+    echo "Loading gtp5g module..."
+    modprobe gtp5g
+
+    # Return to original directory
+    cd "$(git rev-parse --show-toplevel)"
+
+    if lsmod | grep -q gtp5g; then
+        print_status 0 "gtp5g module installed and loaded successfully"
+    else
+        print_status 1 "Failed to load gtp5g module"
+        exit 1
+    fi
+else
+    print_status 0 "gtp5g module already loaded"
+fi
+
 # Check for trailing whitespace
 echo -n "Checking for trailing whitespace... "
 if git diff --check; then

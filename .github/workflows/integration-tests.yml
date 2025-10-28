@@ -60,6 +60,27 @@ jobs:
           mkdir -p docker-compose/results
           chmod 777 docker-compose/results
 
+      - name: Install gtp5g kernel module
+        run: |
+          echo "Checking for gtp5g kernel module..."
+          if ! lsmod | grep -q gtp5g; then
+            echo "gtp5g module not found, installing..."
+            sudo apt-get update
+            sudo apt-get install -y git build-essential linux-headers-$(uname -r)
+            cd /tmp
+            git clone --depth 1 https://github.com/free5gc/gtp5g.git
+            cd gtp5g/
+            make
+            sudo make install
+            echo "Loading gtp5g module..."
+            sudo modprobe gtp5g
+            lsmod | grep gtp5g
+            echo "gtp5g module installed and loaded successfully!"
+          else
+            echo "gtp5g module already loaded"
+            lsmod | grep gtp5g
+          fi
+
       - name: Pull base images
         run: |
           cd docker-compose
@@ -95,12 +116,12 @@ jobs:
           sleep 30
           
           # Check if NRF is responding
-          for i in {1..30}; do
+          for i in {1..4}; do
             if docker exec nrf curl -s http://localhost:8000/nnrf-nfm/v1/nf-instances > /dev/null 2>&1; then
               echo "NRF is ready!"
               break
             fi
-            echo "Waiting for NRF... ($i/30)"
+            echo "Waiting for NRF... ($i/4)"
             sleep 2
           done
 
@@ -116,17 +137,17 @@ jobs:
           cd docker-compose
           docker compose -f docker-compose-test.yaml up -d \
             af_core \
-            pcf_handler \
+            pcf_handler
 
       - name: Wait for AF Core to be ready
         run: |
           echo "Waiting for AF Core to be ready..."
-          for i in {1..30}; do
+          for i in {1..4}; do
             if docker exec af-core grpcurl -plaintext localhost:50051 list > /dev/null 2>&1; then
               echo "AF Core is ready!"
               break
             fi
-            echo "Waiting for AF Core... ($i/30)"
+            echo "Waiting for AF Core... ($i/4)"
             sleep 2
           done
 
