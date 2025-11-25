@@ -13,154 +13,412 @@
 #include "../../common/models/common.h"
 
 /**
- * @brief Universal UE Key for state management
- * @details Provides a flexible key system that can identify UEs by different identifiers
- * when SUPI is not available. Uses a hierarchical approach where SUPI is preferred
- * but IP addresses, GPSI, or other identifiers can serve as temporary keys.
+ * @brief Universal UE Key for state management (Value Object)
+ * @details Provides a flexible, immutable key system that can identify UEs by different
+ * identifiers when SUPI is not available. Uses a hierarchical approach where SUPI is
+ * preferred but IP addresses, GPSI, or other identifiers can serve as temporary keys.
+ *
+ * @note This is a Value Object - equality is based on the primary key value
+ * @thread_safety Read operations are thread-safe. Promotion should be externally synchronized.
  */
-struct UeKey {
+class UeKey {
+public:
+    /**
+     * @brief Enumeration of supported key types in hierarchical order
+     */
     enum class KeyType {
-        SUPI_BASED,     // Primary: UE identified by SUPI
-        GPSI_BASED,     // Secondary: UE identified by GPSI (phone number)
-        IPV4_BASED,     // Tertiary: UE identified by IPv4 address
-        IPV6_BASED,     // Tertiary: UE identified by IPv6 address
-        IPV6_PREFIX_BASED, // Tertiary: UE identified by IPv6 prefix
-        MAC_ADDR_BASED, // Tertiary: UE identified by MAC address
-        COMPOSITE       // Multiple identifiers available
+        SUPI_BASED,         ///< Primary: UE identified by SUPI (Subscription Permanent Identifier)
+        GPSI_BASED,         ///< Secondary: UE identified by GPSI (Generic Public Subscription Identifier)
+        IPV4_BASED,         ///< Tertiary: UE identified by IPv4 address
+        IPV6_BASED,         ///< Tertiary: UE identified by IPv6 address
+        IPV6_PREFIX_BASED,  ///< Tertiary: UE identified by IPv6 prefix
+        MAC_ADDR_BASED,     ///< Tertiary: UE identified by MAC address (Ethernet PDU sessions)
+        COMPOSITE           ///< Multiple identifiers available (for future use)
     };
-    
-    KeyType type;
-    std::optional<std::string> supi_value;
-    std::optional<std::string> gpsi_value;
-    std::optional<std::string> ipv4_value;
-    std::optional<std::string> ipv6_value;
-    std::optional<std::string> ipv6_prefix_value;
-    std::optional<std::string> mac_addr_value; // Optional MAC address for Ethernet PDU sessions
-    
-    // Constructor for SUPI-based key (preferred)
-    explicit UeKey(const Supi& supi) 
-        : type(KeyType::SUPI_BASED), supi_value(supi.value) {}
-    
-    // Constructor for GPSI-based key
-    explicit UeKey(const Gpsi& gpsi) 
-        : type(KeyType::GPSI_BASED), gpsi_value(gpsi.value) {}
-    
-    // Constructor for IPv4-based key
-    explicit UeKey(const Ipv4Addr& ipv4) 
-        : type(KeyType::IPV4_BASED), ipv4_value(ipv4.value) {}
-    
-    // Constructor for IPv6-based key
-    explicit UeKey(const Ipv6Addr& ipv6) 
-        : type(KeyType::IPV6_BASED), ipv6_value(ipv6.value) {}
 
-    // Constructor for IPv6 Prefix-based key
-    explicit UeKey(const Ipv6Prefix& ipv6_prefix) 
-        : type(KeyType::IPV6_PREFIX_BASED), ipv6_prefix_value(ipv6_prefix.value) {}
+    // ============================================================================
+    // Factory Methods
+    // ============================================================================
 
-    // Constructor for MAC Address-based key
-    explicit UeKey(const MacAddr48& mac_addr) 
-        : type(KeyType::MAC_ADDR_BASED), mac_addr_value(mac_addr.value) {}
-
-    // Constructor with key as string and type
-    UeKey(const std::string& key, KeyType key_type) : type(key_type) {
-        switch (key_type) {
-            // TODO: Improve validation for each type
-            case KeyType::SUPI_BASED:
-                // validate if key is a valid SUPI format (basic check)
-                if (key.find("imsi") == 0 || key.find("nai") == 0) {
-                    supi_value = key;
-                } else {
-                    throw std::invalid_argument("Invalid SUPI format");
-                }
-                break;
-            case KeyType::GPSI_BASED:
-                // Basic validation for GPSI (phone number)
-                if (!key.empty()) {
-                    gpsi_value = key;
-                } else {
-                    throw std::invalid_argument("Invalid GPSI format");
-                }
-                break;
-            case KeyType::IPV4_BASED:
-                // Basic validation for IPv4 address
-                if (!key.empty() && key.find('.') != std::string::npos) {
-                    ipv4_value = key;
-                } else {
-                    throw std::invalid_argument("Invalid IPv4 address format");
-                }
-                break;
-            case KeyType::IPV6_BASED:
-                // Basic validation for IPv6 address
-                if (!key.empty() && key.find(':') != std::string::npos) {
-                    ipv6_value = key;
-                } else {
-                    throw std::invalid_argument("Invalid IPv6 address format");
-                }
-                break;
-            case KeyType::IPV6_PREFIX_BASED:
-                // Basic validation for IPv6 prefix
-                if (!key.empty() && key.find('/') != std::string::npos) {
-                    ipv6_prefix_value = key;
-                } else {
-                    throw std::invalid_argument("Invalid IPv6 prefix format");
-                }
-                break;
-            case KeyType::MAC_ADDR_BASED:
-                // Basic validation for MAC address
-                if (!key.empty() && key.find(':') != std::string::npos) {
-                    mac_addr_value = key;
-                } else {
-                    throw std::invalid_argument("Invalid MAC address format");
-                }
-                break;
-            case KeyType::COMPOSITE:
-                throw std::invalid_argument("Use specific constructors for composite keys");
-            default:
-                throw std::invalid_argument("Unknown key type");
-        }
+    /**
+     * @brief Create a SUPI-based key (preferred identifier)
+     * @param supi Subscription Permanent Identifier
+     * @return UeKey instance
+     * @throws std::invalid_argument if SUPI format is invalid
+     */
+    static UeKey from_supi(const Supi& supi) {
+        validate_supi_format(supi.value);
+        return UeKey(KeyType::SUPI_BASED, supi.value, {}, {}, {}, {}, {});
     }
 
-    // Get the primary key string for map indexing
-    std::string get_primary_key() const {
-        switch (type) {
-            case KeyType::SUPI_BASED: return "supi:" + supi_value.value_or("");
-            case KeyType::GPSI_BASED: return "gpsi:" + gpsi_value.value_or("");
-            case KeyType::IPV4_BASED: return "ipv4:" + ipv4_value.value_or("");
-            case KeyType::IPV6_BASED: return "ipv6:" + ipv6_value.value_or("");
-            case KeyType::IPV6_PREFIX_BASED: return "ipv6_prefix:" + ipv6_prefix_value.value_or("");
-            case KeyType::MAC_ADDR_BASED: return "mac:" + mac_addr_value.value_or("");
-            case KeyType::COMPOSITE: {
-                if (supi_value) return "supi:" + *supi_value;
-                if (gpsi_value) return "gpsi:" + *gpsi_value;
-                if (ipv4_value) return "ipv4:" + *ipv4_value;
-                if (ipv6_value) return "ipv6:" + *ipv6_value;
-                if (ipv6_prefix_value) return "ipv6_prefix:" + *ipv6_prefix_value;
-                if (mac_addr_value) return "mac:" + *mac_addr_value;
-                return "unknown";
-            }
-        }
-        return "unknown";
+    /**
+     * @brief Create a GPSI-based key (phone number)
+     * @param gpsi Generic Public Subscription Identifier
+     * @return UeKey instance
+     * @throws std::invalid_argument if GPSI format is invalid
+     */
+    static UeKey from_gpsi(const Gpsi& gpsi) {
+        validate_gpsi_format(gpsi.value);
+        return UeKey(KeyType::GPSI_BASED, {}, gpsi.value, {}, {}, {}, {});
     }
-    
-    // Check if this key can be promoted to SUPI-based
-    bool can_promote_to_supi() const {
-        return type != KeyType::SUPI_BASED && supi_value.has_value();
+
+    /**
+     * @brief Create an IPv4-based key
+     * @param ipv4 IPv4 address
+     * @return UeKey instance
+     * @throws std::invalid_argument if IPv4 format is invalid
+     */
+    static UeKey from_ipv4(const Ipv4Addr& ipv4) {
+        validate_ipv4_format(ipv4.value);
+        return UeKey(KeyType::IPV4_BASED, {}, {}, ipv4.value, {}, {}, {});
     }
-    
-    // Promote to SUPI-based key
+
+    /**
+     * @brief Create an IPv6-based key
+     * @param ipv6 IPv6 address
+     * @return UeKey instance
+     * @throws std::invalid_argument if IPv6 format is invalid
+     */
+    static UeKey from_ipv6(const Ipv6Addr& ipv6) {
+        validate_ipv6_format(ipv6.value);
+        return UeKey(KeyType::IPV6_BASED, {}, {}, {}, ipv6.value, {}, {});
+    }
+
+    /**
+     * @brief Create an IPv6 prefix-based key
+     * @param ipv6_prefix IPv6 prefix with CIDR notation
+     * @return UeKey instance
+     * @throws std::invalid_argument if IPv6 prefix format is invalid
+     */
+    static UeKey from_ipv6_prefix(const Ipv6Prefix& ipv6_prefix) {
+        validate_ipv6_prefix_format(ipv6_prefix.value);
+        return UeKey(KeyType::IPV6_PREFIX_BASED, {}, {}, {}, {}, ipv6_prefix.value, {});
+    }
+
+    /**
+     * @brief Create a MAC address-based key
+     * @param mac_addr MAC address (for Ethernet PDU sessions)
+     * @return UeKey instance
+     * @throws std::invalid_argument if MAC address format is invalid
+     */
+    static UeKey from_mac(const MacAddr48& mac_addr) {
+        validate_mac_format(mac_addr.value);
+        return UeKey(KeyType::MAC_ADDR_BASED, {}, {}, {}, {}, {}, mac_addr.value);
+    }
+
+    // ============================================================================
+    // Legacy Constructors
+    // ============================================================================
+
+    /**
+     * @brief Constructor for SUPI-based key (legacy)
+     * @param supi Subscription Permanent Identifier
+     * @deprecated Use UeKey::from_supi() instead
+     */
+    explicit UeKey(const Supi& supi)
+        : type_(KeyType::SUPI_BASED), supi_value_(supi.value) {
+        validate_supi_format(supi.value);
+    }
+
+    /**
+     * @brief Constructor for GPSI-based key (legacy)
+     * @param gpsi Generic Public Subscription Identifier
+     * @deprecated Use UeKey::from_gpsi() instead
+     */
+    explicit UeKey(const Gpsi& gpsi)
+        : type_(KeyType::GPSI_BASED), gpsi_value_(gpsi.value) {
+        validate_gpsi_format(gpsi.value);
+    }
+
+    /**
+     * @brief Constructor for IPv4-based key (legacy)
+     * @param ipv4 IPv4 address
+     * @deprecated Use UeKey::from_ipv4() instead
+     */
+    explicit UeKey(const Ipv4Addr& ipv4)
+        : type_(KeyType::IPV4_BASED), ipv4_value_(ipv4.value) {
+        validate_ipv4_format(ipv4.value);
+    }
+
+    /**
+     * @brief Constructor for IPv6-based key (legacy)
+     * @param ipv6 IPv6 address
+     * @deprecated Use UeKey::from_ipv6() instead
+     */
+    explicit UeKey(const Ipv6Addr& ipv6)
+        : type_(KeyType::IPV6_BASED), ipv6_value_(ipv6.value) {
+        validate_ipv6_format(ipv6.value);
+    }
+
+    /**
+     * @brief Constructor for IPv6 Prefix-based key (legacy)
+     * @param ipv6_prefix IPv6 prefix with CIDR notation
+     * @deprecated Use UeKey::from_ipv6_prefix() instead
+     */
+    explicit UeKey(const Ipv6Prefix& ipv6_prefix)
+        : type_(KeyType::IPV6_PREFIX_BASED), ipv6_prefix_value_(ipv6_prefix.value) {
+        validate_ipv6_prefix_format(ipv6_prefix.value);
+    }
+
+    /**
+     * @brief Constructor for MAC Address-based key (legacy)
+     * @param mac_addr MAC address
+     * @deprecated Use UeKey::from_mac() instead
+     */
+    explicit UeKey(const MacAddr48& mac_addr)
+        : type_(KeyType::MAC_ADDR_BASED), mac_addr_value_(mac_addr.value) {
+        validate_mac_format(mac_addr.value);
+    }
+
+    /**
+     * @brief Generic constructor with string value and type
+     * @param key The key value as string
+     * @param key_type The type of key
+     * @throws std::invalid_argument if key format doesn't match the type
+     * @note Consider using factory methods for better type safety
+     */
+    UeKey(const std::string& key, KeyType key_type);
+
+    // ============================================================================
+    // Accessors (Read-only Access to State)
+    // ============================================================================
+
+    /**
+     * @brief Get the type of this key
+     * @return KeyType enumeration value
+     */
+    KeyType get_type() const noexcept { return type_; }
+
+    /**
+     * @brief Get the primary key string for map indexing
+     * @return Formatted key string (e.g., "supi:imsi-123456789")
+     */
+    std::string get_primary_key() const;
+
+    /**
+     * @brief Get SUPI value if present
+     * @return Optional SUPI string
+     */
+    const std::optional<std::string>& get_supi_value() const noexcept { return supi_value_; }
+
+    /**
+     * @brief Get GPSI value if present
+     * @return Optional GPSI string
+     */
+    const std::optional<std::string>& get_gpsi_value() const noexcept { return gpsi_value_; }
+
+    /**
+     * @brief Get IPv4 value if present
+     * @return Optional IPv4 address string
+     */
+    const std::optional<std::string>& get_ipv4_value() const noexcept { return ipv4_value_; }
+
+    /**
+     * @brief Get IPv6 value if present
+     * @return Optional IPv6 address string
+     */
+    const std::optional<std::string>& get_ipv6_value() const noexcept { return ipv6_value_; }
+
+    /**
+     * @brief Get IPv6 prefix value if present
+     * @return Optional IPv6 prefix string
+     */
+    const std::optional<std::string>& get_ipv6_prefix_value() const noexcept { return ipv6_prefix_value_; }
+
+    /**
+     * @brief Get MAC address value if present
+     * @return Optional MAC address string
+     */
+    const std::optional<std::string>& get_mac_addr_value() const noexcept { return mac_addr_value_; }
+
+    // ============================================================================
+    // State Queries
+    // ============================================================================
+
+    /**
+     * @brief Check if this key can be promoted to SUPI-based
+     * @return true if key is not SUPI-based but has SUPI value available
+     */
+    bool can_promote_to_supi() const noexcept {
+        return type_ != KeyType::SUPI_BASED && supi_value_.has_value();
+    }
+
+    /**
+     * @brief Check if this key is provisional (not SUPI-based)
+     * @return true if key is not SUPI-based
+     */
+    bool is_provisional() const noexcept {
+        return type_ != KeyType::SUPI_BASED;
+    }
+
+    /**
+     * @brief Check if this key is fully resolved (SUPI-based)
+     * @return true if key is SUPI-based
+     */
+    bool is_resolved() const noexcept {
+        return type_ == KeyType::SUPI_BASED;
+    }
+
+    // ============================================================================
+    // State Mutations (Limited to SUPI Promotion and Type Demotion)
+    // ============================================================================
+
+    /**
+     * @brief Promote this key to SUPI-based if possible
+     * @note This is the ONLY mutable operation allowed
+     * @thread_safety This operation should be externally synchronized
+     */
     void promote_to_supi() {
         if (can_promote_to_supi()) {
-            type = KeyType::SUPI_BASED;
+            type_ = KeyType::SUPI_BASED;
         }
     }
-    
+
+    /**
+     * @brief Demote this key to COMPOSITE type
+     * @note Used when the primary identifier is removed but other identifiers remain
+     * @thread_safety This operation should be externally synchronized
+     */
+    void demote_to_composite() {
+        if (type_ != KeyType::COMPOSITE) {
+            type_ = KeyType::COMPOSITE;
+        }
+    }
+
+    /**
+     * @brief Create a new UeKey promoted to SUPI (immutable pattern)
+     * @return New UeKey instance with SUPI promotion, or copy if already SUPI-based
+     * @note Preferred over mutable promote_to_supi() for functional style
+     */
+    UeKey with_supi_promotion() const {
+        if (can_promote_to_supi()) {
+            return UeKey(KeyType::SUPI_BASED, supi_value_, gpsi_value_,
+                        ipv4_value_, ipv6_value_, ipv6_prefix_value_, mac_addr_value_);
+        }
+        return *this;
+    }
+
+    /**
+     * @brief Create a new composite UeKey (immutable pattern)
+     * @return New UeKey instance with COMPOSITE type
+     * @note Preferred over mutable demote_to_composite() for functional style
+     */
+    UeKey as_composite() const {
+        if (type_ == KeyType::COMPOSITE) {
+            return *this;
+        }
+        return UeKey(KeyType::COMPOSITE, supi_value_, gpsi_value_,
+                    ipv4_value_, ipv6_value_, ipv6_prefix_value_, mac_addr_value_);
+    }
+
+    // ============================================================================
+    // Comparison Operators (Value Object Semantics)
+    // ============================================================================
+
+    /**
+     * @brief Equality comparison based on primary key
+     * @param other UeKey to compare with
+     * @return true if primary keys are equal
+     */
     bool operator==(const UeKey& other) const {
         return get_primary_key() == other.get_primary_key();
     }
-    
+
+    /**
+     * @brief Inequality comparison
+     * @param other UeKey to compare with
+     * @return true if primary keys are not equal
+     */
+    bool operator!=(const UeKey& other) const {
+        return !(*this == other);
+    }
+
+    /**
+     * @brief Less-than comparison for ordered containers
+     * @param other UeKey to compare with
+     * @return true if this key is lexicographically less than other
+     */
     bool operator<(const UeKey& other) const {
         return get_primary_key() < other.get_primary_key();
     }
+
+private:
+    // ============================================================================
+    // Private Members
+    // ============================================================================
+
+    KeyType type_;                                  ///< Type of key (determines which value is primary)
+    std::optional<std::string> supi_value_;        ///< SUPI value if available
+    std::optional<std::string> gpsi_value_;        ///< GPSI value if available
+    std::optional<std::string> ipv4_value_;        ///< IPv4 address if available
+    std::optional<std::string> ipv6_value_;        ///< IPv6 address if available
+    std::optional<std::string> ipv6_prefix_value_; ///< IPv6 prefix if available
+    std::optional<std::string> mac_addr_value_;    ///< MAC address if available
+
+    // ============================================================================
+    // Private Constructor (Used by Factory Methods)
+    // ============================================================================
+
+    /**
+     * @brief Private constructor for controlled object creation
+     * @note Used by factory methods to ensure validation
+     */
+    UeKey(KeyType type,
+          std::optional<std::string> supi,
+          std::optional<std::string> gpsi,
+          std::optional<std::string> ipv4,
+          std::optional<std::string> ipv6,
+          std::optional<std::string> ipv6_prefix,
+          std::optional<std::string> mac_addr)
+        : type_(type), supi_value_(std::move(supi)), gpsi_value_(std::move(gpsi)),
+          ipv4_value_(std::move(ipv4)), ipv6_value_(std::move(ipv6)),
+          ipv6_prefix_value_(std::move(ipv6_prefix)), mac_addr_value_(std::move(mac_addr)) {}
+
+    // ============================================================================
+    // Validation Helpers (Static Methods)
+    // ============================================================================
+
+    /**
+     * @brief Validate SUPI format
+     * @param value SUPI string to validate
+     * @throws std::invalid_argument if format is invalid
+     */
+    static void validate_supi_format(const std::string& value);
+
+    /**
+     * @brief Validate GPSI format
+     * @param value GPSI string to validate
+     * @throws std::invalid_argument if format is invalid
+     */
+    static void validate_gpsi_format(const std::string& value);
+
+    /**
+     * @brief Validate IPv4 address format
+     * @param value IPv4 string to validate
+     * @throws std::invalid_argument if format is invalid
+     */
+    static void validate_ipv4_format(const std::string& value);
+
+    /**
+     * @brief Validate IPv6 address format
+     * @param value IPv6 string to validate
+     * @throws std::invalid_argument if format is invalid
+     */
+    static void validate_ipv6_format(const std::string& value);
+
+    /**
+     * @brief Validate IPv6 prefix format
+     * @param value IPv6 prefix string to validate
+     * @throws std::invalid_argument if format is invalid
+     */
+    static void validate_ipv6_prefix_format(const std::string& value);
+
+    /**
+     * @brief Validate MAC address format
+     * @param value MAC address string to validate
+     * @throws std::invalid_argument if format is invalid
+     */
+    static void validate_mac_format(const std::string& value);
 };
 
 // --- Hash specializations for custom structs to use with std::unordered_map ---
@@ -268,7 +526,7 @@ struct AfUeSubscriptionState {
     UeKey ue_key; // Primary key for this UE state
     std::optional<Supi> supi; // Subscription Permanent Identifier (may be resolved later)
     std::optional<Gpsi> gpsi; // Generic Public Subscription Identifier (GPSI)
-    
+
     // **Resolution State**
     enum class ResolutionState {
         PROVISIONAL,    // UE identified by IP/temporary identifier only
@@ -277,7 +535,7 @@ struct AfUeSubscriptionState {
     };
     ResolutionState resolution_state;
     std::optional<std::chrono::system_clock::time_point> supi_resolved_at; // When SUPI was resolved
-    
+
     // **Alternative Identifiers** (for cross-referencing and promotion)
     std::vector<std::string> known_ipv4_addresses; // All known IPv4 addresses for this UE
     std::vector<std::string> known_ipv6_addresses; // All known IPv6 addresses for this UE
@@ -309,11 +567,11 @@ struct AfUeSubscriptionState {
     std::optional<std::chrono::system_clock::time_point> last_activity; // Last time UE had any network activity
 
     // Constructor for IP-based provisional state
-    explicit AfUeSubscriptionState(const UeKey& key) 
+    explicit AfUeSubscriptionState(const UeKey& key)
         : ue_key(key), resolution_state(ResolutionState::PROVISIONAL),
           created_at(std::chrono::system_clock::now()), last_updated(std::chrono::system_clock::now()) {}
-    
-    // Constructor for SUPI-based resolved state  
+
+    // Constructor for SUPI-based resolved state
     explicit AfUeSubscriptionState(const Supi& supi_val)
         : ue_key(UeKey(supi_val)), supi(supi_val), resolution_state(ResolutionState::RESOLVED),
           supi_resolved_at(std::chrono::system_clock::now()), created_at(std::chrono::system_clock::now()), last_updated(std::chrono::system_clock::now()) {}
@@ -324,15 +582,19 @@ struct AfUeSubscriptionState {
             supi = supi_val;
             resolution_state = ResolutionState::RESOLVED;
             supi_resolved_at = std::chrono::system_clock::now();
-            
+
             // Update the key if it can be promoted
+            // Note: Since UeKey is now properly encapsulated, we can only promote if the
+            // SUPI value is already present in the key. If not, we need to create a new key.
             if (ue_key.can_promote_to_supi()) {
-                ue_key.supi_value = supi_val.value;
                 ue_key.promote_to_supi();
+            } else {
+                // Create a new SUPI-based key if the current key doesn't have SUPI value
+                ue_key = UeKey::from_supi(supi_val);
             }
         }
     }
-    
+
     // Method to add alternative identifiers for cross-referencing
     void add_known_identifier(const std::string& type, const std::string& value) {
         if (type == "ipv4" && std::find(known_ipv4_addresses.begin(), known_ipv4_addresses.end(), value) == known_ipv4_addresses.end()) {
@@ -349,58 +611,67 @@ struct AfUeSubscriptionState {
     }
 
     bool remove_known_identifier(const std::string& identifier_type, const std::string& identifier_value) {
+        bool removed = false;
+        bool should_demote = false;
+
         if (identifier_type == "ipv4") {
             auto it = std::find(known_ipv4_addresses.begin(), known_ipv4_addresses.end(), identifier_value);
             if (it != known_ipv4_addresses.end()) {
                 known_ipv4_addresses.erase(it);
-                // If the UeKey is IPv4-based and this was the last known IPv4, we might need to update the key type
-                if (ue_key.type == UeKey::KeyType::IPV4_BASED && known_ipv4_addresses.empty()) {
-                    ue_key.type = UeKey::KeyType::COMPOSITE; // Downgrade to composite if no other identifiers
+                removed = true;
+                // Check if we need to demote: if the UeKey is IPv4-based and this was the last known IPv4
+                if (ue_key.get_type() == UeKey::KeyType::IPV4_BASED && known_ipv4_addresses.empty()) {
+                    should_demote = true;
                 }
-                return true;
             }
         } else if (identifier_type == "ipv6") {
             auto it = std::find(known_ipv6_addresses.begin(), known_ipv6_addresses.end(), identifier_value);
             if (it != known_ipv6_addresses.end()) {
                 known_ipv6_addresses.erase(it);
-                // If the UeKey is IPv6-based and this was the last known IPv6, we might need to update the key type
-                if (ue_key.type == UeKey::KeyType::IPV6_BASED && known_ipv6_addresses.empty()) {
-                    ue_key.type = UeKey::KeyType::COMPOSITE; // Downgrade to composite if no other identifiers
+                removed = true;
+                // Check if we need to demote: if the UeKey is IPv6-based and this was the last known IPv6
+                if (ue_key.get_type() == UeKey::KeyType::IPV6_BASED && known_ipv6_addresses.empty()) {
+                    should_demote = true;
                 }
-                return true;
             }
         } else if (identifier_type == "gpsi") {
             auto it = std::find(known_gpsi_values.begin(), known_gpsi_values.end(), identifier_value);
             if (it != known_gpsi_values.end()) {
                 known_gpsi_values.erase(it);
-                // If the UeKey is GPSI-based and this was the last known GPSI, we might need to update the key type
-                if (ue_key.type == UeKey::KeyType::GPSI_BASED && known_gpsi_values.empty()) {
-                    ue_key.type = UeKey::KeyType::COMPOSITE; // Downgrade to composite if no other identifiers
+                removed = true;
+                // Check if we need to demote: if the UeKey is GPSI-based and this was the last known GPSI
+                if (ue_key.get_type() == UeKey::KeyType::GPSI_BASED && known_gpsi_values.empty()) {
+                    should_demote = true;
                 }
-                return true;
             }
         } else if (identifier_type == "ipv6_prefix") {
             auto it = std::find(known_ipv6_prefixes.begin(), known_ipv6_prefixes.end(), identifier_value);
             if (it != known_ipv6_prefixes.end()) {
                 known_ipv6_prefixes.erase(it);
-                // If the UeKey is IPv6-prefix-based and this was the last known IPv6-prefix, we might need to update the key type
-                if (ue_key.type == UeKey::KeyType::IPV6_PREFIX_BASED && known_ipv6_prefixes.empty()) {
-                    ue_key.type = UeKey::KeyType::COMPOSITE; // Downgrade to composite if no other identifiers
+                removed = true;
+                // Check if we need to demote: if the UeKey is IPv6-prefix-based and this was the last known IPv6-prefix
+                if (ue_key.get_type() == UeKey::KeyType::IPV6_PREFIX_BASED && known_ipv6_prefixes.empty()) {
+                    should_demote = true;
                 }
-                return true;
             }
         } else if (identifier_type == "mac") {
             auto it = std::find(known_mac_addresses.begin(), known_mac_addresses.end(), identifier_value);
             if (it != known_mac_addresses.end()) {
                 known_mac_addresses.erase(it);
-                // If the UeKey is MAC-based and this was the last known MAC, we might need to update the key type
-                if (ue_key.type == UeKey::KeyType::MAC_ADDR_BASED && known_mac_addresses.empty()) {
-                    ue_key.type = UeKey::KeyType::COMPOSITE; // Downgrade to composite if no other identifiers
+                removed = true;
+                // Check if we need to demote: if the UeKey is MAC-based and this was the last known MAC
+                if (ue_key.get_type() == UeKey::KeyType::MAC_ADDR_BASED && known_mac_addresses.empty()) {
+                    should_demote = true;
                 }
-                return true;
             }
         }
-        return false; // Identifier not found
+
+        // Demote to composite if the primary identifier was removed but other identifiers exist
+        if (should_demote) {
+            ue_key.demote_to_composite();
+        }
+
+        return removed;
     }
 
     bool operator==(const AfUeSubscriptionState& other) const {

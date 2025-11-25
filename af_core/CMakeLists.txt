@@ -141,6 +141,7 @@ endif()
 
 # Define test sources
 set(SOURCES
+    src/models/ue_key.cpp
     src/qod/qod_notification_manager.cpp
     src/qod/qod_session_manager.cpp
     src/qod/qod_state_manager.cpp
