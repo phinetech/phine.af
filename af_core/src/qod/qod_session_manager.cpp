@@ -630,15 +630,15 @@ QodSessionManager::resolve_device(const af::common::qod::QodDevice& device) {
     if (ue_state) {
         // Get the first active PDU session if available
         std::optional<std::string> pdu_session_id;
-        if (!ue_state->pdu_sessions.empty()) {
-            for (const auto& pdu_session : ue_state->pdu_sessions) {
+        if (!ue_state->get_pdu_sessions().empty()) {
+            for (const auto& pdu_session : ue_state->get_pdu_sessions()) {
                 if (pdu_session.status == "ACTIVE") {
                     pdu_session_id = pdu_session.pdu_session_id;
                     break;
                 }
             }
         }
-        return {ue_state->supi, pdu_session_id};
+        return {ue_state->get_supi(), pdu_session_id};
     } else {
         logger_->warn("Could not resolve device to SUPI");
     }
@@ -716,21 +716,19 @@ void QodSessionManager::create_or_update_ue_state(const af::common::qod::QodSess
         }
 
         // Create initial UE state data
-        AfUeSubscriptionState initial_state(*ue_key);
+        AfUeSubscriptionState initial_state = session.ue_supi
+            ? AfUeSubscriptionState(*session.ue_supi)  // SUPI-based resolved state
+            : AfUeSubscriptionState(*ue_key);           // Provisional state
 
-        // Set SUPI if available
-        if (session.ue_supi) {
-            initial_state.supi = *session.ue_supi;
-            initial_state.resolution_state = AfUeSubscriptionState::ResolutionState::RESOLVED;
-            initial_state.supi_resolved_at = std::chrono::system_clock::now();
-        } else {
-            initial_state.resolution_state = AfUeSubscriptionState::ResolutionState::PROVISIONAL;
+        // If SUPI is available but state was created from key, resolve it
+        if (session.ue_supi && !initial_state.get_supi()) {
+            initial_state.resolve_supi(*session.ue_supi);
         }
 
         // Set GPSI if available
         if (session.device->phone_number) {
             Gpsi gpsi{*session.device->phone_number};
-            initial_state.gpsi = gpsi;
+            initial_state.set_gpsi(gpsi);
         }
 
         // Add known identifiers for cross-referencing

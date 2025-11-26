@@ -17,77 +17,77 @@ UeStateManager::UeStateManager(std::shared_ptr<af::core::events::EventDispatcher
 
 void UeStateManager::update_ue_state(const AfUeSubscriptionState& ue_state) {
     std::unique_lock<std::shared_mutex> lock(rw_mtx_);
-    
+
     // Call internal method directly to avoid recursive locking
-    std::string key_string = ue_state.ue_key.get_primary_key();
+    std::string key_string = ue_state.get_ue_key().get_primary_key();
     auto it = ue_states_by_key_.find(key_string);
-    
+
     if (it != ue_states_by_key_.end()) {
         // Update existing state
         remove_ue_indices(it->second);
         it->second = ue_state;
-        it->second.last_updated = std::chrono::system_clock::now();
         add_ue_indices(it->second);
     } else {
         // Insert new state
         auto [inserted_it, success] = ue_states_by_key_.emplace(key_string, ue_state);
-        inserted_it->second.last_updated = std::chrono::system_clock::now();
         add_ue_indices(inserted_it->second);
     }
 }
 
 void UeStateManager::update_ue_state_internal(const AfUeSubscriptionState& ue_state) {
-    std::string key_string = ue_state.ue_key.get_primary_key();
+    std::string key_string = ue_state.get_ue_key().get_primary_key();
     auto it = ue_states_by_key_.find(key_string);
-    
+
     if (it != ue_states_by_key_.end()) {
         // Update existing state
         remove_ue_indices(it->second);
         it->second = ue_state;
-        it->second.last_updated = std::chrono::system_clock::now();
         add_ue_indices(it->second);
     } else {
         // Insert new state
         auto [inserted_it, success] = ue_states_by_key_.emplace(key_string, ue_state);
-        inserted_it->second.last_updated = std::chrono::system_clock::now();
         add_ue_indices(inserted_it->second);
     }
 }
 
 AfUeSubscriptionState& UeStateManager::create_or_update_provisional_ue_state(
-    const UeKey& key, 
+    const UeKey& key,
     const std::optional<AfUeSubscriptionState>& initial_data) {
-    
+
     std::unique_lock<std::shared_mutex> lock(rw_mtx_);
-    
+
     std::string key_string = key.get_primary_key();
     auto it = ue_states_by_key_.find(key_string);
-    
+
     if (it != ue_states_by_key_.end()) {
         // Update existing state
         if (initial_data) {
-            // Merge with existing data, preserving key and resolution state
-            AfUeSubscriptionState merged = *initial_data;
-            merged.ue_key = it->second.ue_key;
-            merged.resolution_state = it->second.resolution_state;
-            merged.supi = it->second.supi; // Preserve resolved SUPI if any
-            merged.last_updated = std::chrono::system_clock::now();;
-            
-            remove_ue_indices(it->second);
-            it->second = merged;
-            add_ue_indices(it->second);
-        } else {
-            it->second.last_updated = std::chrono::system_clock::now();
+            // Merge initial_data into existing state (preserve ue_key and resolution_state)
+            // Only update mutable fields from initial_data
+            if (initial_data->get_gpsi()) {
+                it->second.set_gpsi(*initial_data->get_gpsi());
+            }
+            if (initial_data->get_location_info()) {
+                it->second.set_location_info(*initial_data->get_location_info());
+            }
+            if (initial_data->get_access_mobility_data()) {
+                it->second.set_access_mobility_data(*initial_data->get_access_mobility_data());
+            }
+            if (initial_data->get_ue_policy_data_info()) {
+                it->second.set_ue_policy_data_info(*initial_data->get_ue_policy_data_info());
+            }
+            // Merge PDU sessions
+            for (const auto& pdu : initial_data->get_pdu_sessions()) {
+                it->second.add_or_update_pdu_session(pdu);
+            }
         }
         return it->second;
     } else {
         // Create new provisional state
         AfUeSubscriptionState new_state = initial_data ? *initial_data : AfUeSubscriptionState(key);
-        new_state.ue_key = key;
-        if (!initial_data) {
-            new_state.resolution_state = AfUeSubscriptionState::ResolutionState::PROVISIONAL;
-        }
-        
+        // Note: ue_key is set by constructor (no need to assign)
+        // Note: resolution_state is automatically set to PROVISIONAL by constructor
+
         auto [inserted_it, success] = ue_states_by_key_.emplace(key_string, std::move(new_state));
         add_ue_indices(inserted_it->second);
         return inserted_it->second;
@@ -96,92 +96,97 @@ AfUeSubscriptionState& UeStateManager::create_or_update_provisional_ue_state(
 
 bool UeStateManager::promote_ue_state_to_resolved(const UeKey& current_key, const Supi& supi) {
     std::unique_lock<std::shared_mutex> lock(rw_mtx_);
-    
+
     std::string current_key_string = current_key.get_primary_key();
     auto it = ue_states_by_key_.find(current_key_string);
-    
+
     if (it == ue_states_by_key_.end()) {
         return false; // UE state not found
     }
-    
+
     // Check if we already have a SUPI-based state
     UeKey supi_key(supi);
     std::string supi_key_string = supi_key.get_primary_key();
-    
+
     if (current_key_string == supi_key_string) {
         // Already SUPI-based, just update resolution
         it->second.resolve_supi(supi);
         return true;
     }
-    
+
     auto supi_it = ue_states_by_key_.find(supi_key_string);
     if (supi_it != ue_states_by_key_.end()) {
         // Merge with existing SUPI-based state
         return merge_ue_states(supi_key, current_key);
     }
-    
+
     // Promote current state to SUPI-based
     remove_ue_indices(it->second);
-    
+
     AfUeSubscriptionState promoted_state = std::move(it->second);
     promoted_state.resolve_supi(supi);
-    promoted_state.ue_key = supi_key;
-    
+
     ue_states_by_key_.erase(it);
     auto [new_it, success] = ue_states_by_key_.emplace(supi_key_string, std::move(promoted_state));
     add_ue_indices(new_it->second);
-    
+
     return success;
 }
 
 bool UeStateManager::merge_ue_states(const UeKey& primary_key, const UeKey& secondary_key) {
     std::unique_lock<std::shared_mutex> lock(rw_mtx_);
-    
+
     std::string primary_key_string = primary_key.get_primary_key();
     std::string secondary_key_string = secondary_key.get_primary_key();
-    
+
     auto primary_it = ue_states_by_key_.find(primary_key_string);
     auto secondary_it = ue_states_by_key_.find(secondary_key_string);
-    
+
     if (primary_it == ue_states_by_key_.end() || secondary_it == ue_states_by_key_.end()) {
         return false;
     }
-    
+
     // Merge secondary into primary
     remove_ue_indices(primary_it->second);
     remove_ue_indices(secondary_it->second);
-    
+
     AfUeSubscriptionState& primary_state = primary_it->second;
     const AfUeSubscriptionState& secondary_state = secondary_it->second;
-    
+
     // Merge known identifiers
-    for (const auto& ipv4 : secondary_state.known_ipv4_addresses) {
+    for (const auto& ipv4 : secondary_state.get_known_ipv4_addresses()) {
         primary_state.add_known_identifier("ipv4", ipv4);
     }
-    for (const auto& ipv6 : secondary_state.known_ipv6_addresses) {
+    for (const auto& ipv6 : secondary_state.get_known_ipv6_addresses()) {
         primary_state.add_known_identifier("ipv6", ipv6);
     }
-    for (const auto& gpsi : secondary_state.known_gpsi_values) {
+    for (const auto& gpsi : secondary_state.get_known_gpsi_values()) {
         primary_state.add_known_identifier("gpsi", gpsi);
     }
-    
+
     // Merge PDU sessions (avoiding duplicates)
-    for (const auto& pdu : secondary_state.pdu_sessions) {
-        auto existing = std::find_if(primary_state.pdu_sessions.begin(), primary_state.pdu_sessions.end(),
+    auto& primary_pdu_sessions = primary_state.get_mutable_pdu_sessions();
+    bool pdu_sessions_modified = false;
+    for (const auto& pdu : secondary_state.get_pdu_sessions()) {
+        auto existing = std::find_if(primary_pdu_sessions.begin(), primary_pdu_sessions.end(),
             [&](const PduSessionData& existing_pdu) {
                 return existing_pdu.pdu_session_id == pdu.pdu_session_id;
             });
-        if (existing == primary_state.pdu_sessions.end()) {
-            primary_state.pdu_sessions.push_back(pdu);
+        if (existing == primary_pdu_sessions.end()) {
+            primary_pdu_sessions.push_back(pdu);
+            pdu_sessions_modified = true;
         }
     }
-    
-    primary_state.last_updated = std::chrono::system_clock::now();;
-    
+
+    // Update activity timestamp if PDU sessions were modified
+    if (pdu_sessions_modified) {
+        primary_state.record_activity();
+    }
+
     // Remove secondary state and add updated indices for primary
     ue_states_by_key_.erase(secondary_it);
     add_ue_indices(primary_state);
-    
+
     return true;
 }
 
@@ -207,11 +212,11 @@ std::vector<AfUeSubscriptionState> UeStateManager::get_all_ue_states() const {
     std::shared_lock<std::shared_mutex> lock(rw_mtx_);
     std::vector<AfUeSubscriptionState> all_states;
     all_states.reserve(ue_states_by_key_.size());
-    
+
     for (const auto& pair : ue_states_by_key_) {
         all_states.push_back(pair.second); // Copy each state
     }
-    
+
     return all_states;
 }
 
@@ -279,7 +284,7 @@ std::optional<AfUeSubscriptionState> UeStateManager::get_ue_state_by_mac_addr(co
     std::lock_guard<std::shared_mutex> lock(rw_mtx_);
     // MAC addresses are typically associated with PDU sessions, so we need to search through PDU session data
     for (const auto& [key_str, ue_state] : ue_states_by_key_) {
-        for (const auto& pdu_session : ue_state.pdu_sessions) {
+        for (const auto& pdu_session : ue_state.get_pdu_sessions()) {
             if (pdu_session.ue_mac_address && pdu_session.ue_mac_address->value == mac_addr.value) {
                 return ue_state;
             }
@@ -292,7 +297,7 @@ std::optional<AfUeSubscriptionState> UeStateManager::get_ue_state_by_pdu_session
     std::lock_guard<std::shared_mutex> lock(rw_mtx_);
     // PDU sessions are part of UE state, so we need to search through all UE states
     for (const auto& [key_str, ue_state] : ue_states_by_key_) {
-        for (const auto& pdu_session : ue_state.pdu_sessions) {
+        for (const auto& pdu_session : ue_state.get_pdu_sessions()) {
             if (pdu_session.pdu_session_id == pdu_session_id) {
                 return ue_state;
             }
@@ -309,12 +314,11 @@ bool UeStateManager::update_ue_gpsi(const UeKey& key, const Gpsi& new_gpsi) {
     auto it = ue_states_by_key_.find(key_string);
     if (it != ue_states_by_key_.end()) {
         // Remove old GPSI index if it existed
-        if (it->second.gpsi) {
-            key_by_gpsi_.erase(it->second.gpsi->value);
+        if (it->second.get_gpsi()) {
+            key_by_gpsi_.erase(it->second.get_gpsi()->value);
         }
         // Update GPSI in the main state
-        it->second.gpsi = new_gpsi;
-        it->second.last_updated = std::chrono::system_clock::now();
+        it->second.set_gpsi(new_gpsi);
         // Add new GPSI index
         key_by_gpsi_[new_gpsi.value] = key_string;
         return true;
@@ -331,9 +335,7 @@ bool UeStateManager::update_ue_location_info(const UeKey& key, const UeLocationI
     std::string key_string = key.get_primary_key();
     auto it = ue_states_by_key_.find(key_string);
     if (it != ue_states_by_key_.end()) {
-        it->second.location_info = new_location_info;
-        it->second.location_timestamp = timestamp;
-        it->second.last_updated = std::chrono::system_clock::now();
+        it->second.set_location_info(new_location_info);
         return true;
     }
     return false;
@@ -344,8 +346,7 @@ bool UeStateManager::update_ue_access_mobility_data(const UeKey& key, const UeAc
     std::string key_string = key.get_primary_key();
     auto it = ue_states_by_key_.find(key_string);
     if (it != ue_states_by_key_.end()) {
-        it->second.access_mobility_data = new_access_mobility_data;
-        it->second.last_updated = std::chrono::system_clock::now();
+        it->second.set_access_mobility_data(new_access_mobility_data);
         return true;
     }
     return false;
@@ -360,21 +361,23 @@ bool UeStateManager::add_or_update_pdu_session(const UeKey& key, const PduSessio
     std::string key_string = key.get_primary_key();
     auto it = ue_states_by_key_.find(key_string);
     if (it != ue_states_by_key_.end()) {
+        auto& pdu_sessions = it->second.get_mutable_pdu_sessions();
+
         // Remove old indices for this PDU session if it exists
-        for (size_t i = 0; i < it->second.pdu_sessions.size(); ++i) {
-            if (it->second.pdu_sessions[i].pdu_session_id == pdu_session_data.pdu_session_id) {
+        for (size_t i = 0; i < pdu_sessions.size(); ++i) {
+            if (pdu_sessions[i].pdu_session_id == pdu_session_data.pdu_session_id) {
                 // PDU Session exists, update it
-                remove_pdu_session_indices(key_string, it->second.pdu_sessions[i]);
-                it->second.pdu_sessions[i] = pdu_session_data; // Update data
+                remove_pdu_session_indices(key_string, pdu_sessions[i]);
+                pdu_sessions[i] = pdu_session_data; // Update data
                 add_pdu_session_indices(key_string, pdu_session_data); // Add new indices
-                it->second.last_updated = std::chrono::system_clock::now();
+                it->second.record_activity();
                 return true;
             }
         }
         // PDU Session does not exist, add it
-        it->second.pdu_sessions.push_back(pdu_session_data);
+        pdu_sessions.push_back(pdu_session_data);
         add_pdu_session_indices(key_string, pdu_session_data);
-        it->second.last_updated = std::chrono::system_clock::now();
+        it->second.record_activity();
         return true;
     }
     return false; // UE not found
@@ -387,19 +390,18 @@ bool UeStateManager::remove_pdu_session(const UeKey& key, const std::string& pdu
     std::string key_string = key.get_primary_key();
     auto it = ue_states_by_key_.find(key_string);
     if (it != ue_states_by_key_.end()) {
-        auto& pdu_sessions = it->second.pdu_sessions;
+        auto& pdu_sessions = it->second.get_mutable_pdu_sessions();
         for (auto session_it = pdu_sessions.begin(); session_it != pdu_sessions.end(); ++session_it) {
             if (session_it->pdu_session_id == pdu_session_id) {
                 remove_pdu_session_indices(key_string, *session_it);
                 pdu_sessions.erase(session_it);
-                
+                it->second.record_activity();
+
                 // Publish PDU Session Terminated Event (only if SUPI is available)
-                if (it->second.supi) {
-                    af::core::events::PduSessionTerminatedEvent event(*it->second.supi, pdu_session_id);
+                if (it->second.get_supi()) {
+                    af::core::events::PduSessionTerminatedEvent event(*it->second.get_supi(), pdu_session_id);
                     event_dispatcher_->publish(event);
                 }
-                
-                it->second.last_updated = std::chrono::system_clock::now();
                 return true;
             }
         }
@@ -416,8 +418,7 @@ bool UeStateManager::update_ue_policy_data_info(const UeKey& key, const std::str
     std::string key_string = key.get_primary_key();
     auto it = ue_states_by_key_.find(key_string);
     if (it != ue_states_by_key_.end()) {
-        it->second.ue_policy_data_info = new_policy_data;
-        it->second.last_updated = std::chrono::system_clock::now();
+        it->second.set_ue_policy_data_info(new_policy_data);
         return true;
     }
     return false;
@@ -432,8 +433,7 @@ bool UeStateManager::update_prose_pduid_information(const UeKey& key, const Pdui
     std::string key_string = key.get_primary_key();
     auto it = ue_states_by_key_.find(key_string);
     if (it != ue_states_by_key_.end()) {
-        it->second.prose_pduid_information = new_prose_info;
-        it->second.last_updated = std::chrono::system_clock::now();
+        it->second.set_prose_pduid_information(new_prose_info);
         return true;
     }
     return false;
@@ -448,8 +448,7 @@ bool UeStateManager::update_time_sync_service_availability(const UeKey& key, boo
     std::string key_string = key.get_primary_key();
     auto it = ue_states_by_key_.find(key_string);
     if (it != ue_states_by_key_.end()) {
-        it->second.time_sync_service_available_and_capable = available_and_capable;
-        it->second.last_updated = std::chrono::system_clock::now();
+        it->second.set_time_sync_service_available_and_capable(available_and_capable);
         return true;
     }
     return false;
@@ -464,8 +463,7 @@ bool UeStateManager::update_service_area_coverage_allowed(const UeKey& key, cons
     std::string key_string = key.get_primary_key();
     auto it = ue_states_by_key_.find(key_string);
     if (it != ue_states_by_key_.end()) {
-        it->second.service_area_coverage_allowed = new_coverage_info;
-        it->second.last_updated = std::chrono::system_clock::now();
+        it->second.set_service_area_coverage_allowed(new_coverage_info);
         return true;
     }
     return false;
@@ -480,8 +478,7 @@ bool UeStateManager::update_high_throughput_desired(const UeKey& key, bool desir
     std::string key_string = key.get_primary_key();
     auto it = ue_states_by_key_.find(key_string);
     if (it != ue_states_by_key_.end()) {
-        it->second.high_throughput_desired_for_ue_traffic = desired;
-        it->second.last_updated = std::chrono::system_clock::now();
+        it->second.set_high_throughput_desired_for_ue_traffic(desired);
         return true;
     }
     return false;
@@ -495,38 +492,38 @@ bool UeStateManager::update_high_throughput_desired(const Supi& supi, bool desir
 
 void UeStateManager::add_ue_indices(const AfUeSubscriptionState& ue_state) {
     // Add secondary indices for faster lookups
-    if (ue_state.supi) {
-        key_by_supi_[ue_state.supi->value] = ue_state.ue_key.get_primary_key();
+    if (ue_state.get_supi()) {
+        key_by_supi_[ue_state.get_supi()->value] = ue_state.get_ue_key().get_primary_key();
     }
-    if (ue_state.gpsi) {
-        key_by_gpsi_[ue_state.gpsi->value] = ue_state.ue_key.get_primary_key();
+    if (ue_state.get_gpsi()) {
+        key_by_gpsi_[ue_state.get_gpsi()->value] = ue_state.get_ue_key().get_primary_key();
     }
-    
+
     // Add indices from PDU session data
-    for (const auto& pdu_session : ue_state.pdu_sessions) {
+    for (const auto& pdu_session : ue_state.get_pdu_sessions()) {
         if (pdu_session.ue_ipv4_address) {
-            key_by_ipv4_addr_[pdu_session.ue_ipv4_address->value] = ue_state.ue_key.get_primary_key();
+            key_by_ipv4_addr_[pdu_session.ue_ipv4_address->value] = ue_state.get_ue_key().get_primary_key();
         }
         for (const auto& ipv6_prefix : pdu_session.ue_ipv6_prefixes) {
-            key_by_ipv6_prefix_[ipv6_prefix.value] = ue_state.ue_key.get_primary_key();
+            key_by_ipv6_prefix_[ipv6_prefix.value] = ue_state.get_ue_key().get_primary_key();
         }
         for (const auto& ipv6_addr : pdu_session.ue_ipv6_addresses) {
-            key_by_ipv6_addr_[ipv6_addr.value] = ue_state.ue_key.get_primary_key();
+            key_by_ipv6_addr_[ipv6_addr.value] = ue_state.get_ue_key().get_primary_key();
         }
     }
 }
 
 void UeStateManager::remove_ue_indices(const AfUeSubscriptionState& ue_state) {
     // Remove secondary indices
-    if (ue_state.supi) {
-        key_by_supi_.erase(ue_state.supi->value);
+    if (ue_state.get_supi()) {
+        key_by_supi_.erase(ue_state.get_supi()->value);
     }
-    if (ue_state.gpsi) {
-        key_by_gpsi_.erase(ue_state.gpsi->value);
+    if (ue_state.get_gpsi()) {
+        key_by_gpsi_.erase(ue_state.get_gpsi()->value);
     }
-    
+
     // Remove indices from PDU session data
-    for (const auto& pdu_session : ue_state.pdu_sessions) {
+    for (const auto& pdu_session : ue_state.get_pdu_sessions()) {
         if (pdu_session.ue_ipv4_address) {
             key_by_ipv4_addr_.erase(pdu_session.ue_ipv4_address->value);
         }
@@ -582,10 +579,11 @@ bool UeStateManager::add_qod_session_to_pdu_session(const UeKey& key, const std:
     std::string key_string = key.get_primary_key();
     auto it = ue_states_by_key_.find(key_string);
     if (it != ue_states_by_key_.end()) {
-        for (auto& pdu_session : it->second.pdu_sessions) {
+        auto& pdu_sessions = it->second.get_mutable_pdu_sessions();
+        for (auto& pdu_session : pdu_sessions) {
             if (pdu_session.pdu_session_id == pdu_session_id) {
                 pdu_session.active_qod_session_ids.insert(qod_session_id);
-                it->second.last_updated = std::chrono::system_clock::now();
+                it->second.record_activity();
                 return true;
             }
         }
@@ -602,10 +600,11 @@ bool UeStateManager::remove_qod_session_from_pdu_session(const UeKey& key, const
     std::string key_string = key.get_primary_key();
     auto it = ue_states_by_key_.find(key_string);
     if (it != ue_states_by_key_.end()) {
-        for (auto& pdu_session : it->second.pdu_sessions) {
+        auto& pdu_sessions = it->second.get_mutable_pdu_sessions();
+        for (auto& pdu_session : pdu_sessions) {
             if (pdu_session.pdu_session_id == pdu_session_id) {
                 pdu_session.active_qod_session_ids.erase(qod_session_id);
-                it->second.last_updated = std::chrono::system_clock::now();
+                it->second.record_activity();
                 return true;
             }
         }
@@ -619,21 +618,21 @@ bool UeStateManager::remove_qod_session_from_pdu_session(const Supi& supi, const
 
 bool remove_known_identifier(const std::string& identifier_type, const std::string& identifier_value, AfUeSubscriptionState& ue_state) {
     if (identifier_type == "ipv4") {
-        auto it = std::find(ue_state.known_ipv4_addresses.begin(), ue_state.known_ipv4_addresses.end(), identifier_value);
-        if (it != ue_state.known_ipv4_addresses.end()) {
-            ue_state.known_ipv4_addresses.erase(it);
+        // Use remove_known_identifier() method instead
+        if (std::find(ue_state.get_known_ipv4_addresses().begin(), ue_state.get_known_ipv4_addresses().end(), identifier_value) != ue_state.get_known_ipv4_addresses().end()) {
+            ue_state.remove_known_identifier("ipv4", identifier_value);
             return true;
         }
     } else if (identifier_type == "ipv6") {
-        auto it = std::find(ue_state.known_ipv6_addresses.begin(), ue_state.known_ipv6_addresses.end(), identifier_value);
-        if (it != ue_state.known_ipv6_addresses.end()) {
-            ue_state.known_ipv6_addresses.erase(it);
+        // Use remove_known_identifier() method instead
+        if (std::find(ue_state.get_known_ipv6_addresses().begin(), ue_state.get_known_ipv6_addresses().end(), identifier_value) != ue_state.get_known_ipv6_addresses().end()) {
+            ue_state.remove_known_identifier("ipv6", identifier_value);
             return true;
         }
     } else if (identifier_type == "gpsi") {
-        auto it = std::find(ue_state.known_gpsi_values.begin(), ue_state.known_gpsi_values.end(), identifier_value);
-        if (it != ue_state.known_gpsi_values.end()) {
-            ue_state.known_gpsi_values.erase(it);
+        // Use remove_known_identifier() method instead
+        if (std::find(ue_state.get_known_gpsi_values().begin(), ue_state.get_known_gpsi_values().end(), identifier_value) != ue_state.get_known_gpsi_values().end()) {
+            ue_state.remove_known_identifier("gpsi", identifier_value);
             return true;
         }
     }
@@ -651,7 +650,6 @@ bool UeStateManager::remove_non_primary_ue_identifier(const UeKey& key, const st
             // Update indices accordingly
             remove_ue_indices(it->second);
             add_ue_indices(it->second);
-            it->second.last_updated = std::chrono::system_clock::now();
             return true;
         }
         return false; // Identifier not found
@@ -660,17 +658,17 @@ bool UeStateManager::remove_non_primary_ue_identifier(const UeKey& key, const st
         // it->second.known_ipv4_addresses.clear();
         // it->second.known_ipv6_addresses.clear();
         // it->second.known_gpsi_values.clear();
-        
+
         // // Remove secondary indices
         // remove_ue_indices(it->second);
-        
+
         // // Re-add primary key index
         // add_ue_indices(it->second);
-        
-        // it->second.last_updated = std::chrono::system_clock::now();
+
+        //
         // return true;
     }
-    return false; // UE not found 
+    return false; // UE not found
 }
 
 std::optional<std::unordered_set<std::string>> UeStateManager::get_qod_sessions_for_pdu_session(const UeKey& key, const std::string& pdu_session_id) const {
@@ -678,7 +676,7 @@ std::optional<std::unordered_set<std::string>> UeStateManager::get_qod_sessions_
     std::string key_string = key.get_primary_key();
     auto it = ue_states_by_key_.find(key_string);
     if (it != ue_states_by_key_.end()) {
-        for (const auto& pdu_session : it->second.pdu_sessions) {
+        for (const auto& pdu_session : it->second.get_pdu_sessions()) {
             if (pdu_session.pdu_session_id == pdu_session_id) {
                 return pdu_session.active_qod_session_ids;
             }
@@ -695,7 +693,7 @@ std::vector<std::string> UeStateManager::get_pdu_sessions_for_qod_session(const 
     std::shared_lock<std::shared_mutex> lock(rw_mtx_);
     std::vector<std::string> pdu_session_ids;
     for (const auto& ue_pair : ue_states_by_key_) {
-        for (const auto& pdu_session : ue_pair.second.pdu_sessions) {
+        for (const auto& pdu_session : ue_pair.second.get_pdu_sessions()) {
             if (pdu_session.active_qod_session_ids.find(qod_session_id) != pdu_session.active_qod_session_ids.end()) {
                 pdu_session_ids.push_back(pdu_session.pdu_session_id);
             }
@@ -707,22 +705,22 @@ std::vector<std::string> UeStateManager::get_pdu_sessions_for_qod_session(const 
 std::vector<AfUeSubscriptionState> UeStateManager::find_ue_states(
     std::optional<AfUeSubscriptionState::ResolutionState> resolution_state,
     std::optional<bool> has_active_sessions) const {
-    
+
     std::shared_lock<std::shared_mutex> lock(rw_mtx_);
     std::vector<AfUeSubscriptionState> matching_states;
-    
+
     for (const auto& [key_str, ue_state] : ue_states_by_key_) {
         bool matches = true;
-        
+
         // Filter by resolution state if specified
-        if (resolution_state && ue_state.resolution_state != *resolution_state) {
+        if (resolution_state && ue_state.get_resolution_state() != *resolution_state) {
             matches = false;
         }
-        
+
         // Filter by active sessions if specified
         if (has_active_sessions && matches) {
             bool has_sessions = false;
-            for (const auto& pdu : ue_state.pdu_sessions) {
+            for (const auto& pdu : ue_state.get_pdu_sessions()) {
                 if (!pdu.active_qod_session_ids.empty()) {
                     has_sessions = true;
                     break;
@@ -732,51 +730,53 @@ std::vector<AfUeSubscriptionState> UeStateManager::find_ue_states(
                 matches = false;
             }
         }
-        
+
         if (matches) {
             matching_states.push_back(ue_state);
         }
     }
-    
+
     return matching_states;
 }
 
 bool UeStateManager::add_qod_session_to_ue(const UeKey& key, const std::optional<std::string>& pdu_session_id, const std::string& qod_session_id) {
     std::unique_lock<std::shared_mutex> lock(rw_mtx_);
-    
+
     // If PDU session ID provided, use existing method
     if (pdu_session_id) {
         lock.unlock(); // Release lock before calling other method to avoid recursive locking
         return add_qod_session_to_pdu_session(key, *pdu_session_id, qod_session_id);
     }
-    
+
     // Otherwise, create provisional UE state if needed and add to first available PDU session
     std::string key_string = key.get_primary_key();
     auto it = ue_states_by_key_.find(key_string);
-    
+
     if (it == ue_states_by_key_.end()) {
         // Create provisional state
         AfUeSubscriptionState new_state(key);
-        new_state.resolution_state = AfUeSubscriptionState::ResolutionState::PROVISIONAL;
-        
+        // FIXME: Use constructor - new_state should be created with provisional constructor
+
+        // new_state.resolution_state = AfUeSubscriptionState::ResolutionState::PROVISIONAL;
+
         auto [inserted_it, success] = ue_states_by_key_.emplace(key_string, std::move(new_state));
         add_ue_indices(inserted_it->second);
         it = inserted_it;
     }
-    
+
     // Add to first PDU session or create one if none exists
-    if (it->second.pdu_sessions.empty()) {
+    auto& pdu_sessions = it->second.get_mutable_pdu_sessions();
+    if (pdu_sessions.empty()) {
         // Create a default PDU session
         PduSessionData default_pdu;
         default_pdu.pdu_session_id = "provisional-" + key_string;
         default_pdu.status = "PROVISIONAL";
-        it->second.pdu_sessions.push_back(default_pdu);
+        pdu_sessions.push_back(default_pdu);
     }
-    
+
     // Add QoD session to first PDU session
-    it->second.pdu_sessions[0].active_qod_session_ids.insert(qod_session_id);
-    it->second.last_updated = std::chrono::system_clock::now();
-    
+    pdu_sessions[0].active_qod_session_ids.insert(qod_session_id);
+    it->second.record_activity();
     return true;
 }
 
@@ -784,22 +784,23 @@ bool UeStateManager::remove_qod_session_from_ue(const UeKey& key, const std::str
     std::unique_lock<std::shared_mutex> lock(rw_mtx_);
     std::string key_string = key.get_primary_key();
     auto it = ue_states_by_key_.find(key_string);
-    
+
     if (it == ue_states_by_key_.end()) {
         return false;
     }
-    
+
     bool removed = false;
-    for (auto& pdu_session : it->second.pdu_sessions) {
+    auto& pdu_sessions = it->second.get_mutable_pdu_sessions();
+    for (auto& pdu_session : pdu_sessions) {
         if (pdu_session.active_qod_session_ids.erase(qod_session_id) > 0) {
             removed = true;
         }
     }
-    
+
     if (removed) {
-        it->second.last_updated = std::chrono::system_clock::now();
+        it->second.record_activity();
     }
-    
+
     return removed;
 }
 
@@ -807,16 +808,16 @@ void UeStateManager::cleanup_expired_provisional_states(std::chrono::seconds max
     std::unique_lock<std::shared_mutex> lock(rw_mtx_);
     auto now = std::chrono::system_clock::now();
     std::vector<std::string> to_remove;
-    
+
     for (const auto& [key_str, ue_state] : ue_states_by_key_) {
-        if (ue_state.resolution_state == AfUeSubscriptionState::ResolutionState::PROVISIONAL) {
-            auto age = std::chrono::duration_cast<std::chrono::seconds>(now - ue_state.created_at);
+        if (ue_state.get_resolution_state() == AfUeSubscriptionState::ResolutionState::PROVISIONAL) {
+            auto age = std::chrono::duration_cast<std::chrono::seconds>(now - ue_state.get_created_at());
             if (age > max_age) {
                 to_remove.push_back(key_str);
             }
         }
     }
-    
+
     for (const auto& key : to_remove) {
         auto it = ue_states_by_key_.find(key);
         if (it != ue_states_by_key_.end()) {
@@ -828,16 +829,16 @@ void UeStateManager::cleanup_expired_provisional_states(std::chrono::seconds max
 
 std::unordered_map<std::string, size_t> UeStateManager::get_state_statistics() const {
     std::shared_lock<std::shared_mutex> lock(rw_mtx_);
-    
+
     std::unordered_map<std::string, size_t> stats;
     stats["total_states"] = ue_states_by_key_.size();
     stats["resolved_count"] = 0;
     stats["provisional_count"] = 0;
     stats["partial_count"] = 0;
     stats["active_qod_sessions"] = 0;
-    
+
     for (const auto& [key_str, ue_state] : ue_states_by_key_) {
-        switch (ue_state.resolution_state) {
+        switch (ue_state.get_resolution_state()) {
             case AfUeSubscriptionState::ResolutionState::RESOLVED:
                 stats["resolved_count"]++;
                 break;
@@ -848,12 +849,12 @@ std::unordered_map<std::string, size_t> UeStateManager::get_state_statistics() c
                 stats["partial_count"]++;
                 break;
         }
-        
-        for (const auto& pdu : ue_state.pdu_sessions) {
+
+        for (const auto& pdu : ue_state.get_pdu_sessions()) {
             stats["active_qod_sessions"] += pdu.active_qod_session_ids.size();
         }
     }
-    
+
     return stats;
 }
 
@@ -869,36 +870,36 @@ const AfUeSubscriptionState* UeStateManager::get_ue_state_internal(const std::st
 
 void UeStateManager::update_indices_for_key_change(const std::string& old_key, const std::string& new_key, const AfUeSubscriptionState& ue_state) {
     // Remove old indices that point to old_key
-    if (ue_state.supi) {
-        auto it = key_by_supi_.find(ue_state.supi->value);
+    if (ue_state.get_supi()) {
+        auto it = key_by_supi_.find(ue_state.get_supi()->value);
         if (it != key_by_supi_.end() && it->second == old_key) {
             it->second = new_key;
         }
     }
-    
-    if (ue_state.gpsi) {
-        auto it = key_by_gpsi_.find(ue_state.gpsi->value);
+
+    if (ue_state.get_gpsi()) {
+        auto it = key_by_gpsi_.find(ue_state.get_gpsi()->value);
         if (it != key_by_gpsi_.end() && it->second == old_key) {
             it->second = new_key;
         }
     }
-    
+
     // Update PDU session indices
-    for (const auto& pdu : ue_state.pdu_sessions) {
+    for (const auto& pdu : ue_state.get_pdu_sessions()) {
         if (pdu.ue_ipv4_address) {
             auto it = key_by_ipv4_addr_.find(pdu.ue_ipv4_address->value);
             if (it != key_by_ipv4_addr_.end() && it->second == old_key) {
                 it->second = new_key;
             }
         }
-        
+
         for (const auto& ipv6_addr : pdu.ue_ipv6_addresses) {
             auto it = key_by_ipv6_addr_.find(ipv6_addr.value);
             if (it != key_by_ipv6_addr_.end() && it->second == old_key) {
                 it->second = new_key;
             }
         }
-        
+
         for (const auto& ipv6_prefix : pdu.ue_ipv6_prefixes) {
             auto it = key_by_ipv6_prefix_.find(ipv6_prefix.value);
             if (it != key_by_ipv6_prefix_.end() && it->second == old_key) {
