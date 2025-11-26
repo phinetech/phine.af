@@ -14,7 +14,7 @@ QodStateManager::QodStateManager() {
     // Setup logger
     // Setup logger
     initializeLogger(spdlog::level::debug);
-    
+
     // Initialize default QoS profile mappings
     initialize_default_mappings();
 
@@ -27,11 +27,11 @@ QodStateManager::~QodStateManager() {
 
 void QodStateManager::initializeLogger(spdlog::level::level_enum log_level) {
     logger_ = spdlog::get("qod_state_mgr");
-    
+
     if (!logger_) {
         logger_ = spdlog::stdout_color_mt("qod_session_mgr");
     }
-    
+
     logger_->set_level(log_level);
     logger_->set_pattern("%Y-%m-%d %H:%M:%S.%e [%^%l%$] [%n] %v");
 }
@@ -50,7 +50,7 @@ void QodStateManager::initialize_default_mappings() {
         128,        // Max UL (kbps)
         128         // Max DL (kbps)
     };
-    
+
     qos_profile_mappings_["QOS_S"] = {
         2,          // 5QI = 2 (Conversational Video)
         40,         // Priority
@@ -63,7 +63,7 @@ void QodStateManager::initialize_default_mappings() {
         512,        // Max UL (kbps)
         512         // Max DL (kbps)
     };
-    
+
     qos_profile_mappings_["QOS_M"] = {
         3,          // 5QI = 3 (Real Time Gaming)
         30,         // Priority
@@ -76,7 +76,7 @@ void QodStateManager::initialize_default_mappings() {
         1024,       // Max UL (kbps)
         1024        // Max DL (kbps)
     };
-    
+
     qos_profile_mappings_["QOS_L"] = {
         4,          // 5QI = 4 (Non-Conversational Video)
         50,         // Priority
@@ -89,20 +89,20 @@ void QodStateManager::initialize_default_mappings() {
         512,        // Max UL (kbps)
         512         // Max DL (kbps)
     };
-    
+
     // Custom profiles
     qos_profile_mappings_["voice"] = {
         1, 20, 100, 0.001, std::nullopt, true, 64, 64, 128, 128
     };
-    
+
     qos_profile_mappings_["video"] = {
         2, 40, 150, 0.001, std::nullopt, true, 1024, 2048, 2048, 4096
     };
-    
+
     qos_profile_mappings_["game"] = {
         3, 30, 50, 0.001, std::nullopt, true, 512, 512, 1024, 1024
     };
-    
+
     qos_profile_mappings_["data"] = {
         9,          // 5QI = 9 (Default non-GBR)
         60,         // Priority
@@ -190,7 +190,7 @@ std::vector<std::string> QodStateManager::get_sessions_by_supi(const std::string
 
 std::vector<af::common::qod::QodSession> QodStateManager::get_sessions_by_status(af::common::qod::QosStatus status) const {
     std::lock_guard<std::mutex> lock(mtx_);
-    
+
     std::vector<af::common::qod::QodSession> result;
     result.reserve(sessions_by_id_.size());
 
@@ -199,17 +199,17 @@ std::vector<af::common::qod::QodSession> QodStateManager::get_sessions_by_status
             result.push_back(session);
         }
     }
-    
+
     return result;
 }
 
 std::vector<af::common::qod::QodSession> QodStateManager::get_all_sessions() const {
 
     std::lock_guard<std::mutex> lock(mtx_);
-    
+
     std::vector<af::common::qod::QodSession> result;
     result.reserve(sessions_by_id_.size());
-    
+
     for (const auto& [id, session] : sessions_by_id_) {
         result.push_back(session);
     }
@@ -226,8 +226,8 @@ void QodStateManager::clear_all_sessions() {
 }
 
 // Update session status and optional status info
-bool QodStateManager::update_session_status(const std::string& session_id, 
-    af::common::qod::QosStatus new_status, 
+bool QodStateManager::update_session_status(const std::string& session_id,
+    af::common::qod::QosStatus new_status,
     std::optional<af::common::qod::StatusInfo> status_info) {
     std::lock_guard<std::mutex> lock(mtx_);
     auto it = sessions_by_id_.find(session_id);
@@ -236,8 +236,8 @@ bool QodStateManager::update_session_status(const std::string& session_id,
         if (status_info) {
             it->second.status_info = status_info;
         }
-        logger_->debug("Updated status of QoD session {}: new status={}, status info={}", 
-                       session_id, static_cast<int>(new_status), 
+        logger_->debug("Updated status of QoD session {}: new status={}, status info={}",
+                       session_id, static_cast<int>(new_status),
                        status_info ? std::to_string(static_cast<int>(*status_info)) : "none");
         return true;
     }
@@ -248,9 +248,9 @@ bool QodStateManager::update_session_status(const std::string& session_id,
 std::optional<af::common::qod::QodSession> QodStateManager::get_session_by_pdu_session(
     const Supi& supi,
     const std::string& pdu_session_id) const {
-    
+
     std::lock_guard<std::mutex> lock(mtx_);
-    
+
     auto it = sessions_by_supi_.find(supi.value);
     if (it != sessions_by_supi_.end()) {
         for (const auto& session_id : it->second) {
@@ -263,8 +263,8 @@ std::optional<af::common::qod::QodSession> QodStateManager::get_session_by_pdu_s
             }
         }
     }
-    
-    return std::nullopt; // No matching session found   
+
+    return std::nullopt; // No matching session found
 }
 
 // Retrieve expired sessions based on current time and grace period
@@ -295,24 +295,28 @@ void QodStateManager::update_pcf_session_map(
 std::optional<af::common::qod::QodSession> QodStateManager::get_session_by_pcf_session_id(
     const std::string& pcf_session_id) const {
 
-    std::lock_guard<std::mutex> lock(pcf_mapping_mutex_);
+    std::string qod_session_id;
 
-    // Find QoD session ID by PCF ID
-    auto pcf_it = pcf_session_mapping_.find(pcf_session_id);
-    if (pcf_it == pcf_session_mapping_.end()) {
-        logger_->warn("No QoD session found for PCF session: {}", pcf_session_id);
-        return std::nullopt;
+    // Scope 1: Acquire pcf_mapping_mutex to lookup QoD session ID
+    {
+        std::lock_guard<std::mutex> lock(pcf_mapping_mutex_);
+
+        auto pcf_it = pcf_session_mapping_.find(pcf_session_id);
+        if (pcf_it == pcf_session_mapping_.end()) {
+            logger_->warn("No QoD session found for PCF session: {}", pcf_session_id);
+            return std::nullopt;
+        }
+
+        qod_session_id = pcf_it->second;
     }
 
-    std::string qod_session_id = pcf_it->second;
-    
-    // Get QoD session by id
+    // Scope 2: Acquire mtx_ to get session details
     return get_session_by_id(qod_session_id);
 }
 
 bool QodStateManager::remove_pcf_to_qod_session_mapping(
     const std::string& pcf_session_id) {
-    
+
     std::lock_guard<std::mutex> lock(pcf_mapping_mutex_);
     // Find and erase the mapping
     if (pcf_session_mapping_.find(pcf_session_id) == pcf_session_mapping_.end()) {
@@ -327,14 +331,14 @@ bool QodStateManager::remove_pcf_to_qod_session_mapping(
 // TODO: move to qos_profile_manager when available
 std::optional<af::common::qod::QosProfileMapping> QodStateManager::get_qos_profile_mapping(
     const std::string& qos_profile) {
-    
+
     std::lock_guard<std::mutex> lock(mappings_mutex_);
-    
+
     auto it = qos_profile_mappings_.find(qos_profile);
     if (it != qos_profile_mappings_.end()) {
         return it->second;
     }
-    
+
     return std::nullopt;
 }
 

@@ -1,7 +1,7 @@
 /**
  * @file qod_state_manager.h
  * @brief Manages state for CAMARA QualityOnDemand sessions
- * 
+ *
  * This class handles the storage, retrieval, and lifecycle management of
  * QualityOnDemand sessions.
  */
@@ -94,8 +94,8 @@ public:
      * @param status_info Optional additional status information.
      * @return True if the session was found and updated.
      */
-    bool update_session_status(const std::string& session_id, 
-        af::common::qod::QosStatus new_status, 
+    bool update_session_status(const std::string& session_id,
+        af::common::qod::QosStatus new_status,
         std::optional<af::common::qod::StatusInfo> status_info = std::nullopt);
 
     /**
@@ -140,7 +140,7 @@ public:
         const std::string& pcf_session_id);
 
     // === QoS Profile Mapping ===
-    
+
     /**
      * @brief Get QoS profile mapping
      * @param qos_profile QoS profile name
@@ -148,13 +148,13 @@ public:
      */
     std::optional<af::common::qod::QosProfileMapping> get_qos_profile_mapping(
         const std::string& qos_profile);
-    
+
     /**
      * @brief Register custom QoS profile mapping
      * @param profile_name Profile name
      * @param mapping Mapping configuration
      */
-    void register_qos_profile(const std::string& profile_name, 
+    void register_qos_profile(const std::string& profile_name,
                               const af::common::qod::QosProfileMapping& mapping);
 private:
 
@@ -162,7 +162,34 @@ private:
      * @brief Initialize logger
      */
     void initializeLogger(spdlog::level::level_enum log_level = spdlog::level::info);
-    
+
+    // =============================================================================
+    // THREAD SAFETY & LOCK ORDERING
+    // =============================================================================
+    // This class uses fine-grained locking (multiple mutexes) to reduce contention.
+    //
+    // DEADLOCK PREVENTION RULES:
+    // 1. NEVER hold multiple locks simultaneously (except with std::scoped_lock)
+    // 2. If you MUST acquire multiple locks, use this ordering:
+    //    Level 1 (acquire first):  mappings_mutex_
+    //    Level 2:                  pcf_mapping_mutex_
+    //    Level 3 (acquire last):   mtx_
+    // 3. ALWAYS release locks before calling methods that might acquire other locks
+    // 4. Use std::scoped_lock when you need multiple locks atomically
+    //
+    // Example SAFE pattern:
+    //   {
+    //     std::lock_guard<std::mutex> lock(pcf_mapping_mutex_);
+    //     auto id = get_id_from_map();
+    //   } // Release lock
+    //   return get_session_by_id(id); // Acquire different lock
+    //
+    // Example UNSAFE pattern (DEADLOCK RISK):
+    //   std::lock_guard<std::mutex> lock(pcf_mapping_mutex_);
+    //   return get_session_by_id(id); // ❌ Nested lock acquisition!
+    // =============================================================================
+
+    // Level 3: Protects primary session storage and indices
     mutable std::mutex mtx_;
 
     // Primary storage: Keyed by the unique QoD session ID.
@@ -172,15 +199,18 @@ private:
     // This is critical for efficient cleanup when a UE state changes.
     std::unordered_map<std::string /* supi */, std::unordered_set<std::string> /* session_ids */> sessions_by_supi_;
 
-    // Secondary index: Maps a QoD session ID to PCF application session ID.
-    std::unordered_map<std::string /* pcf_session_id */, std::string /* qod_session_id */> pcf_session_mapping_;
-    // Note: The reverse mapping (PCF to QoD) is maintained in Qod Session Manager
-    // because it needs to be accessed without locking this entire state manager.
+    // Level 2: Protects PCF session mapping (separate to avoid blocking main operations)
     mutable std::mutex pcf_mapping_mutex_;
+
+    // Secondary index: Maps PCF session ID to QoD session ID.
+    std::unordered_map<std::string /* pcf_session_id */, std::string /* qod_session_id */> pcf_session_mapping_;
+    // Note: The reverse mapping (QoD to PCF) is stored in the QodSession object itself
+
+    // Level 1: Protects QoS profile configuration (rarely changes, read-heavy)
+    mutable std::mutex mappings_mutex_;
 
     // QoS profile mappings
     std::unordered_map<std::string, af::common::qod::QosProfileMapping> qos_profile_mappings_;
-    mutable std::mutex mappings_mutex_;
 
     // Logger
     std::shared_ptr<spdlog::logger> logger_;
