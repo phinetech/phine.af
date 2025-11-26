@@ -26,12 +26,9 @@
 #include "../../common/models/qod/qod_events.h"
 #include "ue_state_manager.h"
 #include "../../common/communication/include/message.h"
+#include "../../common/communication/include/communication_interface.h"
 
 namespace af {
-namespace core {
-    class AfOrchestrator; // Forward declaration
-}
-
 namespace qod {
 
 /**
@@ -62,37 +59,37 @@ public:
         std::shared_ptr<UeStateManager> ue_state_manager,
         std::shared_ptr<QodStateManager> qod_state_manager,
         const QodSessionConfig& config = QodSessionConfig{});
-    
+
     /**
      * @brief Destructor
      */
     ~QodSessionManager();
-    
+
     /**
-     * @brief Initialize the QoD session manager
-     * @param orchestrator Pointer to the orchestrator
+     * @brief Initialize the QoD session manager with PCF communication service
+     * @param pcf_service Shared pointer to PCF communication service for policy enforcement
      */
-    void initialize(af::core::AfOrchestrator* orchestrator);
-    
+    void initialize(std::shared_ptr<af::communication::CommunicationService> pcf_service);
+
     /**
      * @brief Start the session manager (cleanup threads, etc.)
      */
     void start();
-    
+
     /**
      * @brief Stop the session manager
      */
     void stop();
-    
+
     // === Session Management Operations ===
-    
+
     /**
      * @brief Create a new QoD session
      * @param request Session creation request
      * @return Created session or nullopt on failure
      */
     std::optional<af::common::qod::QodSession> create_session(const af::common::qod::CreateSessionRequest& request);
-    
+
     /**
      * @brief Get session information
      * @param session_id Session ID
@@ -102,7 +99,7 @@ public:
     std::optional<af::common::qod::QodSession> get_session(
         const std::string& session_id,
         const std::string& api_consumer_id);
-    
+
     /**
      * @brief Delete a session
      * @param session_id Session ID
@@ -112,7 +109,7 @@ public:
     bool delete_session(
         const std::string& session_id,
         const std::string& api_consumer_id);
-    
+
     /**
      * @brief Extend session duration
      * @param request Extension request
@@ -122,7 +119,7 @@ public:
     std::optional<af::common::qod::QodSession> extend_session_duration(
         const af::common::qod::ExtendSessionDurationRequest& request,
         const std::string& api_consumer_id);
-    
+
     /**
      * @brief Retrieve sessions for a device
      * @param request Retrieval request
@@ -130,9 +127,9 @@ public:
      */
     std::vector<af::common::qod::QodSession> retrieve_sessions_by_device(
         const af::common::qod::RetrieveSessionsRequest& request);
-    
+
     // === PCF Integration ===
-    
+
     /**
      * @brief Handle PCF session creation response
      * @param session_id QoD session ID
@@ -145,7 +142,7 @@ public:
         const std::string& pcf_session_id,
         bool success,
         const std::string& error_message = "");
-    
+
     /**
      * @brief Handle PCF session termination notification
      * @param pcf_session_id PCF session ID
@@ -154,22 +151,22 @@ public:
     void handle_pcf_session_terminated(
         const std::string& pcf_session_id,
         const std::string& reason);
-    
+
     // === Notification Management ===
-    
+
     /**
      * @brief Set notification delivery handler
      * @param handler Notification delivery implementation
      */
     void set_notification_handler(
         std::shared_ptr<af::common::qod::INotificationDelivery> handler);
-    
+
     /**
      * @brief Get all active sessions
      * @return Vector of all active sessions
      */
     std::vector<af::common::qod::QodSession> get_all_sessions();
-    
+
     /**
      * @brief Get sessions by status
      * @param status QoS status to filter by
@@ -195,7 +192,7 @@ public:
 
 private:
     // === Internal Methods ===
-    
+
     /**
      * @brief Create or get UE key from session
      * @param session QoD session
@@ -208,7 +205,7 @@ private:
      * @param device QoD device specification
      * @return Resolved SUPI and PDU session info if found
      */
-    std::pair<std::optional<Supi>, std::optional<std::string>> 
+    std::pair<std::optional<Supi>, std::optional<std::string>>
         resolve_device(const af::common::qod::QodDevice& device);
 
     /**
@@ -229,7 +226,7 @@ private:
      * @return true if profile is valid and available
      */
     bool validate_qos_profile(const std::string& profile);
-    
+
     /**
      * @brief Check for conflicting sessions
      * @param device Device identifier
@@ -239,23 +236,23 @@ private:
     std::optional<std::string> check_session_conflict(
         const af::common::qod::QodDevice& device,
         const af::common::qod::ApplicationServer& app_server);
-    
+
     /**
      * @brief Apply session to PCF
      * @param session Session to apply
      * @return true if successfully sent to PCF
      */
     bool apply_session_to_pcf(af::common::qod::QodSession& session);
-    
+
     /**
      * @brief Remove session from PCF
      * @param session Session to remove
      * @return true if successfully removed
      */
     bool remove_session_from_pcf(const af::common::qod::QodSession& session);
-    
+
     // TODO: Create an update_session_in_pcf method if needed in future
-    
+
     /**
      * @brief Send notification for session status change
      * @param session Session that changed
@@ -266,33 +263,33 @@ private:
         const af::common::qod::QodSession& session,
         af::common::qod::QosStatus old_status,
         std::optional<af::common::qod::StatusInfo> status_info = std::nullopt);
-    
+
     /**
      * @brief Cleanup expired and terminated sessions
-     * 
+     *
      * This method checks for sessions that have expired based on their
      * expiration time and a configured grace period.
      */
     void cleanup_expired_sessions();
-    
+
     /**
      * @brief Session cleanup thread function
      */
     void session_cleanup_thread();
-    
+
     /**
      * @brief Generate a unique session ID
      * @return UUID format session ID
      */
     std::string generate_session_id();
-    
+
     /**
      * @brief Build PCF request for QoD session
      * @param session QoD session
      * @return JSON payload for PCF request
      */
     nlohmann::json build_pcf_request(const af::common::qod::QodSession& session);
-    
+
     /**
      * @brief Convert device identifiers to PCF format
      * @param device QoD device
@@ -302,41 +299,41 @@ private:
     nlohmann::json convert_device_to_pcf(
         const af::common::qod::QodDevice& device,
         const std::optional<Supi>& supi);
-    
+
     /**
      * @brief Build flow filters for PCF
      * @param session QoD session
      * @return Flow description for PCF
      */
     nlohmann::json build_flow_filters(const af::common::qod::QodSession& session);
-    
+
     /**
      * @brief Get maximum duration for QoS profile
      * @param profile QoS profile name
      * @return Maximum allowed duration
      */
     std::chrono::seconds get_max_duration_for_profile(const std::string& profile);
-    
+
     // === Member Variables ===
-    
+
     // Core dependencies
-    af::core::AfOrchestrator* orchestrator_;
+    std::shared_ptr<af::communication::CommunicationService> pcf_service_;
     std::shared_ptr<UeStateManager> ue_state_manager_;
     std::shared_ptr<QodStateManager> qod_state_manager_;
-    
+
     // Configuration
     QodSessionConfig config_;
-    
+
     // Notification handling
     std::shared_ptr<af::common::qod::INotificationDelivery> notification_handler_;
-    
+
     // Session cleanup
     std::thread cleanup_thread_;
     std::atomic<bool> cleanup_running_{false};
-    
+
     // Logger
     std::shared_ptr<spdlog::logger> logger_;
-    
+
     // Supported QoS profiles (would be loaded from configuration)
     std::unordered_set<std::string> supported_profiles_{
         "QOS_E", "QOS_S", "QOS_M", "QOS_L",  // Standard CAMARA profiles

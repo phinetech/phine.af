@@ -45,9 +45,13 @@ QodSessionManager::~QodSessionManager() {
     stop();
 }
 
-void QodSessionManager::initialize(af::core::AfOrchestrator* orchestrator) {
-    orchestrator_ = orchestrator;
-    logger_->info("QoD Session Manager initialized");
+void QodSessionManager::initialize(std::shared_ptr<af::communication::CommunicationService> pcf_service) {
+    pcf_service_ = pcf_service;
+    if (pcf_service_) {
+        logger_->info("QoD Session Manager initialized with PCF service");
+    } else {
+        logger_->warn("QoD Session Manager initialized without PCF service");
+    }
 }
 
 void QodSessionManager::start() {
@@ -905,48 +909,10 @@ std::optional<std::string> QodSessionManager::check_session_conflict(
 bool QodSessionManager::apply_session_to_pcf(af::common::qod::QodSession& session) {
     logger_->info("Applying QoD session {} to PCF", session.session_id);
 
-    if (!orchestrator_) {
-        logger_->error("Orchestrator not initialized");
+    if (!pcf_service_) {
+        logger_->error("PCF communication service not initialized");
         return false;
     }
-
-    std::shared_ptr<af::communication::CommunicationService> pcf_comm;
-
-    try {
-        logger_->debug("Retrieving PCF communication service");
-        // Get PCF communication service
-        auto& comm_services = orchestrator_->get_communication_services();
-        logger_->debug("Available communication services:");
-
-        // Check if comm_services is valid and not a null pointer
-
-        if (comm_services.empty()) {
-            logger_->error("No communication services available from orchestrator.");
-            return false;
-        }
-        logger_->debug("Communication services count: {}", comm_services.size());
-
-        if (comm_services.empty() && comm_services.find("pcf") == comm_services.end()) {
-            logger_->error("Orchestrator returned an empty or invalid communication services map.");
-            return false;
-        }
-
-        auto pcf_comm_it = comm_services.find("pcf");
-        logger_->debug("PCF communication service found");
-
-        if (pcf_comm_it == comm_services.end() || !pcf_comm_it->second) {
-            logger_->error("PCF communication service not available");
-            return false; // Log error and return, do not exit program
-        }
-        logger_->debug("PCF communication service is available");
-
-        pcf_comm = pcf_comm_it->second;
-    }
-    catch (const std::exception& e) {
-        logger_->error("Error accessing PCF communication service: {}", e.what());
-        return false;
-    }
-
 
     try {
         // Build PCF request
@@ -969,7 +935,7 @@ bool QodSessionManager::apply_session_to_pcf(af::common::qod::QodSession& sessio
         // Send async request to PCF
         // The response will come back via handle_pcf_session_response
         // TODO: Use actual PCF address from config
-        auto response = pcf_comm->send_request("192.168.70.140:50055", msg);
+        auto response = pcf_service_->send_request("192.168.70.140:50055", msg);
 
         if (!response) {
             logger_->error("Failed to send request to PCF");
@@ -1019,20 +985,10 @@ bool QodSessionManager::remove_session_from_pcf(const af::common::qod::QodSessio
         return true;
     }
 
-    if (!orchestrator_) {
-        logger_->error("Orchestrator not initialized");
+    if (!pcf_service_) {
+        logger_->error("PCF communication service not initialized");
         return false;
     }
-
-    auto& comm_services = orchestrator_->get_communication_services();
-    auto pcf_comm_it = comm_services.find("pcf");
-
-    if (pcf_comm_it == comm_services.end() || !pcf_comm_it->second) {
-        logger_->error("PCF communication service not available");
-        return false;
-    }
-
-    auto& pcf_comm = pcf_comm_it->second;
 
     try {
         // Create delete request
@@ -1052,7 +1008,7 @@ bool QodSessionManager::remove_session_from_pcf(const af::common::qod::QodSessio
         logger_->debug("Sending delete request to PCF for session: {}", *session.pcf_session_id);
 
         // TODO: Use actual PCF address from config
-        auto response = pcf_comm->send_request("192.168.70.140:50055", msg);
+        auto response = pcf_service_->send_request("192.168.70.140:50055", msg);
 
         if (response && response->message_type == "pcf_delete_app_session") {
 

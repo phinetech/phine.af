@@ -20,10 +20,6 @@
 #include "../../common/models/qod/qod_session.h"
 
 namespace af {
-namespace core {
-    class AfOrchestrator; // Forward declaration
-}
-
 namespace qod {
 
 /**
@@ -51,12 +47,6 @@ public:
      * @brief Destructor
      */
     ~QodHandler();
-
-    /**
-     * @brief Initialize the QoD handler
-     * @param orchestrator Pointer to the orchestrator
-     */
-    void initialize(af::core::AfOrchestrator* orchestrator);
 
     // === CAMARA QoD API Handlers ===
 
@@ -245,7 +235,6 @@ private:
 
     // === Member Variables ===
 
-    af::core::AfOrchestrator* orchestrator_;
     std::shared_ptr<QodSessionManager> session_manager_;
     std::shared_ptr<spdlog::logger> logger_;
 };
