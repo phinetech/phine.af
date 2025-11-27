@@ -109,7 +109,6 @@ public:
         const Supi& supi,
         const std::string& pdu_session_id) const;
 
-    // get_expired_sessions
     /**
      * @brief Retrieves all sessions that have expired based on the current time and a grace period.
      * @param current_time The current system time.
