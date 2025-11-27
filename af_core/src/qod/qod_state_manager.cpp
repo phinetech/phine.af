@@ -115,7 +115,7 @@ void QodStateManager::initialize_default_mappings() {
 }
 
 void QodStateManager::add_session(const af::common::qod::QodSession& session) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::unique_lock<std::shared_mutex> lock(mtx_);
     sessions_by_id_[session.session_id] = session;
     logger_->debug("Added QoD session: {}", session.session_id);
 
@@ -127,7 +127,7 @@ void QodStateManager::add_session(const af::common::qod::QodSession& session) {
 }
 
 std::optional<af::common::qod::QodSession> QodStateManager::get_session_by_id(const std::string& session_id) const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::shared_lock<std::shared_mutex> lock(mtx_);
     auto it = sessions_by_id_.find(session_id);
     if (it != sessions_by_id_.end()) {
         return it->second;
@@ -136,7 +136,7 @@ std::optional<af::common::qod::QodSession> QodStateManager::get_session_by_id(co
 }
 
 bool QodStateManager::remove_session(const std::string& session_id) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::unique_lock<std::shared_mutex> lock(mtx_);
     // TODO: Update the southbound handlers when session is removed
     auto it = sessions_by_id_.find(session_id);
     if (it == sessions_by_id_.end()) {
@@ -164,7 +164,7 @@ bool QodStateManager::remove_session(const std::string& session_id) {
 }
 
 bool QodStateManager::update_session(const af::common::qod::QodSession& session) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::unique_lock<std::shared_mutex> lock(mtx_);
     auto it = sessions_by_id_.find(session.session_id);
     if (it != sessions_by_id_.end()) {
         // Simple overwrite. Assumes SUPI does not change after creation.
@@ -176,7 +176,7 @@ bool QodStateManager::update_session(const af::common::qod::QodSession& session)
 }
 
 std::vector<std::string> QodStateManager::get_sessions_by_supi(const std::string& supi) const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::shared_lock<std::shared_mutex> lock(mtx_);
 
     auto it = sessions_by_supi_.find(supi);
     if (it != sessions_by_supi_.end()) {
@@ -189,7 +189,7 @@ std::vector<std::string> QodStateManager::get_sessions_by_supi(const std::string
 }
 
 std::vector<af::common::qod::QodSession> QodStateManager::get_sessions_by_status(af::common::qod::QosStatus status) const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::shared_lock<std::shared_mutex> lock(mtx_);
 
     std::vector<af::common::qod::QodSession> result;
     result.reserve(sessions_by_id_.size());
@@ -205,7 +205,7 @@ std::vector<af::common::qod::QodSession> QodStateManager::get_sessions_by_status
 
 std::vector<af::common::qod::QodSession> QodStateManager::get_all_sessions() const {
 
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::shared_lock<std::shared_mutex> lock(mtx_);
 
     std::vector<af::common::qod::QodSession> result;
     result.reserve(sessions_by_id_.size());
@@ -219,7 +219,7 @@ std::vector<af::common::qod::QodSession> QodStateManager::get_all_sessions() con
 
 // Clear all stored sessions
 void QodStateManager::clear_all_sessions() {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::unique_lock<std::shared_mutex> lock(mtx_);
     sessions_by_id_.clear();
     sessions_by_supi_.clear();
     logger_->info("Cleared all QoD sessions from state manager");
@@ -229,7 +229,7 @@ void QodStateManager::clear_all_sessions() {
 bool QodStateManager::update_session_status(const std::string& session_id,
     af::common::qod::QosStatus new_status,
     std::optional<af::common::qod::StatusInfo> status_info) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::unique_lock<std::shared_mutex> lock(mtx_);
     auto it = sessions_by_id_.find(session_id);
     if (it != sessions_by_id_.end()) {
         it->second.qos_status = new_status;
@@ -249,7 +249,7 @@ std::optional<af::common::qod::QodSession> QodStateManager::get_session_by_pdu_s
     const Supi& supi,
     const std::string& pdu_session_id) const {
 
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::shared_lock<std::shared_mutex> lock(mtx_);
 
     auto it = sessions_by_supi_.find(supi.value);
     if (it != sessions_by_supi_.end()) {
@@ -273,7 +273,7 @@ std::vector<af::common::qod::QodSession> QodStateManager::get_expired_sessions(
     const std::chrono::seconds& grace_period) const {
 
     std::vector<af::common::qod::QodSession> expired_sessions;
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::shared_lock<std::shared_mutex> lock(mtx_);
     for (const auto& [session_id, session] : sessions_by_id_) {
         if (session.expires_at) {
             auto expiration_with_grace = *session.expires_at + grace_period;
@@ -288,7 +288,7 @@ std::vector<af::common::qod::QodSession> QodStateManager::get_expired_sessions(
 void QodStateManager::update_pcf_session_map(
     std:: string pcf_session_id, std::string qod_session_id) {
 
-    std::lock_guard<std::mutex> lock(pcf_mapping_mutex_);
+    std::unique_lock<std::shared_mutex> lock(pcf_mapping_mutex_);
     pcf_session_mapping_[pcf_session_id] = qod_session_id;
 }
 
@@ -299,7 +299,7 @@ std::optional<af::common::qod::QodSession> QodStateManager::get_session_by_pcf_s
 
     // Scope 1: Acquire pcf_mapping_mutex to lookup QoD session ID
     {
-        std::lock_guard<std::mutex> lock(pcf_mapping_mutex_);
+        std::shared_lock<std::shared_mutex> lock(pcf_mapping_mutex_);
 
         auto pcf_it = pcf_session_mapping_.find(pcf_session_id);
         if (pcf_it == pcf_session_mapping_.end()) {
@@ -317,7 +317,7 @@ std::optional<af::common::qod::QodSession> QodStateManager::get_session_by_pcf_s
 bool QodStateManager::remove_pcf_to_qod_session_mapping(
     const std::string& pcf_session_id) {
 
-    std::lock_guard<std::mutex> lock(pcf_mapping_mutex_);
+    std::unique_lock<std::shared_mutex> lock(pcf_mapping_mutex_);
     // Find and erase the mapping
     if (pcf_session_mapping_.find(pcf_session_id) == pcf_session_mapping_.end()) {
         logger_->warn("No mapping found for PCF session ID: {}", pcf_session_id);
@@ -332,7 +332,7 @@ bool QodStateManager::remove_pcf_to_qod_session_mapping(
 std::optional<af::common::qod::QosProfileMapping> QodStateManager::get_qos_profile_mapping(
     const std::string& qos_profile) {
 
-    std::lock_guard<std::mutex> lock(mappings_mutex_);
+    std::shared_lock<std::shared_mutex> lock(mappings_mutex_);
 
     auto it = qos_profile_mappings_.find(qos_profile);
     if (it != qos_profile_mappings_.end()) {
@@ -344,7 +344,7 @@ std::optional<af::common::qod::QosProfileMapping> QodStateManager::get_qos_profi
 
 void QodStateManager::register_qos_profile(const std::string& profile_name,
                                         const af::common::qod::QosProfileMapping& mapping) {
-    std::lock_guard<std::mutex> lock(mappings_mutex_);
+    std::unique_lock<std::shared_mutex> lock(mappings_mutex_);
     qos_profile_mappings_[profile_name] = mapping;
     logger_->info("Registered QoS profile mapping: {}", profile_name);
 }

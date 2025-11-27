@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 #include <mutex>
+#include <shared_mutex>
 #include <optional>
 #include <spdlog/spdlog.h>
 
@@ -190,7 +191,8 @@ private:
     // =============================================================================
 
     // Level 3: Protects primary session storage and indices
-    mutable std::mutex mtx_;
+    // Using shared_mutex to allow concurrent reads (shared_lock) while maintaining exclusive writes (unique_lock)
+    mutable std::shared_mutex mtx_;
 
     // Primary storage: Keyed by the unique QoD session ID.
     std::unordered_map<std::string, af::common::qod::QodSession> sessions_by_id_;
@@ -200,14 +202,16 @@ private:
     std::unordered_map<std::string /* supi */, std::unordered_set<std::string> /* session_ids */> sessions_by_supi_;
 
     // Level 2: Protects PCF session mapping (separate to avoid blocking main operations)
-    mutable std::mutex pcf_mapping_mutex_;
+    // Using shared_mutex for concurrent PCF session lookups
+    mutable std::shared_mutex pcf_mapping_mutex_;
 
     // Secondary index: Maps PCF session ID to QoD session ID.
     std::unordered_map<std::string /* pcf_session_id */, std::string /* qod_session_id */> pcf_session_mapping_;
     // Note: The reverse mapping (QoD to PCF) is stored in the QodSession object itself
 
     // Level 1: Protects QoS profile configuration (rarely changes, read-heavy)
-    mutable std::mutex mappings_mutex_;
+    // Using shared_mutex - profile lookups are very frequent, updates are rare
+    mutable std::shared_mutex mappings_mutex_;
 
     // QoS profile mappings
     std::unordered_map<std::string, af::common::qod::QosProfileMapping> qos_profile_mappings_;
