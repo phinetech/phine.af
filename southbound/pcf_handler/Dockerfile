@@ -108,7 +108,7 @@ RUN apt-get update && \
 RUN ldconfig
 
 # Build common runtime libraries (AF common components)
-COPY ./southbound/common/ /app/common/
+COPY ./common/ /app/common/
 
 RUN cd /app/common && \
     mkdir -p build && \
@@ -184,13 +184,13 @@ RUN ldconfig
 RUN ls /app/build-output/generated/ || echo "Generated headers not found"
 
 # Copy AF common source (needed for headers/includes)
-COPY ./southbound/common/ /app/common/
+COPY ./common/ /app/common/
 
 # Copy PCF Handler source files
-COPY ./southbound/pcf_handler/src /app/src/
-COPY ./southbound/pcf_handler/build/cmake /app/build/cmake/
-COPY ./southbound/pcf_handler/include /app/include/
-COPY ./southbound/pcf_handler/CMakeLists.txt /app/CMakeLists.txt
+COPY ./pcf_handler/src /app/src/
+COPY ./pcf_handler/build/cmake /app/build/cmake/
+COPY ./pcf_handler/include /app/include/
+COPY ./pcf_handler/CMakeLists.txt /app/CMakeLists.txt
 
 # Build the af_core component
 RUN cd /app && \
@@ -263,7 +263,7 @@ RUN apt-get update && \
       libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY ./southbound/pcf_handler/config/pcf_handler.yaml /etc/oai/af/pcf_handler.yaml
+COPY ./pcf_handler/config/pcf_handler.yaml /etc/oai/af/pcf_handler.yaml
 
 # Create a non-root user
 RUN groupadd -r afpcfuser && useradd -r -g afpcfuser afpcfuser && \

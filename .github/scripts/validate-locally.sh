@@ -103,7 +103,7 @@ fi
 
 # Build PCF Handler
 echo "Building PCF Handler..."
-if docker build -f southbound/pcf_handler/Dockerfile -t pcf-handler:validation . > /tmp/pcf-handler-build.log 2>&1; then
+if docker build -f southbound/pcf_handler/Dockerfile -t pcf-handler:validation southbound/ > /tmp/pcf-handler-build.log 2>&1; then
     print_status 0 "PCF Handler built successfully"
 else
     print_status 1 "PCF Handler build failed (see /tmp/pcf-handler-build.log)"

@@ -2,18 +2,30 @@ version: "3.8"
 
 services:
   free5gc-upf:
-    container_name: upf
-    image: free5gc/upf:v4.1.0
-    command: bash -c "./upf-iptables.sh && ./upf -c ./config/upfcfg.yaml"
+    container_name: "upf"
+    image: tariromukute/oai-upf:fix-measurement-ie-v2
+    expose:
+      - 2152/udp
+      - 8805/udp
+      - 8080/tcp
     volumes:
-      - ./free5gc/config/upfcfg.yaml:/free5gc/config/upfcfg.yaml
-      - ./free5gc/config/upf-iptables.sh:/free5gc/upf-iptables.sh
+      - ./conf/oai_upf_config.yaml:/openair-upf/etc/config.yaml
+      - /sys/fs/bpf:/sys/fs/bpf
+      - /sys/kernel/debug:/sys/kernel/debug:rw
+    environment:
+      - TZ=Europe/Paris
+    depends_on:
+      - free5gc-nrf
     cap_add:
       - NET_ADMIN
-    networks:
-      privnet:
-        aliases:
-          - upf.free5gc.org
+      - SYS_ADMIN
+    cap_drop:
+      - ALL
+    privileged: true
+    network_mode: host
+    extra_hosts:
+      - "oai-ext-dn:192.168.72.135"
+      - "oai-nrf:192.168.70.139"
 
   db:
     container_name: mongodb
@@ -26,7 +38,8 @@ services:
       - ./free5gc/dump:/data/dump
       - ./free5gc/mongorestore.sh:/docker-entrypoint-initdb.d/mongorestore.sh
     networks:
-      privnet:
+      public_net:
+        ipv4_address: 192.168.70.131
         aliases:
           - db
 
@@ -43,9 +56,10 @@ services:
       DB_URI: mongodb://db/free5gc
       GIN_MODE: release
     networks:
-      privnet:
+      public_net:
         aliases:
           - nrf.free5gc.org
+        ipv4_address: 192.168.70.130
     depends_on:
       - db
 
@@ -61,8 +75,8 @@ services:
     environment:
       GIN_MODE: release
     networks:
-      privnet:
-        ipv4_address: 192.168.70.16
+      public_net:
+        ipv4_address: 192.168.70.132
         aliases:
           - amf.free5gc.org
     depends_on:
@@ -80,7 +94,8 @@ services:
     environment:
       GIN_MODE: release
     networks:
-      privnet:
+      public_net:
+        ipv4_address: 192.168.70.138
         aliases:
           - ausf.free5gc.org
     depends_on:
@@ -98,7 +113,8 @@ services:
     environment:
       GIN_MODE: release
     networks:
-      privnet:
+      public_net:
+        ipv4_address: 192.168.70.146
         aliases:
           - nssf.free5gc.org
     depends_on:
@@ -116,7 +132,7 @@ services:
     environment:
       GIN_MODE: release
     networks:
-      privnet:
+      public_net:
         ipv4_address: 192.168.70.139
         aliases:
           - pcf.free5gc.org
@@ -136,7 +152,8 @@ services:
     environment:
       GIN_MODE: release
     networks:
-      privnet:
+      public_net:
+        ipv4_address: 192.168.70.133
         aliases:
           - smf.free5gc.org
     depends_on:
@@ -155,7 +172,8 @@ services:
     environment:
       GIN_MODE: release
     networks:
-      privnet:
+      public_net:
+        ipv4_address: 192.168.70.137
         aliases:
           - udm.free5gc.org
     depends_on:
@@ -175,7 +193,8 @@ services:
       DB_URI: mongodb://db/free5gc
       GIN_MODE: release
     networks:
-      privnet:
+      public_net:
+        ipv4_address: 192.168.70.136
         aliases:
           - udr.free5gc.org
     depends_on:
@@ -195,34 +214,14 @@ services:
       DB_URI: mongodb://db/free5gc
       GIN_MODE: release
     networks:
-      privnet:
+      public_net:
+        ipv4_address: 192.168.70.150
         aliases:
           - chf.free5gc.org
     depends_on:
       - db
       - free5gc-nrf
       - free5gc-webui
-
-  free5gc-n3iwf:
-    container_name: n3iwf
-    image: free5gc/n3iwf:v4.1.0
-    command: ./n3iwf -c ./config/n3iwfcfg.yaml
-    volumes:
-      - ./free5gc/config/n3iwfcfg.yaml:/free5gc/config/n3iwfcfg.yaml
-      - ./free5gc/config/n3iwf-ipsec.sh:/free5gc/n3iwf-ipsec.sh
-    environment:
-      GIN_MODE: release
-    cap_add:
-      - NET_ADMIN
-    networks:
-      privnet:
-        ipv4_address: 192.168.70.15
-        aliases:
-          - n3iwf.free5gc.org
-    depends_on:
-      - free5gc-amf
-      - free5gc-smf
-      - free5gc-upf
 
   free5gc-tngf:
     container_name: tngf
@@ -253,7 +252,8 @@ services:
     environment:
       GIN_MODE: release
     networks:
-      privnet:
+      public_net:
+        ipv4_address: 192.168.70.151
         aliases:
           - nef.free5gc.org
     depends_on:
@@ -271,7 +271,8 @@ services:
     environment:
       - GIN_MODE=release
     networks:
-      privnet:
+      public_net:
+        ipv4_address: 192.168.70.152
         aliases:
           - webui
     ports:
@@ -281,6 +282,32 @@ services:
     depends_on:
       - db
       - free5gc-nrf
+
+  oai-ext-dn:
+    privileged: true
+    init: true
+    container_name: oai-ext-dn
+    image: oaisoftwarealliance/trf-gen-cn5g:latest
+    environment:
+      - EBPF_GW_SETUP=yes
+      - EBPF_GW_N6_IP_ADDR=192.168.72.135
+      - GW_SGI_IP_ADDR=192.168.70.135
+      - GW_N3_IP_ADDR=192.168.71.135
+      - UE_IP_ADDRESS_POOL=10.60.0.0/24
+      - N6_UPF_IP_ADDR=192.168.72.129
+      - SGI_DEMO_OAI_ADDR=192.168.70.129
+    healthcheck:
+      test: /bin/bash -c "ip r | grep 10.60.0"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.135
+      n3_net:
+        ipv4_address: 192.168.71.135
+      n6_net:
+        ipv4_address: 192.168.72.135
 
   gnb:
     container_name: gnb
@@ -294,9 +321,14 @@ services:
     devices:
       - "/dev/net/tun"
     networks:
-      privnet:
+      public_net:
+        ipv4_address: 192.168.70.180
         aliases:
           - gnb.free5gc.org
+      n3_net:
+        ipv4_address: 192.168.71.180
+        aliases:
+          - gnb-n3.free5gc.org
     depends_on:
       - free5gc-amf
       - free5gc-upf
@@ -308,10 +340,10 @@ services:
       - /bin/bash
       - -c
       - |
-          sleep 15
-          echo "Starting UE..."
-          nr-ue -c /ueransim/config/uecfg.yaml
-          tail -f /dev/null
+        sleep 15
+        echo "Starting UE..."
+        nr-ue -c /ueransim/config/uecfg.yaml
+        tail -f /dev/null
     volumes:
       - ./ueransim/free5gc-gnb.yaml:/ueransim/config/gnbcfg.yaml
       - ./ueransim/free5gc-ue.yaml:/ueransim/config/uecfg.yaml
@@ -320,12 +352,14 @@ services:
     devices:
       - "/dev/net/tun"
     networks:
-      privnet:
+      public_net:
+        ipv4_address: 192.168.70.181
         aliases:
           - ue.free5gc.org
     depends_on:
       - free5gc-amf
       - free5gc-upf
+      - gnb
 
   af:
     container_name: "af"
@@ -337,16 +371,15 @@ services:
       - TZ=Europe/Paris
     depends_on:
       - free5gc-pcf
-    command: 
-    - /bin/bash
-    - -c
-    - |
+    command:
+      - /bin/bash
+      - -c
+      - |
         apt update -y && apt install curl -y
         tail -f /dev/null
     networks:
-      privnet:
+      public_net:
         ipv4_address: 192.168.70.143
-
     # Southbound Handlers
   pcf_handler:
     image: tariromukute/pcf-handler:${TAG:-latest}
@@ -360,7 +393,7 @@ services:
     volumes:
       - ./conf/pcf_handler.yaml:/etc/oai/af/pcf_handler.yaml
     networks:
-      privnet:
+      public_net:
         ipv4_address: 192.168.70.140
 
   # AF Core
@@ -371,7 +404,7 @@ services:
       context: ../af_core
       dockerfile: Dockerfile
     networks:
-      privnet:
+      public_net:
         ipv4_address: 192.168.70.141
 
   # Northbound Components
@@ -384,18 +417,34 @@ services:
       context: ../northbound/api_component
       dockerfile: Dockerfile
     networks:
-      privnet:
+      public_net:
         ipv4_address: 192.168.70.142
 
-
 networks:
-  privnet:
+  public_net:
+    driver: bridge
+    name: demo-oai-public-net
     ipam:
-      driver: default
       config:
-        - subnet: 192.168.70.0/24
+        - subnet: 192.168.70.128/26
     driver_opts:
-      com.docker.network.bridge.name: br-free5gc
+      com.docker.network.bridge.name: "demo-oai"
+  n3_net:
+    driver: bridge
+    name: demo-oai-n3-net
+    ipam:
+      config:
+        - subnet: 192.168.71.128/26
+    driver_opts:
+      com.docker.network.bridge.name: "demo-n3"
+  n6_net:
+    driver: bridge
+    name: demo-oai-n6-net
+    ipam:
+      config:
+        - subnet: 192.168.72.128/26
+    driver_opts:
+      com.docker.network.bridge.name: "demo-n6"
 
 # volumes:
 #   dbdata:
