@@ -122,7 +122,7 @@ services:
 
   free5gc-pcf:
     container_name: pcf
-    image: free5gc/pcf:v4.1.0
+    image: tariromukute/free5gc-pcf:latest
     command: ./pcf -c ./config/pcfcfg.yaml
     expose:
       - "8000"

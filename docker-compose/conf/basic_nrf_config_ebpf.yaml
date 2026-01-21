@@ -41,6 +41,10 @@ register_nf:
 
 http_version: 2
 
+# HTTP request timeout in milliseconds (default: 3000, min: 10, max: 20000)
+# Increase if SMF/other NFs take longer to respond
+http_request_timeout: 10000
+
 ############## SBI Interfaces
 ### Each NF takes its local SBI interfaces and remote interfaces from here, unless it gets them using NRF discovery mechanisms
 nfs:
@@ -142,6 +146,7 @@ amf:
                                # There's no NRF in this scenario, SMF info is taken from "nfs" section.
     enable_nssf: no
     enable_smf_selection: yes
+    enable_pcf: yes
   relative_capacity: 30
   statistics_timer_interval: 20  # in seconds
   emergency_support: false
