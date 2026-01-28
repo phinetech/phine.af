@@ -25,8 +25,13 @@ print_status() {
     fi
 }
 
+# Determine project root relative to this script
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+# Assuming script is in .github/scripts/, root is two levels up
+PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+
 # Change to repository root
-cd "$(git rev-parse --show-toplevel)"
+cd "$PROJECT_ROOT"
 
 echo -e "${YELLOW}Step 1: Code Quality Checks${NC}"
 echo "----------------------------"
@@ -56,8 +61,8 @@ if ! lsmod | grep -q gtp5g; then
     echo "Loading gtp5g module..."
     modprobe gtp5g
 
-    # Return to original directory
-    cd "$(git rev-parse --show-toplevel)"
+    # Return to project root
+    cd "$PROJECT_ROOT"
 
     if lsmod | grep -q gtp5g; then
         print_status 0 "gtp5g module installed and loaded successfully"

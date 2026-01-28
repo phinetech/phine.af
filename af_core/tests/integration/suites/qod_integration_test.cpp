@@ -16,7 +16,9 @@ TEST_F(QodIntegrationTest, A_CreateQodSession_Success) {
         {{"phoneNumber", "+1234567890"},
         {"networkAccessIdentifier", "123456789@domain.com"},
         {"publicAddress", "10.60.0.1"},
-        {"publicPort", "59765"}}
+        {"publicPort", "59765"},
+        {"ueId", "10.60.0.1"},
+        {"qos_profile", "QOS_M"}}
     );
 
     // Act
@@ -29,11 +31,11 @@ TEST_F(QodIntegrationTest, A_CreateQodSession_Success) {
 
     // Assert
     ASSERT_RESPONSE_SUCCESS(response);
-    
+
     // Use vector instead of initializer list
     std::vector<std::string> required_fields = {"applicationServer", "qosProfile", "sessionId", "duration"};
     ASSERT_RESPONSE_CONTAINS(response, required_fields);
-    
+
     ASSERT_RESPONSE_TIME(response, 5000); // Max 5 seconds
 
     // Store session ID for use in other tests
@@ -69,8 +71,8 @@ TEST_F(QodIntegrationTest, B_CreateQodSession_InvalidQosProfile) {
  */
 TEST_F(QodIntegrationTest, B_ExtendQodSession_Success) {
     // Arrange: Use session from previous test OR create new one
-    std::string session_id = QodIntegrationTest::shared_session_id_.empty() 
-        ? CreateQodSession() 
+    std::string session_id = QodIntegrationTest::shared_session_id_.empty()
+        ? CreateQodSession()
         : QodIntegrationTest::shared_session_id_;
 
     ASSERT_FALSE(session_id.empty()) << "No session ID available for extend test";
@@ -100,8 +102,8 @@ TEST_F(QodIntegrationTest, B_ExtendQodSession_Success) {
  */
 TEST_F(QodIntegrationTest, C_GetQodSession_Success) {
     // Arrange: Use session from previous test OR create new one
-    std::string session_id = QodIntegrationTest::shared_session_id_.empty() 
-        ? CreateQodSession() 
+    std::string session_id = QodIntegrationTest::shared_session_id_.empty()
+        ? CreateQodSession()
         : QodIntegrationTest::shared_session_id_;
 
     ASSERT_FALSE(session_id.empty()) << "No session ID available for get test";
@@ -149,13 +151,13 @@ TEST_F(QodIntegrationTest, D_GetQodSessions_Success) {
     // Assert
     ASSERT_GRPC_OK(response);
     ASSERT_ARRAY_SIZE(response, "", 1); // Root is array with 1 element
-    
+
     // Check first element using helper
     ASSERT_FIRST_ELEMENT_EQUALS(response, "", "sessionId", QodIntegrationTest::shared_session_id_);
-    
+
     // Or check specific index
     ASSERT_ARRAY_ELEMENT_EQUALS(response, "", 0, "sessionId", QodIntegrationTest::shared_session_id_);
-    
+
     // Check first element contains required fields
     auto required_fields = std::vector<std::string>{"sessionId", "qosProfile", "applicationServer"};
     ASSERT_FIRST_ELEMENT_CONTAINS(response, "", required_fields);
@@ -170,8 +172,8 @@ TEST_F(QodIntegrationTest, D_GetQodSessions_Success) {
  */
 TEST_F(QodIntegrationTest, E_DeleteQodSession_Success) {
     // Arrange
-    std::string session_id = QodIntegrationTest::shared_session_id_.empty() 
-        ? CreateQodSession() 
+    std::string session_id = QodIntegrationTest::shared_session_id_.empty()
+        ? CreateQodSession()
         : QodIntegrationTest::shared_session_id_;
 
     ASSERT_FALSE(session_id.empty()) << "No session ID available for delete test";

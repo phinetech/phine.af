@@ -8,6 +8,7 @@
 #include <openssl/bio.h>
 #include <openssl/evp.h>
 #include <openssl/buffer.h>
+#include <nlohmann/json.hpp>
 #include "../common/communication/include/message.h"
 
  // Include generated protobuf/gRPC code
@@ -24,7 +25,7 @@ GrpcTestClient::GrpcTestClient(const GrpcClientConfig& config)
 
 std::shared_ptr<grpc::Channel> GrpcTestClient::CreateChannel() {
     std::string target = config_.host + ":" + std::to_string(config_.port);
-    
+
     if (config_.use_tls) {
         grpc::SslCredentialsOptions ssl_opts;
         if (!config_.ca_cert_path.empty()) {
@@ -43,37 +44,37 @@ std::string GrpcTestClient::EncodePayload(const std::string& json_payload) {
     // Base64 encode the payload
     BIO *bio, *b64;
     BUF_MEM *buffer_ptr;
-    
+
     b64 = BIO_new(BIO_f_base64());
     bio = BIO_new(BIO_s_mem());
     bio = BIO_push(b64, bio);
-    
+
     BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
     BIO_write(bio, json_payload.c_str(), json_payload.length());
     BIO_flush(bio);
     BIO_get_mem_ptr(bio, &buffer_ptr);
-    
+
     std::string encoded(buffer_ptr->data, buffer_ptr->length);
     BIO_free_all(bio);
-    
+
     return encoded;
 }
 
 std::string GrpcTestClient::DecodePayload(const std::string& encoded_payload) {
     // Base64 decode the payload
     BIO *bio, *b64;
-    
+
     int decode_len = encoded_payload.length();
     std::vector<char> buffer(decode_len);
-    
+
     bio = BIO_new_mem_buf(encoded_payload.c_str(), -1);
     b64 = BIO_new(BIO_f_base64());
     bio = BIO_push(b64, bio);
-    
+
     BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
     int length = BIO_read(bio, buffer.data(), decode_len);
     BIO_free_all(bio);
-    
+
     return std::string(buffer.data(), length);
 }
 
@@ -83,8 +84,8 @@ GrpcTestResponse GrpcTestClient::SendMessage(
     const std::string& correlation_id,
     const std::map<std::string, std::string>& metadata
 ) {
-    
-    std::cerr << "Sending gRPC message of type: " << message_type 
+
+    std::cerr << "Sending gRPC message of type: " << message_type
               << " with correlation ID: " << correlation_id << std::endl;
 
     // Create request
@@ -97,26 +98,35 @@ GrpcTestResponse GrpcTestClient::SendMessage(
     for (const auto& [key, value] : metadata) {
         (*request.mutable_metadata())[key] = value;
     }
-    
+
 
     // Set correlation ID
 
     request.set_correlation_id(correlation_id);
 
     // Log the request being sent
-    std::cout << "\n┌─ gRPC Request ─────────────────────────────────────────┐" << std::endl;
-    std::cout << "│ Message Type:        " << std::setw(40) << std::left << message_type << "│" << std::endl;
-    std::cout << "│ Payload:      " << std::setw(40) << std::left << payload << "│" << std::endl;
-    std::cout << "│ Correlation ID: " << std::setw(40) << std::left << correlation_id << "│" << std::endl;
-    
+    std::cout << "\n  [" << message_type << "] Request:" << std::endl;
+    std::cout << "  Correlation ID: " << correlation_id << std::endl;
+
+    // Attempt to pretty print JSON if it looks like JSON
+    try {
+        if (!payload.empty() && (payload.front() == '{' || payload.front() == '[')) {
+             auto json = nlohmann::json::parse(payload);
+             std::cout << "  Payload: \n" << json.dump(4) << std::endl; // Indent 4 spaces
+        } else {
+             std::cout << "  Payload: " << payload << std::endl;
+        }
+    } catch (...) {
+        std::cout << "  Payload: " << payload << std::endl;
+    }
+
     if (!metadata.empty()) {
-        std::cout << "│ Metadata:                                            │" << std::endl;
+        std::cout << "  Metadata:" << std::endl;
         for (const auto& [key, value] : metadata) {
-            std::cout << "│   " << std::setw(15) << std::left << key << ": " 
-                      << std::setw(37) << std::left << value << "│" << std::endl;
+            std::cout << "    - " << key << ": " << value << std::endl;
         }
     }
-    std::cout << "└────────────────────────────────────────────────────────┘" << std::endl;
+    std::cout << std::endl;
 
     // Set timeout
     grpc::ClientContext context;
@@ -130,29 +140,21 @@ GrpcTestResponse GrpcTestClient::SendMessage(
     af::proto::InternalMessage response;
 
     grpc::Status status = stub_->SendMessage(&context, request, &response);
-    
+
     auto end_time = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
         end_time - start_time
     ).count();
 
     // Log the response
-    std::cout << "\n┌─ gRPC Response ────────────────────────────────────────┐" << std::endl;
-    std::cout << "│ Status:         " << std::setw(40) << std::left 
-              << (status.ok() ? "✓ SUCCESS" : "✗ FAILED") << "│" << std::endl;
-    std::cout << "│ Status Code:    " << std::setw(40) << std::left 
-              << status.error_code() << "│" << std::endl;
-    std::cout << "│ Duration:       " << std::setw(37) << std::left 
-              << (std::to_string(duration) + " ms") << "│" << std::endl;
-    
+    std::cout << "  [" << message_type << "] Response (" << duration << "ms):" << std::endl;
+    std::cout << "  Status: " << (status.ok() ? "SUCCESS" : "FAILED")
+              << " (Code: " << status.error_code() << ")" << std::endl;
+
     if (!status.ok()) {
-        std::cout << "│ Error:          " << std::setw(40) << std::left 
-                  << status.error_message() << "│" << std::endl;
-    } else {
-        std::cout << "│ Payload Length: " << std::setw(40) << std::left 
-                  << response.payload().length() << "│" << std::endl;
+        std::cout << "  Error: " << status.error_message() << std::endl;
     }
-    std::cout << "└────────────────────────────────────────────────────────┘" << std::endl;
+    std::cout << std::endl;
 
     // Build response object
     GrpcTestResponse test_response;
@@ -165,7 +167,7 @@ GrpcTestResponse GrpcTestClient::SendMessage(
     if (status.ok()) {
         // Parse response payload
         test_response.response_payload = response.payload();
-        
+
         // Extract response metadata
         for (const auto& [key, value] : response.metadata()) {
             test_response.metadata[key] = value;
@@ -180,30 +182,30 @@ bool GrpcTestClient::IsHealthy() {
     // Create gRPC request
     af::proto::InternalMessage request;
     request.set_message_type("health_check");
-    
+
     grpc::ClientContext context;
     af::proto::InternalMessage response;
     grpc::Status status = stub_->SendMessage(&context, request, &response);
-    
+
     return status.ok();
 }
 
 bool GrpcTestClient::WaitForReady(int max_wait_seconds) {
     auto start = std::chrono::steady_clock::now();
-    
+
     while (true) {
         if (IsHealthy()) {
             return true;
         }
-        
+
         auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
             std::chrono::steady_clock::now() - start
         ).count();
-        
+
         if (elapsed >= max_wait_seconds) {
             return false;
         }
-        
+
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 }

@@ -241,6 +241,14 @@ std::optional<af::common::qod::QodSession> QodSessionManager::get_session(
                      session_id, api_consumer_id);
         return std::nullopt;
     }
+
+    // Treat UNAVAILABLE sessions as not found for external consumers
+    // to comply with standard REST deletion behavior
+    if (session_opt->qos_status == af::common::qod::QosStatus::UNAVAILABLE) {
+        logger_->debug("Session {} is UNAVAILABLE, returning not found", session_id);
+        return std::nullopt;
+    }
+
     return *session_opt;
 }
 
@@ -268,7 +276,7 @@ bool QodSessionManager::delete_session(
     // af::common::qod::QodSession& session = it->second;
     af::common::qod::QosStatus old_status = session.qos_status;
 
-    bool deleted = false;
+    bool deleted = true;
     // Remove from PCF if active
     if (session.qos_status == af::common::qod::QosStatus::AVAILABLE) {
         deleted = remove_session_from_pcf(session);
@@ -303,6 +311,7 @@ bool QodSessionManager::delete_session(
 
     // Mark for cleanup (will be removed after TTL)
     // This allows polling clients to see the UNAVAILABLE status
+    qod_state_manager_->update_session(session);
 
     logger_->info("Session {} marked as deleted", session_id);
     return true;
@@ -330,8 +339,9 @@ std::optional<af::common::qod::QodSession> QodSessionManager::extend_session_dur
         return std::nullopt;
     }
 
-    // Can only extend AVAILABLE sessions
-    if (session.qos_status != af::common::qod::QosStatus::AVAILABLE) {
+    // Can only extend AVAILABLE or REQUESTED sessions
+    if (session.qos_status != af::common::qod::QosStatus::AVAILABLE &&
+        session.qos_status != af::common::qod::QosStatus::REQUESTED) {
         logger_->error("Cannot extend session {} in status {}",
                       request.session_id, af::common::qod::QodTypeUtils::qos_status_to_string(session.qos_status));
         return std::nullopt;

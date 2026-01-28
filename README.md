@@ -222,7 +222,7 @@ If you prefer to use CMake directly:
 
 ```bash
 # Navigate to the project root
-cd phine.afs
+cd phine.af
 
 # Create and navigate to build directory
 mkdir -p build-output

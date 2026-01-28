@@ -347,6 +347,12 @@ services:
     volumes:
       - ./ueransim/free5gc-gnb.yaml:/ueransim/config/gnbcfg.yaml
       - ./ueransim/free5gc-ue.yaml:/ueransim/config/uecfg.yaml
+    # Add health check to verify UE registration, it will have interface uesimtun0 after registration
+    healthcheck:
+      test: /bin/bash -c "ip a | grep uesimtun0"
+      interval: 10s
+      timeout: 5s
+      retries: 5
     cap_add:
       - NET_ADMIN
     devices:
@@ -428,13 +434,24 @@ services:
       context: ../af_core/tests/integration
       dockerfile: Dockerfile
     depends_on:
-      - af_core
-      - api_component
-      - pcf_handler
-      - free5gc-nrf
-      - free5gc-amf
-      - free5gc-smf
-      - free5gc-upf
+      af_core:
+        condition: service_started
+      api_component:
+        condition: service_started
+      pcf_handler:
+        condition: service_started
+      free5gc-nrf:
+        condition: service_started
+      free5gc-amf:
+        condition: service_started
+      free5gc-smf:
+        condition: service_started
+      free5gc-upf:
+        condition: service_started
+      ue:
+        condition: service_healthy
+      gnb:
+        condition: service_started
     environment:
       - GRPC_HOST=af-core
       - GRPC_PORT=50051
