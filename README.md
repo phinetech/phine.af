@@ -126,7 +126,7 @@ graph LR
 ## Project Structure
 
 ```
-/oai-cn5g-af/
+/phine.af/
 |-- common/               # Shared utilities, models, and frameworks
 |-- northbound/           # Northbound interface adapters
 |-- af_core/              # Core orchestration logic
@@ -193,7 +193,7 @@ The easiest way to build the application is to use the provided build script:
 
 ```bash
 # Navigate to the project root
-cd oai-cn5g-af
+cd phine.af
 
 # Make the build script executable if needed
 chmod +x build/scripts/build_all.sh
@@ -222,7 +222,7 @@ If you prefer to use CMake directly:
 
 ```bash
 # Navigate to the project root
-cd oai-cn5g-afs
+cd phine.afs
 
 # Create and navigate to build directory
 mkdir -p build-output
