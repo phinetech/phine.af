@@ -1,15 +1,6 @@
-[submodule "northbound/api_component/common"]
-	path = northbound/api_component/common
-	url = https://github.com/phinetech/oai-cn5g-common.git
-[submodule "southbound/common"]
-	path = southbound/common
-	url = https://github.com/phinetech/oai-cn5g-common.git
-[submodule "af_core/common"]
-	path = af_core/common
-	url = https://github.com/phinetech/oai-cn5g-common.git
+[submodule "common"]
+	path = common
+	url = https://github.com/hub-phine-tech/oai-cn5g-common.git
 [submodule "southbound/oai-cn5g-common-src"]
 	path = southbound/oai-cn5g-common-src
 	url = https://gitlab.eurecom.fr/oai/cn5g/oai-cn5g-common-src.git
-[submodule "af_core/tests/integration/common"]
-	path = af_core/tests/integration/common
-	url = https://github.com/phinetech/oai-cn5g-common.git
