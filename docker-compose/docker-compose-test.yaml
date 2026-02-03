@@ -25,7 +25,7 @@ services:
     network_mode: host
     extra_hosts:
       - "oai-ext-dn:192.168.72.135"
-      - "oai-nrf:192.168.70.139"
+      - "oai-nrf:192.168.70.130"
 
   db:
     container_name: mongodb
@@ -367,25 +367,6 @@ services:
       - free5gc-upf
       - gnb
 
-  af:
-    container_name: "af"
-    image: ubuntu:22.04
-    expose:
-      - 80/tcp
-      - 8080/tcp
-    environment:
-      - TZ=Europe/Paris
-    depends_on:
-      - free5gc-pcf
-    command:
-      - /bin/bash
-      - -c
-      - |
-        apt update -y && apt install curl -y
-        tail -f /dev/null
-    networks:
-      public_net:
-        ipv4_address: 192.168.70.143
     # Southbound Handlers
   pcf_handler:
     image: tariromukute/pcf-handler:${TAG:-latest}
@@ -394,8 +375,8 @@ services:
       - free5gc-pcf
       - af_core
     build:
-      context: ../southbound/
-      dockerfile: ./pcf_handler/Dockerfile
+      context: ..
+      dockerfile: southbound/pcf_handler/Dockerfile
     volumes:
       - ./conf/pcf_handler.yaml:/etc/oai/af/pcf_handler.yaml
     networks:
@@ -407,8 +388,8 @@ services:
     image: tariromukute/af-core:${TAG:-latest}
     container_name: af-core
     build:
-      context: ../af_core
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: af_core/Dockerfile
     networks:
       public_net:
         ipv4_address: 192.168.70.141
@@ -420,16 +401,16 @@ services:
     depends_on:
       - af_core
     build:
-      context: ../northbound/api_component
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: northbound/api_component/Dockerfile
     networks:
       public_net:
         ipv4_address: 192.168.70.142
 
   # Integration Tests
-  af_integration_tests:
-    image: integration-tests:${TAG:-latest}
-    container_name: af_integration_tests
+  af-integration-tests:
+    image: af-integration-tests:${TAG:-latest}
+    container_name: af-integration-tests
     build:
       context: ../af_core/tests/integration
       dockerfile: Dockerfile
@@ -466,7 +447,7 @@ services:
       public_net:
         ipv4_address: 192.168.70.145
     volumes:
-      - ../tests/results:/app/results
+      - ./results:/app/results
 
 networks:
   public_net:

@@ -25,7 +25,7 @@ services:
     network_mode: host
     extra_hosts:
       - "oai-ext-dn:192.168.72.135"
-      - "oai-nrf:192.168.70.139"
+      - "oai-nrf:192.168.70.130"
 
   db:
     container_name: mongodb
@@ -388,8 +388,8 @@ services:
       - free5gc-pcf
       - af_core
     build:
-      context: ../southbound/
-      dockerfile: ./pcf_handler/Dockerfile
+      context: ..
+      dockerfile: southbound/pcf_handler/Dockerfile
     volumes:
       - ./conf/pcf_handler.yaml:/etc/oai/af/pcf_handler.yaml
     networks:
@@ -401,8 +401,8 @@ services:
     image: tariromukute/af-core:${TAG:-latest}
     container_name: af-core
     build:
-      context: ../af_core
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: af_core/Dockerfile
     networks:
       public_net:
         ipv4_address: 192.168.70.141
@@ -414,8 +414,8 @@ services:
     depends_on:
       - af_core
     build:
-      context: ../northbound/api_component
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: northbound/api_component/Dockerfile
     networks:
       public_net:
         ipv4_address: 192.168.70.142

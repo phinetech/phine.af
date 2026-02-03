@@ -11,9 +11,12 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # Find Protobuf FIRST (required by gRPC)
-find_package(Protobuf CONFIG QUIET)
-if(NOT Protobuf_FOUND)
-    find_package(Protobuf REQUIRED)
+# Avoid re-defining targets if already found by parent
+if(NOT Protobuf_FOUND AND NOT TARGET protobuf::libprotobuf)
+    find_package(Protobuf CONFIG QUIET)
+    if(NOT Protobuf_FOUND)
+        find_package(Protobuf REQUIRED)
+    endif()
 endif()
 
 # Create aliases if they don't exist
@@ -123,21 +126,8 @@ endif()
 # Find fmt library (required by spdlog)
 find_package(fmt REQUIRED)
 
-# Try to find the installed af_common library
-find_library(AF_COMMON_LIB NAMES af_common libaf_common)
-find_library(AF_PROTOS_LIB NAMES af_protos libaf_protos)
-find_path(AF_COMMON_INCLUDE_DIR NAMES af/common PATHS /usr/local/include NO_DEFAULT_PATH)
-
-if(AF_COMMON_LIB AND AF_COMMON_INCLUDE_DIR)
-    message(STATUS "Found af_common library: ${AF_COMMON_LIB}")
-    message(STATUS "Found af_protos library: ${AF_PROTOS_LIB}")
-    message(STATUS "Found af_common includes: ${AF_COMMON_INCLUDE_DIR}")
-    set(USE_INSTALLED_AF_COMMON TRUE)
-else()
-    message(STATUS "af_common not installed, adding as subdirectory")
-    add_subdirectory(common)
-    set(USE_INSTALLED_AF_COMMON FALSE)
-endif()
+# Use the root common library (built by parent CMakeLists.txt)
+# No need to add_subdirectory or find installed library - parent handles it
 
 # Define test sources
 set(SOURCES
@@ -157,44 +147,23 @@ set(SOURCES
 # Create test executable
 add_executable(af_core ${SOURCES})
 
-# Set include directories based on whether we're using installed library or not
-if(USE_INSTALLED_AF_COMMON)
-    target_include_directories(af_core
-        PRIVATE
-            include
-            ${AF_COMMON_INCLUDE_DIR}
-    )
-else()
-    target_include_directories(af_core
-        PRIVATE
-            include
-    )
-endif()
+# Set include directories - include project root for "common/..." headers
+target_include_directories(af_core
+    PRIVATE
+        include
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/common
+)
 
-# Link libraries
-if(USE_INSTALLED_AF_COMMON)
-    target_link_libraries(af_core
-        PRIVATE
-            ${AF_COMMON_LIB}
-            ${AF_PROTOS_LIB}
-            gRPC::grpc++
-            gRPC::grpc++_reflection
-            protobuf::libprotobuf
-            nlohmann_json::nlohmann_json
-            fmt::fmt
-            OpenSSL::SSL
-            OpenSSL::Crypto
-    )
-else()
-    target_link_libraries(af_core
-        PRIVATE
-            af_common
-            gRPC::grpc++
-            gRPC::grpc++_reflection
-            protobuf::libprotobuf
-            nlohmann_json::nlohmann_json
-            fmt::fmt
-            OpenSSL::SSL
-            OpenSSL::Crypto
-    )
-endif()
+# Link libraries - use root common target
+target_link_libraries(af_core
+    PRIVATE
+        af_common
+        gRPC::grpc++
+        gRPC::grpc++_reflection
+        protobuf::libprotobuf
+        nlohmann_json::nlohmann_json
+        fmt::fmt
+        OpenSSL::SSL
+        OpenSSL::Crypto
+)

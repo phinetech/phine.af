@@ -186,14 +186,14 @@ RUN ls /app/build-output/generated/ || echo "Generated headers not found"
 # Copy AF common source (needed for headers/includes)
 COPY ./common/ /app/common/
 
-# Copy PCF Handler source files
-COPY ./pcf_handler/src /app/src/
-COPY ./pcf_handler/build/cmake /app/build/cmake/
-COPY ./pcf_handler/include /app/include/
-COPY ./pcf_handler/CMakeLists.txt /app/CMakeLists.txt
+# Copy PCF Handler source files - preserve directory structure for relative includes
+COPY ./southbound/pcf_handler/src /app/southbound/pcf_handler/src/
+COPY ./southbound/pcf_handler/build/cmake /app/southbound/pcf_handler/build/cmake/
+COPY ./southbound/pcf_handler/include /app/southbound/pcf_handler/include/
+COPY ./southbound/pcf_handler/CMakeLists.txt /app/southbound/pcf_handler/CMakeLists.txt
 
-# Build the af_core component
-RUN cd /app && \
+# Build the pcf_handler component
+RUN cd /app/southbound/pcf_handler && \
     mkdir -p build-output && \
     cd build-output && \
     cmake .. -DCMAKE_BUILD_TYPE=Release \
@@ -247,15 +247,15 @@ COPY --from=oai-builder /usr/local/lib/libNAS.a /usr/local/lib/
 COPY --from=oai-builder /usr/local/lib/libCOMMON.a /usr/local/lib/
 COPY --from=oai-builder /usr/local/lib/libUTILS.a /usr/local/lib/
 
-# Copy AF common runtime libraries
-COPY --from=builder /app/build-output/lib/libaf_common* /usr/local/lib/
-COPY --from=builder /app/build-output/lib/libaf_communication_factory.so /usr/local/lib/
-COPY --from=builder /app/build-output/lib/libaf_direct_communication.so /usr/local/lib/
+# Copy AF common runtime libraries (from common-runtime stage, not builder)
+COPY --from=common-runtime /app/common/build/lib/libaf_common* /usr/local/lib/
+COPY --from=common-runtime /app/common/build/lib/libaf_communication_factory.so /usr/local/lib/
+COPY --from=common-runtime /app/common/build/lib/libaf_direct_communication.so /usr/local/lib/
 
 RUN ldconfig
 
 # Copy build artifacts
-COPY --from=builder /app/build-output/bin/pcf_server /usr/local/bin/
+COPY --from=builder /app/southbound/pcf_handler/build-output/bin/pcf_server /usr/local/bin/
 
 # Install minimal build dependencies
 RUN apt-get update && \
@@ -263,7 +263,7 @@ RUN apt-get update && \
       libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY ./pcf_handler/config/pcf_handler.yaml /etc/oai/af/pcf_handler.yaml
+COPY ./southbound/pcf_handler/config/pcf_handler.yaml /etc/oai/af/pcf_handler.yaml
 
 # Create a non-root user
 RUN groupadd -r afpcfuser && useradd -r -g afpcfuser afpcfuser && \

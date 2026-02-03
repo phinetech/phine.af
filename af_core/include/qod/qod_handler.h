@@ -16,8 +16,8 @@
 #include <nlohmann/json.hpp>
 #include "qod_session_manager.h"
 #include "qod_error_codes.h"
-#include "../../common/communication/include/message.h"
-#include "../../common/models/qod/qod_session.h"
+#include "common/communication/include/message.h"
+#include "common/models/qod/qod_session.h"
 
 namespace af {
 namespace qod {

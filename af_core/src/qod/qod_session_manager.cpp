@@ -242,13 +242,8 @@ std::optional<af::common::qod::QodSession> QodSessionManager::get_session(
         return std::nullopt;
     }
 
-    // Treat UNAVAILABLE sessions as not found for external consumers
-    // to comply with standard REST deletion behavior
-    if (session_opt->qos_status == af::common::qod::QosStatus::UNAVAILABLE) {
-        logger_->debug("Session {} is UNAVAILABLE, returning not found", session_id);
-        return std::nullopt;
-    }
-
+    // Sessions are returned regardless of status - CAMARA spec allows
+    // clients to retrieve sessions in any state including UNAVAILABLE
     return *session_opt;
 }
 
@@ -973,10 +968,13 @@ bool QodSessionManager::apply_session_to_pcf(af::common::qod::QodSession& sessio
             auto error_json = nlohmann::json::parse(error_str);
 
             std::string error_message = error_json.value("message", "Unknown error");
+            int status = error_json.value("status", 500);
+            logger_->error("PCF returned error (status {}): {}", status, error_message);
             handle_pcf_session_response(session.session_id, "", false, error_message);
             return false;
         } else {
             logger_->warn("Received unexpected response from PCF: {}", response->message_type);
+            return false;  // Treat unexpected responses as failures
         }
 
         return true;
@@ -1026,7 +1024,11 @@ bool QodSessionManager::remove_session_from_pcf(const af::common::qod::QodSessio
             auto response_json = nlohmann::json::parse(response_str);
             std::string pcf_session_id = response_json.value("pcf_session_id", "");
             std::string reason = response_json.value("reason", "Requested by user");
-            handle_pcf_session_terminated(pcf_session_id, reason);
+
+            // Don't call handle_pcf_session_terminated here - that would hard-delete the session
+            // Instead, just remove the PCF mapping and let the calling code handle the soft delete
+            qod_state_manager_->remove_pcf_to_qod_session_mapping(pcf_session_id);
+            logger_->debug("Removed PCF to QoD session mapping for PCF ID: {}", pcf_session_id);
 
             logger_->info("QoD session removed from PCF successfully");
             return true;

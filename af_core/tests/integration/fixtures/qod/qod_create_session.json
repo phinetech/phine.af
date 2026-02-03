@@ -14,11 +14,11 @@
     "ipv4Address": "192.168.100.1"
   },
   "device": {
-    "phoneNumber": "+1234567890",
-    "networkAccessIdentifier": "test-user@example.com",
+    "phoneNumber": "{{phoneNumber}}",
+    "networkAccessIdentifier": "{{networkAccessIdentifier}}",
     "ipv4Address": {
-      "publicAddress": "84.125.93.10",
-      "publicPort": 59765
+      "publicAddress": "{{publicAddress}}",
+      "publicPort": {{publicPort}}
     }
   },
   "qosProfile": "{{qos_profile}}",

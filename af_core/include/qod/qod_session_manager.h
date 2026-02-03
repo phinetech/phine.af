@@ -22,11 +22,13 @@
 #include <spdlog/spdlog.h>
 #include <unordered_set>
 #include "qod_state_manager.h"
-#include "../../common/models/qod/qod_session.h"
-#include "../../common/models/qod/qod_events.h"
 #include "ue_state_manager.h"
-#include "../../common/communication/include/message.h"
-#include "../../common/communication/include/communication_interface.h"
+#include "models/ue_state.h"
+#include "events/events.h"
+#include "common/models/qod/qod_session.h"
+#include "common/models/qod/qod_events.h"
+#include "common/communication/include/message.h"
+#include "common/communication/include/communication_interface.h"
 
 namespace af {
 namespace qod {

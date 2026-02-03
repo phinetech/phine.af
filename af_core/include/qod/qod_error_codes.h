@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include "../../common/models/camara/camara_error_codes.h"
+#include "common/models/camara/camara_error_codes.h"
 
 namespace af {
 namespace qod {

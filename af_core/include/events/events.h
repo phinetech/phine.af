@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 #include <any>
-#include "../../common/models/common.h" // For Supi, etc.
+#include "common/models/common.h" // For Supi, etc.
 
 namespace af {
 namespace core {
@@ -28,7 +28,7 @@ struct PduSessionTerminatedEvent : public BaseEvent {
         : supi(s), pdu_session_id(p_id) {}
 };
 
-// Add other events here 
+// Add other events here
 
 
 } // namespace events

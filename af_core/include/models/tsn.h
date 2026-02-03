@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 #include <optional>
-#include "../../common/models/common.h"
+#include "common/models/common.h"
 
 
 /**
@@ -14,11 +14,11 @@ struct TsnQosParameters {
     /**
      * @brief Contains **Time Sensitive Networking (TSN) Traffic QoS** parameters.
      * **How it's used**:
-     * - Includes `maxTscBurstSize` (maximum TSC burst size), `tscPackDelay` (packet delay budget for TSC), 
+     * - Includes `maxTscBurstSize` (maximum TSC burst size), `tscPackDelay` (packet delay budget for TSC),
      *   `maxPer` (maximum packet error rate for TSC), and `tscPrioLevel` (TSC Priority Level).
      * - The `TSN AF` or `TSCTSF` provides this information.
      * **When it's used**:
-     * - When the `TimeSensitiveNetworking` feature is supported, for `Npcf_PolicyAuthorization_Create` or 
+     * - When the `TimeSensitiveNetworking` feature is supported, for `Npcf_PolicyAuthorization_Create` or
      *   `Npcf_PolicyAuthorization_Update` to describe `TSC traffic QoS characteristics`.
      */
     struct TsnQosContainer {
@@ -28,7 +28,7 @@ struct TsnQosParameters {
         std::optional<TscPriorityLevel> tscPrioLevel;
     };
     std::optional<TsnQosContainer> tsnQos;
-    
+
     /**
      * @brief Packet Delay Budget (`PDB`) for the service data flow.
      * **How it's used**:
@@ -60,7 +60,7 @@ struct TscaiParameters {
     /**
      * @brief Contains **TSCAI (Time Sensitive Communication Assistance Information) input for Uplink**.
      * **How it's used**:
-     * - Describes the `TSC traffic pattern` including `periodicity`, `burstArrivalTime`, `surTimeInNumMsg` (survival time in number of messages), 
+     * - Describes the `TSC traffic pattern` including `periodicity`, `burstArrivalTime`, `surTimeInNumMsg` (survival time in number of messages),
      *   and `surTimeInTime` (survival time in time).
      * - Used by the `TSN AF` or `TSCTSF` to provide traffic pattern details to the PCF.
      * - The SMF derives `TSCAI` and forwards it to `NG-RAN`.
@@ -86,7 +86,7 @@ struct TscaiParameters {
      * - In AF requests for `TSC-related policy authorization`.
      */
     std::optional<Uinteger> tscaiTimeDom;
-    
+
     /**
      * @brief Indicates the periodicity of **Uplink traffic** (in milliseconds).
      * **How it's used**:
@@ -121,7 +121,7 @@ struct TimeSynchronizationParameters {
      * - When an application requires precise time synchronization services.
      */
     std::optional<AsTimeDistributionParam> asTimeDistParam;
-    
+
     /**
      * @brief Indicates the **capability for the AF to adjust the burst sending time**.
      * **How it's used**:
@@ -130,7 +130,7 @@ struct TimeSynchronizationParameters {
      * - In AF requests to inform the PCF about the application's adaptability to network conditions, especially relevant for `Time Sensitive Communication` (TSC).
      */
     std::optional<bool> capBatAdaptation;
-    
+
     /**
      * @brief Indicates that the **service data flow needs to meet the Round-Trip (RT) latency requirement**.
      * **How it's used**:
@@ -160,7 +160,7 @@ struct AfTsnRequest {
     TscaiParameters tscaiParams;
     TimeSynchronizationParameters timeSyncParams;
     TrafficFilteringInformation trafficFiltering;
-    
+
     /**
      * @brief Indicates the **status of service data flows** (e.g., `ENABLED`, `DISABLED`, `REMOVED`).
      * **How it's used**:
@@ -169,7 +169,7 @@ struct AfTsnRequest {
      * - During policy authorization to control the activation or deactivation of TSN traffic flows.
      */
     std::optional<std::string> flowStatus;
-    
+
     /**
      * @brief Reference to a **pre-defined QoS information set** for TSN.
      * **How it's used**:

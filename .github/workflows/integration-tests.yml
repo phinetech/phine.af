@@ -59,32 +59,20 @@ jobs:
         run: |
           mkdir -p docker-compose/results
           chmod 777 docker-compose/results
+          mkdir -p docker-compose/logs
+
+      - name: Install dependencies
+        run: |
+          chmod +x build/scripts/ci_helper.sh
+          ./build/scripts/ci_helper.sh install_dependencies
 
       - name: Install gtp5g kernel module
-        run: |
-          echo "Checking for gtp5g kernel module..."
-          if ! lsmod | grep -q gtp5g; then
-            echo "gtp5g module not found, installing..."
-            sudo apt-get update
-            sudo apt-get install -y git build-essential linux-headers-$(uname -r)
-            cd /tmp
-            git clone --depth 1 https://github.com/free5gc/gtp5g.git
-            cd gtp5g/
-            make
-            sudo make install
-            echo "Loading gtp5g module..."
-            sudo modprobe gtp5g
-            lsmod | grep gtp5g
-            echo "gtp5g module installed and loaded successfully!"
-          else
-            echo "gtp5g module already loaded"
-            lsmod | grep gtp5g
-          fi
+        run: ./build/scripts/ci_helper.sh install_gtp5g
 
       - name: Pull base images
         run: |
           cd docker-compose
-          docker compose -f docker-compose-test.yaml pull db free5gc-nrf free5gc-amf free5gc-upf
+          docker compose -f docker-compose-test.yaml pull db free5gc-nrf free5gc-amf free5gc-upf oai-ext-dn
 
       - name: Build AF components
         run: |
@@ -92,7 +80,8 @@ jobs:
           docker compose -f docker-compose-test.yaml build \
             af_core \
             pcf_handler \
-            af_integration_tests
+            api_component \
+            af-integration-tests
 
       - name: Start infrastructure services
         run: |
@@ -108,22 +97,11 @@ jobs:
             free5gc-udm \
             free5gc-udr \
             free5gc-upf \
-            free5gc-webui
+            free5gc-webui \
+            oai-ext-dn
 
       - name: Wait for infrastructure to be ready
-        run: |
-          echo "Waiting for Free5GC services to be ready..."
-          sleep 5
-          
-          # Check if NRF is responding
-          for i in {1..4}; do
-            if docker exec nrf curl -s http://localhost:8000/nnrf-nfm/v1/nf-instances > /dev/null 2>&1; then
-              echo "NRF is ready!"
-              break
-            fi
-            echo "Waiting for NRF... ($i/4)"
-            sleep 2
-          done
+        run: ./build/scripts/ci_helper.sh wait_for_nrf
 
       - name: Start UE and gNB
         run: |
@@ -137,19 +115,11 @@ jobs:
           cd docker-compose
           docker compose -f docker-compose-test.yaml up -d \
             af_core \
-            pcf_handler
+            pcf_handler \
+            api_component
 
       - name: Wait for AF Core to be ready
-        run: |
-          echo "Waiting for AF Core to be ready..."
-          for i in {1..4}; do
-            if docker exec af-core grpcurl -plaintext localhost:50051 list > /dev/null 2>&1; then
-              echo "AF Core is ready!"
-              break
-            fi
-            echo "Waiting for AF Core... ($i/4)"
-            sleep 2
-          done
+        run: ./build/scripts/ci_helper.sh wait_for_af
 
       - name: Show running containers
         run: docker ps -a
@@ -157,62 +127,13 @@ jobs:
       - name: Run integration tests
         run: |
           cd docker-compose
-          docker compose -f docker-compose-test.yaml up --exit-code-from af_integration_tests af_integration_tests
+          docker compose -f docker-compose-test.yaml up --exit-code-from af-integration-tests af-integration-tests
         continue-on-error: true
         id: run_tests
 
       - name: Collect container logs
         if: always()
-        run: |
-          cd docker-compose
-          mkdir -p logs
-
-          echo "=== Status of all containers ===" >> logs/container_status.log
-          docker ps -a >> logs/container_status.log 2>&1 || echo "Failed to get container status"
-          
-          echo "=== AF Core Logs ===" > logs/af_core.log
-          docker logs af-core >> logs/af_core.log 2>&1 || echo "Failed to get af_core logs"
-          
-          echo "=== PCF Handler Logs ===" > logs/pcf_handler.log
-          docker logs af-pcf-handler >> logs/pcf_handler.log 2>&1 || echo "Failed to get pcf_handler logs"
-          
-          echo "=== Integration Tests Logs ===" > logs/integration_tests.log
-          docker logs af-integration-tests >> logs/integration_tests.log 2>&1 || echo "Failed to get integration_tests logs"
-          
-          echo "=== PCF Logs ===" > logs/pcf.log
-          docker logs pcf >> logs/pcf.log 2>&1 || echo "Failed to get pcf logs"
-
-          echo "=== UE Logs ===" > logs/ue.log
-          docker logs ue >> logs/ue.log 2>&1 || echo "Failed to get ue logs"
-
-          echo "=== gNB Logs ===" > logs/gnb.log
-          docker logs gnb >> logs/gnb.log 2>&1 || echo "Failed to get gnb logs"
-
-          echo "=== mongodb Logs ===" > logs/mongodb.log
-          docker logs mongodb >> logs/mongodb.log 2>&1 || echo "Failed to get mongodb logs"
-
-          echo "=== NRF Logs ===" > logs/nrf.log
-          docker logs nrf >> logs/nrf.log 2>&1 || echo "Failed to get nrf logs"
-
-          echo "=== AMF Logs ===" > logs/amf.log
-          docker logs amf >> logs/amf.log 2>&1 || echo "Failed to get amf logs"
-
-          echo "=== SMF Logs ===" > logs/smf.log
-          docker logs smf >> logs/smf.log 2>&1 || echo "Failed to get smf logs"
-
-          echo "=== UDR Logs ===" > logs/udr.log
-          docker logs udr >> logs/udr.log 2>&1 || echo "Failed to get udr logs"
-
-          echo "=== UDM Logs ===" > logs/udm.log
-          docker logs udm >> logs/udm.log 2>&1 || echo "Failed to get udm logs"
-
-          echo "=== AUSF Logs ===" > logs/ausf.log
-          docker logs ausf >> logs/ausf.log 2>&1 || echo "Failed to get ausf logs"
-
-          echo "=== UPF Logs ===" > logs/upf.log
-          docker logs upf >> logs/upf.log 2>&1 || echo "Failed to get upf logs"
-
-      - name: Upload test results
+        run: ./build/scripts/ci_helper.sh collect_logs docker-compose/logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -224,17 +145,7 @@ jobs:
 
       - name: Parse test results
         if: always()
-        run: |
-          if [ -f docker-compose/results/test_results.xml ]; then
-            echo "Test results found!"
-            # Display summary
-            if command -v xmllint > /dev/null; then
-              xmllint --format docker-compose/results/test_results.xml | grep -E "(tests=|failures=|errors=)" || true
-            fi
-            cat docker-compose/results/test_results.xml
-          else
-            echo "No test results file found!"
-          fi
+        run: ./build/scripts/ci_helper.sh parse_results docker-compose/results/test_results.xml
 
       - name: Check test exit code
         if: always()
@@ -281,7 +192,7 @@ jobs:
         run: |
           echo "Checking AF libraries..."
           docker run --rm pcf-handler:test sh -c "ls -la /usr/local/lib/libaf* 2>/dev/null || echo 'AF libs missing'"
-          
+
           echo "Checking Abseil libraries..."
           docker run --rm pcf-handler:test sh -c "ls -la /usr/local/lib/libabsl* 2>/dev/null | head -10"
 

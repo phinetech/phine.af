@@ -17,7 +17,7 @@ TEST_F(QodIntegrationTest, A_CreateQodSession_Success) {
         {"networkAccessIdentifier", "123456789@domain.com"},
         {"publicAddress", "10.60.0.1"},
         {"publicPort", "59765"},
-        {"ueId", "10.60.0.1"},
+        {"ueId", "208950000000031"},
         {"qos_profile", "QOS_M"}}
     );
 
@@ -52,7 +52,16 @@ TEST_F(QodIntegrationTest, A_CreateQodSession_Success) {
 TEST_F(QodIntegrationTest, B_CreateQodSession_InvalidQosProfile) {
     // Arrange
     auto correlation_id = GenerateCorrelationId();
-    auto request_json = fixture_loader_->LoadFixture("qod/qod_create_session_invalid_qos_profile.json");
+
+    auto request_json = fixture_loader_->LoadFixtureWithVars(
+        "qod/qod_create_session.json",
+        {{"phoneNumber", "+1234567890"},
+        {"networkAccessIdentifier", "123456789@domain.com"},
+        {"publicAddress", "10.60.0.1"},
+        {"publicPort", "59765"},
+        {"ueId", "208950000000031"},
+        {"qos_profile", "INVALID_QOS_PROFILE"}}
+    );
 
     // Act
     auto response = client_->SendMessage(
@@ -142,7 +151,7 @@ TEST_F(QodIntegrationTest, D_GetQodSessions_Success) {
         "qod_retrieve_sessions",
         request_json.dump(),
         correlation_id,
-        {{"auth_type", "user"}} // TODO: remove this
+        {{"auth_type", "application"}}
     );
 
     // Print response for debugging
@@ -190,14 +199,17 @@ TEST_F(QodIntegrationTest, E_DeleteQodSession_Success) {
     // Assert
     ASSERT_GRPC_OK(response);
 
-    // Verify session is deleted by attempting to get it
+    // Verify session is marked UNAVAILABLE (soft delete) by attempting to get it
     auto get_response = client_->SendMessage(
         "qod_get_session",
         "",
         GenerateCorrelationId(),
         {{"session_id", session_id}} // Add session id in metadata for routing
     );
-    ASSERT_GRPC_ERROR(get_response, grpc::StatusCode::NOT_FOUND);
+    ASSERT_GRPC_OK(get_response);
+    ASSERT_FIELD_EQUALS(get_response, "sessionId", session_id);
+    ASSERT_FIELD_EQUALS(get_response, "qosStatus", "UNAVAILABLE");
+    ASSERT_FIELD_EQUALS(get_response, "statusInfo", "DELETE_REQUESTED");
 }
 
 } // namespace af::test

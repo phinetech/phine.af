@@ -10,7 +10,7 @@
 #include <variant>
 #include <chrono>
 #include <stdexcept>
-#include "../../common/models/common.h"
+#include "common/models/common.h"
 
 /**
  * @brief Universal UE Key for state management (Value Object)

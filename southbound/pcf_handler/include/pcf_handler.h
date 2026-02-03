@@ -15,8 +15,8 @@
 #include <vector>
 #include <mutex>
 #include <spdlog/spdlog.h>
-#include "../common/component/include/af_component.h"
-#include "../common/communication/include/communication_interface.h"
+#include <af_component.h>
+#include <communication_interface.h>
 #include "request_router.h"
 #include "pcc_rule_manager.h"
 #include "pcf_client_wrapper.h"
@@ -45,27 +45,27 @@ public:
      * @param config_path Path to configuration file
      */
     PcfHandler(const std::string& config_path);
-    
+
     /**
      * @brief Destructor
      */
     ~PcfHandler();
-    
+
     /**
      * @brief Initialize the PCF handler
      */
     void initialize() override;
-    
+
     /**
      * @brief Start the PCF handler
      */
     void start() override;
-    
+
     /**
      * @brief Stop the PCF handler
      */
     void stop() override;
-    
+
     /**
      * @brief Process a message from any source
      * @param message The incoming message
@@ -81,7 +81,7 @@ public:
      */
     af::communication::MessagePtr create_app_session(
         const af::communication::MessagePtr& app_session_data);
-    
+
     /**
      * @brief Update an existing application session
      * @param update_data Update data including session ID
@@ -89,7 +89,7 @@ public:
      */
     af::communication::MessagePtr update_app_session(
         const af::communication::MessagePtr& update_data);
-    
+
     /**
      * @brief Delete an application session
      * @param delete_data Delete request including session ID
@@ -97,7 +97,7 @@ public:
      */
     af::communication::MessagePtr delete_app_session(
         const af::communication::MessagePtr& delete_data);
-    
+
     /**
      * @brief Get information about an existing application session
      * @param get_data Get request including session ID
@@ -105,7 +105,7 @@ public:
      */
     af::communication::MessagePtr get_app_session(
         const af::communication::MessagePtr& get_data);
-    
+
     /**
      * @brief Handle a notification from the PCF
      * @param notification_data Notification data
@@ -126,14 +126,14 @@ private:
     std::string pcf_base_url_;
     bool use_tls_;
     std::string api_version_;
-    
+
     // Components
     std::shared_ptr<PcfClientWrapper> pcf_client_;
     std::shared_ptr<PccRuleManager> pcc_rule_manager_;
-    
+
     // Communication service for talking to the AF Core
     std::shared_ptr<af::communication::CommunicationService> core_comm_;
-    
+
     // Request router for handling incoming messages
     std::shared_ptr<RequestRouter> request_router_;
 
@@ -143,7 +143,7 @@ private:
     // Message handler for incoming messages
     class PcfMessageHandler;
     std::shared_ptr<PcfMessageHandler> message_handler_;
-    
+
     // Application session tracking
     struct AppSessionInfo {
         std::string app_session_id;
@@ -155,28 +155,28 @@ private:
         std::vector<std::string> media_components;
         bool active;
     };
-    
+
     std::unordered_map<std::string, AppSessionInfo> app_sessions_;
     std::mutex app_sessions_mutex_;
-    
+
     // Logger
     std::shared_ptr<spdlog::logger> logger_;
-    
+
     /**
      * @brief Load configuration from file
      */
     void load_config();
-    
+
     /**
      * @brief Initialize communication with AF Core
      */
     void initialize_communication();
-    
+
     /**
      * @brief Register message handlers
      */
     void register_handlers();
-    
+
     // === QoD ===
     // TODO: move me
     /**
@@ -190,27 +190,27 @@ private:
      * @param session_info Session information
      */
     void store_app_session(const std::string& session_id, const AppSessionInfo& session_info);
-    
+
     /**
      * @brief Get application session information
      * @param session_id Session ID
      * @return Session information or nullptr if not found
      */
     std::shared_ptr<AppSessionInfo> get_app_session_info(const std::string& session_id);
-    
+
     /**
      * @brief Remove application session information
      * @param session_id Session ID
      * @return true if session was found and removed
      */
     bool remove_app_session(const std::string& session_id);
-    
+
     /**
      * @brief Forward a notification to the AF Core
      * @param notification_type Type of notification
      * @param notification_data Notification data
      */
-    void forward_notification(const std::string& notification_type, 
+    void forward_notification(const std::string& notification_type,
                               const nlohmann::json& notification_data);
 };
 

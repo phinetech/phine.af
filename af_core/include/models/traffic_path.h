@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 #include <optional>
-#include "../../common/models/common.h"
+#include "common/models/common.h"
 
 /**
  * @brief Represents traffic routing parameters used in AF requests

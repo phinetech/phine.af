@@ -14,7 +14,7 @@
 #include <functional>
 #include <spdlog/spdlog.h>
 #include "pcf_handler.h"
-#include "../common/communication/include/message.h"
+#include <message.h>
 
 namespace af {
 namespace southbound {
@@ -36,26 +36,26 @@ public:
      * @brief Constructor
      */
     RequestRouter();
-    
+
     /**
      * @brief Destructor
      */
     ~RequestRouter();
-    
+
     /**
      * @brief Initialize the router
      * @param handler Pointer to the handler
      */
     void initialize(PcfHandler* handler);
-    
+
     /**
      * @brief Register a handler for a specific message type
      * @param message_type Type of message to handle
      * @param handler Handler function
      */
-    void register_handler(const std::string& message_type, 
+    void register_handler(const std::string& message_type,
                           const MessageHandlerFunc& handler);
-    
+
     /**
      * @brief Route a message to the appropriate handler
      * @param message The message to route
@@ -73,16 +73,16 @@ public:
 private:
     // Reference to orchestrator
     PcfHandler* handler_;
-    
+
     // Message type to handler mapping
     std::unordered_map<std::string, MessageHandlerFunc> handlers_;
-    
+
     // Default handler for unknown message types
     MessageHandlerFunc default_handler_;
-    
+
     // Logger
     std::shared_ptr<spdlog::logger> logger_;
-    
+
     /**
      * @brief Create a default handler for unknown message types
      * @return Handler function

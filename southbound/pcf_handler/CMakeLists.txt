@@ -14,10 +14,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Add custom cmake module path
-# In Docker builds, common is copied to the same directory level
+# In Docker builds, common is copied to /app/common/ while we're in /app/southbound/pcf_handler/
 # Otherwise, it's at ../common (one level up in the southbound directory)
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/common/cmake")
     list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/common/cmake")
+elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../common/cmake")
+    # Docker build: /app/southbound/pcf_handler/ -> /app/common/
+    list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../common/cmake")
 elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../common/cmake")
     list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../common/cmake")
 endif()
@@ -210,22 +213,8 @@ find_package(OAI REQUIRED)
 message(STATUS "Found OAI libraries: ${OAI_LIBRARIES}")
 message(STATUS "OAI include dirs: ${OAI_INCLUDE_DIRS}")
 
-# Try to find the installed af_common library
-find_library(AF_COMMON_LIB NAMES af_common libaf_common)
-find_library(AF_PROTOS_LIB NAMES af_protos libaf_protos)
-find_library(AF_COMMUNICATION_LIB NAMES af_communication libaf_communication)
-find_path(AF_COMMON_INCLUDE_DIR NAMES af/common PATHS /usr/local/include NO_DEFAULT_PATH)
-
-if(AF_COMMON_LIB AND AF_COMMON_INCLUDE_DIR)
-    message(STATUS "Found af_common library: ${AF_COMMON_LIB}")
-    message(STATUS "Found af_protos library: ${AF_PROTOS_LIB}")
-    message(STATUS "Found af_common includes: ${AF_COMMON_INCLUDE_DIR}")
-    set(USE_INSTALLED_AF_COMMON TRUE)
-else()
-    message(STATUS "af_common not installed, adding as subdirectory")
-    add_subdirectory(common)
-    set(USE_INSTALLED_AF_COMMON FALSE)
-endif()
+# Use the root common library (built by parent CMakeLists.txt)
+# No need to add_subdirectory or find installed library - parent handles it
 
 # Define source files (only pcf_handler specific sources)
 set(SOURCES
@@ -243,99 +232,128 @@ set(SOURCES
 # Create test executable
 add_executable(pcf_server ${SOURCES})
 
-# Set include directories based on whether we're using installed library or not
-if(USE_INSTALLED_AF_COMMON)
-    target_include_directories(pcf_server
-        PUBLIC
-            ${CMAKE_CURRENT_SOURCE_DIR}/include
-            ${CMAKE_CURRENT_SOURCE_DIR}/common
-            ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp_utils
-            ${CMAKE_CURRENT_SOURCE_DIR}/common/models
-            ${CMAKE_CURRENT_SOURCE_DIR}/common/communication/include
-            ${CMAKE_CURRENT_SOURCE_DIR}/common/component/include
-            ${CMAKE_CURRENT_SOURCE_DIR}/common/di/include
-            ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp_utils/include
-            ${OAI_INCLUDE_DIRS}
+# Set include directories - add common library include paths
+# For Docker builds, use installed paths; for source builds, use relative paths
+set(COMMON_INCLUDE_DIRS "")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../common")
+    # Source build - common is at repo root (includes Docker build with /app/common)
+    list(APPEND COMMON_INCLUDE_DIRS
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../common
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../common/component/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../common/communication/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../common/models
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../common/models/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../common/config/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../common/di/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../common/cpp_utils/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../common/handlers/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../common/response/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../common/communication/adapters/include
     )
-else()
-    target_include_directories(pcf_server
-        PUBLIC
-            ${CMAKE_CURRENT_SOURCE_DIR}/include
-            ${CMAKE_CURRENT_SOURCE_DIR}/common
-            ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp_utils
-            ${CMAKE_CURRENT_SOURCE_DIR}/common/models
-            ${CMAKE_CURRENT_SOURCE_DIR}/common/communication/include
-            ${CMAKE_CURRENT_SOURCE_DIR}/common/component/include
-            ${CMAKE_CURRENT_SOURCE_DIR}/common/di/include
-            ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp_utils/include
-            ${OAI_INCLUDE_DIRS}
+elseif(EXISTS "/usr/local/include/af")
+    # Docker build - use installed headers (fallback)
+    list(APPEND COMMON_INCLUDE_DIRS
+        /usr/local/include/af
+        /usr/local/include/af/common
     )
 endif()
 
-# Link libraries
-if(USE_INSTALLED_AF_COMMON)
-    target_link_libraries(pcf_server
-        PUBLIC
-            ${AF_COMMON_LIB}
-            ${AF_PROTOS_LIB}
-            ${AF_COMMUNICATION_LIB}
-            oai::CONFIG
-            oai::PCF
-            oai::COMMON_MODEL
-            oai::LOGGER
-            oai::NAS
-            oai::COMMON
-            oai::UTILS
-            gRPC::grpc++
-            gRPC::grpc++_reflection
-            gRPC::gpr
-            protobuf::libprotobuf
-            ${SPDLOG_TARGET}
-            nlohmann_json::nlohmann_json
-            yaml-cpp
-            OpenSSL::Crypto
-            OpenSSL::SSL
-            nghttp2::nghttp2
-            nghttp2::asio_http2
-            Boost::system
-            Boost::thread
-            crypto
-            # Abseil libraries required by gRPC
-            ${ABSL_LINK_LIBRARIES}
-    )
+target_include_directories(pcf_server
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${OAI_INCLUDE_DIRS}
+        ${COMMON_INCLUDE_DIRS}
+        /usr/local/include
+        /usr/local/include/af
+)
+
+# Find AF common libraries
+# Check if targets exist (parent build) or find installed libraries (standalone Docker build)
+set(AF_COMMON_LIBS "")
+if(TARGET af_common)
+    list(APPEND AF_COMMON_LIBS af_common af_common_component af_communication af_grpc_communication af_protos)
 else()
-    target_link_libraries(pcf_server
-        PUBLIC
-            af_common
-            af_common_component
-            af_communication
-            af_protos
-            oai::CONFIG
-            oai::PCF
-            oai::COMMON_MODEL
-            oai::LOGGER
-            oai::NAS
-            oai::COMMON
-            oai::UTILS
-            gRPC::grpc++
-            gRPC::grpc++_reflection
-            gRPC::gpr
-            protobuf::libprotobuf
-            ${SPDLOG_TARGET}
-            fmt
-            nlohmann_json::nlohmann_json
-            yaml-cpp
-            OpenSSL::Crypto
-            OpenSSL::SSL
-            nghttp2::nghttp2
-            nghttp2::asio_http2
-            Boost::system
-            Boost::thread
-            crypto
-            # Abseil libraries required by gRPC - must come after static libs
-            ${ABSL_LINK_LIBRARIES}
-    )
+    # Find installed AF common libraries
+    find_library(AF_COMMON_LIB NAMES af_common PATHS /usr/local/lib)
+    find_library(AF_COMMON_COMPONENT_LIB NAMES af_common_component PATHS /usr/local/lib)
+    find_library(AF_COMMUNICATION_LIB NAMES af_communication_factory af_communication PATHS /usr/local/lib)
+    find_library(AF_GRPC_COMMUNICATION_LIB NAMES af_grpc_communication PATHS /usr/local/lib)
+    find_library(AF_DIRECT_COMMUNICATION_LIB NAMES af_direct_communication PATHS /usr/local/lib)
+    find_library(AF_PROTOS_LIB NAMES af_protos PATHS /usr/local/lib)
+    find_library(AF_RESPONSE_LIB NAMES af_response PATHS /usr/local/lib)
+    find_library(AF_TRANSPORT_ADAPTERS_LIB NAMES af_transport_adapters PATHS /usr/local/lib)
+    find_library(AF_HANDLERS_LIB NAMES af_handlers PATHS /usr/local/lib)
+
+    if(AF_COMMON_LIB)
+        list(APPEND AF_COMMON_LIBS ${AF_COMMON_LIB})
+        message(STATUS "Found af_common: ${AF_COMMON_LIB}")
+    endif()
+    if(AF_COMMON_COMPONENT_LIB)
+        list(APPEND AF_COMMON_LIBS ${AF_COMMON_COMPONENT_LIB})
+        message(STATUS "Found af_common_component: ${AF_COMMON_COMPONENT_LIB}")
+    endif()
+    if(AF_COMMUNICATION_LIB)
+        list(APPEND AF_COMMON_LIBS ${AF_COMMUNICATION_LIB})
+        message(STATUS "Found af_communication: ${AF_COMMUNICATION_LIB}")
+    endif()
+    if(AF_GRPC_COMMUNICATION_LIB)
+        list(APPEND AF_COMMON_LIBS ${AF_GRPC_COMMUNICATION_LIB})
+        message(STATUS "Found af_grpc_communication: ${AF_GRPC_COMMUNICATION_LIB}")
+    endif()
+    if(AF_DIRECT_COMMUNICATION_LIB)
+        list(APPEND AF_COMMON_LIBS ${AF_DIRECT_COMMUNICATION_LIB})
+        message(STATUS "Found af_direct_communication: ${AF_DIRECT_COMMUNICATION_LIB}")
+    endif()
+    if(AF_PROTOS_LIB)
+        list(APPEND AF_COMMON_LIBS ${AF_PROTOS_LIB})
+        message(STATUS "Found af_protos: ${AF_PROTOS_LIB}")
+    endif()
+    # Link order matters for static libraries - dependencies must come after
+    # af_handlers depends on af_response and af_transport_adapters
+    if(AF_HANDLERS_LIB)
+        list(APPEND AF_COMMON_LIBS ${AF_HANDLERS_LIB})
+        message(STATUS "Found af_handlers: ${AF_HANDLERS_LIB}")
+    endif()
+    if(AF_RESPONSE_LIB)
+        list(APPEND AF_COMMON_LIBS ${AF_RESPONSE_LIB})
+        message(STATUS "Found af_response: ${AF_RESPONSE_LIB}")
+    endif()
+    if(AF_TRANSPORT_ADAPTERS_LIB)
+        list(APPEND AF_COMMON_LIBS ${AF_TRANSPORT_ADAPTERS_LIB})
+        message(STATUS "Found af_transport_adapters: ${AF_TRANSPORT_ADAPTERS_LIB}")
+    endif()
 endif()
+
+# Link libraries - use AF common libraries (targets or installed)
+# Note: Link order matters - AF libs use gRPC, so gRPC comes after
+target_link_libraries(pcf_server
+    PUBLIC
+        ${AF_COMMON_LIBS}
+        oai::CONFIG
+        oai::PCF
+        oai::COMMON_MODEL
+        oai::LOGGER
+        oai::NAS
+        oai::COMMON
+        oai::UTILS
+        gRPC::grpc++
+        gRPC::grpc
+        gRPC::grpc++_reflection
+        gRPC::gpr
+        protobuf::libprotobuf
+        ${SPDLOG_TARGET}
+        nlohmann_json::nlohmann_json
+        yaml-cpp
+        OpenSSL::Crypto
+        OpenSSL::SSL
+        nghttp2::nghttp2
+        nghttp2::asio_http2
+        Boost::system
+        Boost::thread
+        crypto
+        # Abseil libraries required by gRPC
+        ${ABSL_LINK_LIBRARIES}
+)
 
 # Add linker options to ensure Abseil libraries are properly linked
 target_link_options(pcf_server PRIVATE

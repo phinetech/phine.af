@@ -8,7 +8,7 @@
 #include <yaml-cpp/yaml.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
-#include "../common/communication/include/communication_factory.h"
+#include "common/communication/include/communication_factory.h"
 
 namespace af {
 namespace core {
@@ -45,14 +45,6 @@ AfOrchestrator::AfOrchestrator(const std::string& config_path)
 
     // Create QoD components
     initialize_qod_components();
-
-    // event_dispatcher_->subscribe<af::core::events::PduSessionTerminatedEvent>(
-    //     [this](const auto& event) {
-    //         logger_->info("Received PDU Session Terminated Event for SUPI: {}, PDU Session ID: {}",
-    //                       event.supi.value, event.pdu_session_id);
-    //         // Handle the event as needed
-    //         qod_session_manager_->handle_pdu_session_terminated(event);
-    //     });
 
     // Create message handler
     message_handler_ = std::make_shared<OrchestratorMessageHandler>(this);

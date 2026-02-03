@@ -83,7 +83,7 @@ std::string QodIntegrationTest::CreateQodSession(const std::string& fixture_name
         {"networkAccessIdentifier", "123456789@domain.com"},
         {"publicAddress", "10.60.0.1"},
         {"publicPort", "59765"},
-        {"ueId", "10.60.0.1"},
+        {"ueId", "208930000000001"},
         {"qos_profile", "QOS_M"}}
     );
 

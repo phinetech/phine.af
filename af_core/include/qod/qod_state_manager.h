@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "../../common/models/qod/qod_session.h"
+#include "common/models/qod/qod_session.h"
 #include <unordered_map>
 #include <unordered_set>
 #include <string>

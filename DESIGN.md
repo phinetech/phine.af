@@ -40,7 +40,7 @@ graph TD
 
     subgraph Project AF
         NB(Northbound Gateway)
-        
+
         subgraph AF Core
             direction LR
             subgraph State Managers
@@ -48,7 +48,7 @@ graph TD
                 QOD_MGR(QodSessionManager)
                 LOC_MGR(...)
             end
-            
+
             DISPATCHER(Event Dispatcher)
 
             UE_MGR -- Publishes Events --> DISPATCHER
@@ -57,7 +57,7 @@ graph TD
         end
 
         SB(Southbound Connectors)
-        
+
         subgraph Common Library
             COMMS[Communication Abstraction]
             DI[Dependency Injection]
@@ -177,8 +177,7 @@ phine.af/
 │   │       └── qod/                # Logic specific to the Quality on Demand (QoD) service.
 │   │           ├── qod_service.h   # Main entry point and facade for the QoD service. It orchestrates all QoD operations.
 |   |           ├── qod_session_manager.h # Handles the creation, modification, and deletion of QoD sessions.
-|   |           ├── qod_state_manager.h # Manages state for CAMARA QualityOnDemand sessions
-│   │           └── qod_api_mapper.h    # Maps incoming CAMARA API data models to the application's internal domain models.
+|   |           └── qod_state_manager.h # Manages state for CAMARA QualityOnDemand sessions
 │   │
 │   ├── src/                        # Source file implementations for the core application.
 │   |   ├── state/                  # Implementations for state management logic.
@@ -187,8 +186,7 @@ phine.af/
 │   |   └── services/
 │   |        └── qod/                # Implementations for the QoD service logic.
 │   |           ├── qod_service.cpp
-│   |           ├── qod_session_manager.cpp
-│   |           └── qod_api_mapper.cpp
+│   |           └── qod_session_manager.cpp
 |   └── tests/                     # See tests README for detailed structure
 |       └── integration/
 |           ├── fixtures/          # Test data (JSON request/response fixtures)

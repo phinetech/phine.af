@@ -20,9 +20,9 @@
 #include <chrono>
 #include <functional>
 #include <spdlog/spdlog.h>
-#include "../../common/models/qod/qod_events.h"
-#include "../../common/models/qod/qod_session.h"
-#include "../../common/communication/include/message.h"
+#include "common/models/qod/qod_events.h"
+#include "common/models/qod/qod_session.h"
+#include "common/communication/include/message.h"
 
 namespace af {
 namespace core {
@@ -66,7 +66,7 @@ class HttpNotificationClient {
 public:
     HttpNotificationClient();
     ~HttpNotificationClient();
-    
+
     /**
      * @brief Send HTTP POST request with af::common::qod::CloudEvent
      * @param url Target URL
@@ -80,10 +80,10 @@ public:
         const af::common::qod::CloudEvent& event,
         const std::optional<af::common::qod::SinkCredential>& credential,
         std::chrono::seconds timeout);
-    
+
 private:
     // TODO: Add HTTP client members (e.g., CURL handle)
-    
+
     static size_t write_callback(void* contents, size_t size, size_t nmemb, void* userp);
     void setup_authentication(const std::optional<af::common::qod::SinkCredential>& credential);
     void cleanup_headers();
@@ -100,28 +100,28 @@ public:
      */
     explicit QodNotificationManager(
         const NotificationConfig& config = NotificationConfig{});
-    
+
     /**
      * @brief Destructor
      */
     ~QodNotificationManager();
-    
+
     /**
      * @brief Initialize the notification manager
      * @param orchestrator Pointer to the orchestrator
      */
     void initialize(af::core::AfOrchestrator* orchestrator);
-    
+
     /**
      * @brief Start the notification manager
      */
     void start();
-    
+
     /**
      * @brief Stop the notification manager
      */
     void stop();
-    
+
     /**
      * @brief Deliver a af::common::qod::CloudEvent notification
      * @param event The af::common::qod::CloudEvent to deliver
@@ -133,7 +133,7 @@ public:
         const af::common::qod::CloudEvent& event,
         const std::string& sink,
         const std::optional<af::common::qod::SinkCredential>& credential = std::nullopt) override;
-    
+
     /**
      * @brief Queue a notification for async delivery
      * @param event The af::common::qod::CloudEvent to deliver
@@ -149,20 +149,20 @@ public:
         const std::optional<af::common::qod::SinkCredential>& credential,
         const std::string& session_id,
         std::function<void(const af::common::qod::NotificationDeliveryResult&)> callback = nullptr);
-    
+
     /**
      * @brief Cancel pending notifications for a session
      * @param session_id QoD session ID
      * @return Number of cancelled notifications
      */
     int cancel_session_notifications(const std::string& session_id);
-    
+
     /**
      * @brief Get pending notification count
      * @return Number of pending notifications
      */
     size_t get_pending_count() const;
-    
+
     /**
      * @brief Get statistics for a session
      * @param session_id QoD session ID
@@ -170,7 +170,7 @@ public:
      */
     std::unordered_map<std::string, int> get_session_stats(
         const std::string& session_id) const;
-    
+
     /**
      * @brief Initialize logger
      */
@@ -181,14 +181,14 @@ private:
      * @brief Worker thread function
      */
     void worker_thread();
-    
+
     /**
      * @brief Process a notification task
      * @param task The task to process
      * @return true if successful, false if retry needed
      */
     bool process_notification(NotificationTask& task);
-    
+
     /**
      * @brief Calculate next retry time
      * @param task The task to retry
@@ -196,55 +196,55 @@ private:
      */
     std::chrono::system_clock::time_point calculate_next_retry(
         const NotificationTask& task);
-    
+
     /**
      * @brief Validate sink URL
      * @param sink URL to validate
      * @return true if valid
      */
     bool validate_sink(const std::string& sink);
-    
+
     /**
      * @brief Validate credential expiry
      * @param credential Credential to validate
      * @return true if valid (not expired)
      */
     bool validate_credential(const std::optional<af::common::qod::SinkCredential>& credential);
-    
+
     /**
      * @brief Update session statistics
      * @param session_id Session ID
      * @param success Whether delivery was successful
      */
     void update_stats(const std::string& session_id, bool success);
-    
+
     /**
      * @brief Clean up expired statistics
      */
     void cleanup_old_stats();
-    
+
     // === Member Variables ===
-    
+
     af::core::AfOrchestrator* orchestrator_;
     NotificationConfig config_;
-    
+
     // Task queue and synchronization
     std::queue<NotificationTask> task_queue_;
-    std::priority_queue<NotificationTask, 
+    std::priority_queue<NotificationTask,
                        std::vector<NotificationTask>,
-                       std::function<bool(const NotificationTask&, const NotificationTask&)>> 
+                       std::function<bool(const NotificationTask&, const NotificationTask&)>>
                        retry_queue_;
     mutable std::mutex queue_mutex_;
     std::condition_variable queue_cv_;
-    
+
     // Worker threads
     std::vector<std::thread> worker_threads_;
     std::atomic<bool> running_{false};
-    
+
     // Session tracking
     std::unordered_map<std::string, std::vector<NotificationTask>> session_tasks_;
     mutable std::mutex session_mutex_;
-    
+
     // Statistics
     struct SessionStats {
         int total_sent{0};
@@ -255,11 +255,11 @@ private:
     };
     std::unordered_map<std::string, SessionStats> session_stats_;
     mutable std::mutex stats_mutex_;
-    
+
     // HTTP clients pool
     std::vector<std::unique_ptr<HttpNotificationClient>> http_clients_;
     std::mutex clients_mutex_;
-    
+
     // Logger
     std::shared_ptr<spdlog::logger> logger_;
 };

@@ -71,7 +71,7 @@ nfs:
       interface_name: demo-n9
       port: 2152
   nrf:
-    host: 192.168.70.139
+    host: 192.168.70.130
     sbi:
       port: 8000
       api_version: v1

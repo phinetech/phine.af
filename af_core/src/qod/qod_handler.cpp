@@ -4,6 +4,7 @@
  */
 
 #include "qod/qod_handler.h"
+#include "handlers/service_handler_helpers.h"
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <regex>
@@ -805,26 +806,14 @@ af::communication::MessagePtr QodHandler::create_error_response(
     const std::string& message,
     const std::string& correlation_id) {
 
-    nlohmann::json error_json;
-    error_json["status"] = status;
-    error_json["code"] = code;
-    error_json["message"] = message;
-
-    auto response = std::make_shared<af::communication::Message>();
-    response->message_type = "qod_error_response";
-    response->correlation_id = correlation_id;
-
-    std::string payload = error_json.dump();
-    response->payload.assign(payload.begin(), payload.end());
-
-    // Add status code to metadata (can be HTTP/gRPC status or custom)
-    // TODO: create AF specific error codes, these will be mapped to HTTP/gRPC codes at API gateway layer
-    response->metadata["status"] = std::to_string(status);
-    response->metadata["x-correlator"] = correlation_id;
-
-    logger_->debug("Error response: {} - {} - {}", status, code, message);
-
-    return response;
+    // Use common helper for response creation
+    return common::handlers::ServiceHandlerHelpers::create_error_response(
+        status,
+        code,
+        message,
+        correlation_id,
+        logger_
+    );
 }
 
 af::communication::MessagePtr QodHandler::create_success_response(
@@ -832,98 +821,37 @@ af::communication::MessagePtr QodHandler::create_success_response(
     int status,
     const std::string& correlation_id) {
 
-    auto response = std::make_shared<af::communication::Message>();
-    response->message_type = "qod_success_response";
-    response->correlation_id = correlation_id;
-
-    std::string payload = data.dump();
-    response->payload.assign(payload.begin(), payload.end());
-
-    // Add status code to metadata (can be HTTP/gRPC status or custom)
-    // TODO: create AF specific error codes, these will be mapped to HTTP/gRPC codes at API gateway layer
-    response->metadata["status"] = std::to_string(status);
-    response->metadata["x-correlator"] = correlation_id;
-
-    return response;
+    // Use common helper for response creation
+    return common::handlers::ServiceHandlerHelpers::create_success_response(
+        data,
+        status,
+        correlation_id,
+        logger_
+    );
 }
 
 QodRequestContext QodHandler::extract_context(const af::communication::MessagePtr& message) {
+    // Extract common context using helper
+    auto common_context = common::handlers::ServiceHandlerHelpers::extract_context(message, logger_);
+
+    // Convert to QodRequestContext
     QodRequestContext context;
-
-    // Extract correlation ID
-    context.correlation_id = message->correlation_id;
-    if (context.correlation_id.empty()) {
-        // Generate one if not provided
-        context.correlation_id = "qod-" + std::to_string(
-            std::chrono::steady_clock::now().time_since_epoch().count());
-    }
-
-    // Set default to 2-legged
-    context.is_three_legged = false;
-
-    // Extract metadata
-    if (!message->metadata.empty()) {
-        try {
-
-            // message->metadata is a map<string, string>, convert to JSON string
-            nlohmann::json metadata_json = message->metadata;
-            // Extract API consumer ID (from OAuth token or API key)
-            if (metadata_json.contains("api_consumer_id")) {
-                context.api_consumer_id = metadata_json["api_consumer_id"];
-            } else {
-                // Default for testing
-                context.api_consumer_id = "default_consumer";
-            }
-
-
-            logger_->debug("Message metadata: {}", metadata_json.dump());
-            // Determine if 3-legged authentication
-            if (metadata_json.contains("auth_type")) {
-                context.is_three_legged = (metadata_json["auth_type"] == "3-legged");
-            } else if (metadata_json.contains("token_type")) {
-                context.is_three_legged = (metadata_json["token_type"] == "user");
-            }
-
-            // Extract device from token if 3-legged
-            if (context.is_three_legged && metadata_json.contains("device_id")) {
-                context.device_from_token = metadata_json["device_id"];
-            }
-
-            // Extract x-correlator header if provided
-            if (metadata_json.contains("x-correlator")) {
-                context.correlation_id = metadata_json["x-correlator"];
-            }
-        }
-        catch (const std::exception& e) {
-            logger_->warn("Failed to parse message metadata: {}", e.what());
-        }
-    }
+    context.correlation_id = common_context.correlation_id;
+    context.api_consumer_id = common_context.api_consumer_id;
+    context.is_three_legged = common_context.is_three_legged;
+    context.device_from_token = common_context.device_from_token;
 
     return context;
 }
 
 std::string QodHandler::extract_session_id(const af::communication::MessagePtr& message) {
-    // Extract session ID from message metadata or path
-    if (!message->metadata.empty()) {
-        try {
-            nlohmann::json metadata_json = message->metadata;
-
-            if (metadata_json.contains("session_id")) {
-                return metadata_json["session_id"];
-            }
-
-            // Try to extract from path parameter
-            if (metadata_json.contains("path_params") &&
-                metadata_json["path_params"].contains("sessionId")) {
-                return metadata_json["path_params"]["sessionId"];
-            }
-        }
-        catch (const std::exception& e) {
-            logger_->warn("Failed to extract session ID from metadata: {}", e.what());
-        }
+    // Try multiple key formats for session ID extraction
+    // The API uses sessionId (camelCase) but gRPC metadata may use session_id (snake_case)
+    std::string session_id = common::handlers::ServiceHandlerHelpers::extract_path_param(message, "sessionId");
+    if (session_id.empty()) {
+        session_id = common::handlers::ServiceHandlerHelpers::extract_path_param(message, "session_id");
     }
-
-    return "";
+    return session_id;
 }
 
 } // namespace qod
