@@ -20,7 +20,7 @@ jobs:
   lint-and-format:
     name: Code Quality Checks
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -45,7 +45,7 @@ jobs:
     name: Build All Components
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    
+
     strategy:
       fail-fast: false
       matrix:
@@ -80,17 +80,13 @@ jobs:
 
       - name: Build ${{ matrix.component.name }}
         run: |
-          if [ "${{ matrix.component.name }}" = "af-core" ] || [ "${{ matrix.component.name }}" = "api-component" ]; then
-            docker build -f ${{ matrix.component.dockerfile }} -t ${{ matrix.component.name }}:test ${{ matrix.component.path }}/
-          else
-            docker build -f ${{ matrix.component.dockerfile }} -t ${{ matrix.component.name }}:test .
-          fi
+          docker build -f ${{ matrix.component.dockerfile }} -t ${{ matrix.component.name }}:test .
 
       - name: Verify build artifacts
         run: |
           echo "Checking image size..."
           docker images ${{ matrix.component.name }}:test
-          
+
           echo "Checking for binary..."
           docker run --rm ${{ matrix.component.name }}:test sh -c "ls -lh /usr/local/bin/ || ls -lh /app/"
 
@@ -112,7 +108,7 @@ jobs:
     name: Security Scanning
     runs-on: ubuntu-latest
     needs: build-components
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -137,7 +133,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint-and-format, build-components, security-scan]
     if: always()
-    
+
     steps:
       - name: Check build status
         run: |
@@ -145,5 +141,5 @@ jobs:
             echo "::error::Component builds failed"
             exit 1
           fi
-          
+
           echo "✅ All builds passed successfully!"
