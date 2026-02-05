@@ -80,7 +80,6 @@ jobs:
 
       - name: Build ${{ matrix.component.name }}
         run: |
-          ls -R
           docker build -f ${{ matrix.component.dockerfile }} -t ${{ matrix.component.name }}:test .
 
       - name: Verify build artifacts
