@@ -1,10 +1,14 @@
-# Build directories (but allow build/cmake/ which has CMake helper scripts)
-**/build/
+# Build directories
+# Explicitly ignore build directories in components to avoid context bloat
+af_core/build/
+common/build/
+southbound/pcf_handler/build/
+northbound/api_component/build/
+
+# Ignore root build folder contents but preserve cmake/ for helper scripts
+build/*
 !build/cmake/
-!common/build/
-!southbound/pcf_handler/build/
-!northbound/api_component/build/
-!af_core/build/
+
 **/build-*/
 **/CMakeCache.txt
 **/CMakeFiles/
