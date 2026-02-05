@@ -134,6 +134,8 @@ jobs:
       - name: Collect container logs
         if: always()
         run: ./build/scripts/ci_helper.sh collect_logs docker-compose/logs
+
+      - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
