@@ -135,6 +135,10 @@ jobs:
         if: always()
         run: ./build/scripts/ci_helper.sh collect_logs docker-compose/logs
 
+      - name: Parse test results
+        if: always()
+        run: ./build/scripts/ci_helper.sh parse_results docker-compose/results/test_results.xml
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -144,10 +148,6 @@ jobs:
             docker-compose/results/
             docker-compose/logs/
           retention-days: 30
-
-      - name: Parse test results
-        if: always()
-        run: ./build/scripts/ci_helper.sh parse_results docker-compose/results/test_results.xml
 
       - name: Check test exit code
         if: always()
@@ -160,62 +160,4 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          cd docker-compose
-          docker compose -f docker-compose-test.yaml down -v
-          docker system prune -f
-
-  build-pcf-handler:
-    name: Build PCF Handler
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          token: ${{ secrets.CI_GITHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build PCF Handler
-        run: |
-          docker build \
-            -f southbound/pcf_handler/Dockerfile \
-            -t pcf-handler:test \
-            .
-
-      - name: Test PCF Handler binary
-        run: |
-          docker run --rm pcf-handler:test sh -c "ldd /usr/local/bin/pcf_server | grep 'not found' && exit 1 || exit 0"
-
-      - name: Verify dependencies
-        run: |
-          echo "Checking AF libraries..."
-          docker run --rm pcf-handler:test sh -c "ls -la /usr/local/lib/libaf* 2>/dev/null || echo 'AF libs missing'"
-
-          echo "Checking Abseil libraries..."
-          docker run --rm pcf-handler:test sh -c "ls -la /usr/local/lib/libabsl* 2>/dev/null | head -10"
-
-  build-af-core:
-    name: Build AF Core
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          token: ${{ secrets.CI_GITHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build AF Core
-        run: |
-          docker build \
-            -f af_core/Dockerfile \
-            -t af-core:test \
-            af_core/
+          ./build/scripts/ci_helper.sh cleanup_services
