@@ -272,7 +272,7 @@ For more request examples, see [af_core/README.md](af_core/README.md).
 ## Build & test (entry points)
 
 - Build script: [build/scripts/build_all.sh](build/scripts/build_all.sh)
-- CI-like local validation: [.github/scripts/validate-locally.sh](.github/scripts/validate-locally.sh)
+- CI-like local validation: [build/scripts/ci_helper.sh](build/scripts/ci_helper.sh)
 - Compose environments (build/test): [docs/operations/docker-compose.md](docs/operations/docker-compose.md)
 - Testing guide: [docs/development/testing.md](docs/development/testing.md)
 

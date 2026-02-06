@@ -3,7 +3,7 @@
 ## Local validation (CI-like)
 
 ```bash
-./.github/scripts/validate-locally.sh
+./build/scripts/ci_helper.sh
 ```
 
 The script:
