@@ -6,8 +6,420 @@
 #include <vector>
 #include <optional>
 #include <functional> // Required for std::hash
-#include "common.h" // Include common data types
+#include <unordered_set>
+#include <variant>
+#include <chrono>
+#include <stdexcept>
+#include "common/models/common.h"
 
+/**
+ * @brief Universal UE Key for state management (Value Object)
+ * @details Provides a flexible, immutable key system that can identify UEs by different
+ * identifiers when SUPI is not available. Uses a hierarchical approach where SUPI is
+ * preferred but IP addresses, GPSI, or other identifiers can serve as temporary keys.
+ *
+ * @note This is a Value Object - equality is based on the primary key value
+ * @thread_safety Read operations are thread-safe. Promotion should be externally synchronized.
+ */
+class UeKey {
+public:
+    /**
+     * @brief Enumeration of supported key types in hierarchical order
+     */
+    enum class KeyType {
+        SUPI_BASED,         ///< Primary: UE identified by SUPI (Subscription Permanent Identifier)
+        GPSI_BASED,         ///< Secondary: UE identified by GPSI (Generic Public Subscription Identifier)
+        IPV4_BASED,         ///< Tertiary: UE identified by IPv4 address
+        IPV6_BASED,         ///< Tertiary: UE identified by IPv6 address
+        IPV6_PREFIX_BASED,  ///< Tertiary: UE identified by IPv6 prefix
+        MAC_ADDR_BASED,     ///< Tertiary: UE identified by MAC address (Ethernet PDU sessions)
+        COMPOSITE           ///< Multiple identifiers available (for future use)
+    };
+
+    // ============================================================================
+    // Factory Methods
+    // ============================================================================
+
+    /**
+     * @brief Create a SUPI-based key (preferred identifier)
+     * @param supi Subscription Permanent Identifier
+     * @return UeKey instance
+     * @throws std::invalid_argument if SUPI format is invalid
+     */
+    static UeKey from_supi(const Supi& supi) {
+        validate_supi_format(supi.value);
+        return UeKey(KeyType::SUPI_BASED, supi.value, {}, {}, {}, {}, {});
+    }
+
+    /**
+     * @brief Create a GPSI-based key (phone number)
+     * @param gpsi Generic Public Subscription Identifier
+     * @return UeKey instance
+     * @throws std::invalid_argument if GPSI format is invalid
+     */
+    static UeKey from_gpsi(const Gpsi& gpsi) {
+        validate_gpsi_format(gpsi.value);
+        return UeKey(KeyType::GPSI_BASED, {}, gpsi.value, {}, {}, {}, {});
+    }
+
+    /**
+     * @brief Create an IPv4-based key
+     * @param ipv4 IPv4 address
+     * @return UeKey instance
+     * @throws std::invalid_argument if IPv4 format is invalid
+     */
+    static UeKey from_ipv4(const Ipv4Addr& ipv4) {
+        validate_ipv4_format(ipv4.value);
+        return UeKey(KeyType::IPV4_BASED, {}, {}, ipv4.value, {}, {}, {});
+    }
+
+    /**
+     * @brief Create an IPv6-based key
+     * @param ipv6 IPv6 address
+     * @return UeKey instance
+     * @throws std::invalid_argument if IPv6 format is invalid
+     */
+    static UeKey from_ipv6(const Ipv6Addr& ipv6) {
+        validate_ipv6_format(ipv6.value);
+        return UeKey(KeyType::IPV6_BASED, {}, {}, {}, ipv6.value, {}, {});
+    }
+
+    /**
+     * @brief Create an IPv6 prefix-based key
+     * @param ipv6_prefix IPv6 prefix with CIDR notation
+     * @return UeKey instance
+     * @throws std::invalid_argument if IPv6 prefix format is invalid
+     */
+    static UeKey from_ipv6_prefix(const Ipv6Prefix& ipv6_prefix) {
+        validate_ipv6_prefix_format(ipv6_prefix.value);
+        return UeKey(KeyType::IPV6_PREFIX_BASED, {}, {}, {}, {}, ipv6_prefix.value, {});
+    }
+
+    /**
+     * @brief Create a MAC address-based key
+     * @param mac_addr MAC address (for Ethernet PDU sessions)
+     * @return UeKey instance
+     * @throws std::invalid_argument if MAC address format is invalid
+     */
+    static UeKey from_mac(const MacAddr48& mac_addr) {
+        validate_mac_format(mac_addr.value);
+        return UeKey(KeyType::MAC_ADDR_BASED, {}, {}, {}, {}, {}, mac_addr.value);
+    }
+
+    // ============================================================================
+    // Legacy Constructors
+    // ============================================================================
+
+    /**
+     * @brief Constructor for SUPI-based key (legacy)
+     * @param supi Subscription Permanent Identifier
+     * @deprecated Use UeKey::from_supi() instead
+     */
+    explicit UeKey(const Supi& supi)
+        : type_(KeyType::SUPI_BASED), supi_value_(supi.value) {
+        validate_supi_format(supi.value);
+    }
+
+    /**
+     * @brief Constructor for GPSI-based key (legacy)
+     * @param gpsi Generic Public Subscription Identifier
+     * @deprecated Use UeKey::from_gpsi() instead
+     */
+    explicit UeKey(const Gpsi& gpsi)
+        : type_(KeyType::GPSI_BASED), gpsi_value_(gpsi.value) {
+        validate_gpsi_format(gpsi.value);
+    }
+
+    /**
+     * @brief Constructor for IPv4-based key (legacy)
+     * @param ipv4 IPv4 address
+     * @deprecated Use UeKey::from_ipv4() instead
+     */
+    explicit UeKey(const Ipv4Addr& ipv4)
+        : type_(KeyType::IPV4_BASED), ipv4_value_(ipv4.value) {
+        validate_ipv4_format(ipv4.value);
+    }
+
+    /**
+     * @brief Constructor for IPv6-based key (legacy)
+     * @param ipv6 IPv6 address
+     * @deprecated Use UeKey::from_ipv6() instead
+     */
+    explicit UeKey(const Ipv6Addr& ipv6)
+        : type_(KeyType::IPV6_BASED), ipv6_value_(ipv6.value) {
+        validate_ipv6_format(ipv6.value);
+    }
+
+    /**
+     * @brief Constructor for IPv6 Prefix-based key (legacy)
+     * @param ipv6_prefix IPv6 prefix with CIDR notation
+     * @deprecated Use UeKey::from_ipv6_prefix() instead
+     */
+    explicit UeKey(const Ipv6Prefix& ipv6_prefix)
+        : type_(KeyType::IPV6_PREFIX_BASED), ipv6_prefix_value_(ipv6_prefix.value) {
+        validate_ipv6_prefix_format(ipv6_prefix.value);
+    }
+
+    /**
+     * @brief Constructor for MAC Address-based key (legacy)
+     * @param mac_addr MAC address
+     * @deprecated Use UeKey::from_mac() instead
+     */
+    explicit UeKey(const MacAddr48& mac_addr)
+        : type_(KeyType::MAC_ADDR_BASED), mac_addr_value_(mac_addr.value) {
+        validate_mac_format(mac_addr.value);
+    }
+
+    /**
+     * @brief Generic constructor with string value and type
+     * @param key The key value as string
+     * @param key_type The type of key
+     * @throws std::invalid_argument if key format doesn't match the type
+     * @note Consider using factory methods for better type safety
+     */
+    UeKey(const std::string& key, KeyType key_type);
+
+    // ============================================================================
+    // Accessors (Read-only Access to State)
+    // ============================================================================
+
+    /**
+     * @brief Get the type of this key
+     * @return KeyType enumeration value
+     */
+    KeyType get_type() const noexcept { return type_; }
+
+    /**
+     * @brief Get the primary key string for map indexing
+     * @return Formatted key string (e.g., "supi:imsi-123456789")
+     */
+    std::string get_primary_key() const;
+
+    /**
+     * @brief Get SUPI value if present
+     * @return Optional SUPI string
+     */
+    const std::optional<std::string>& get_supi_value() const noexcept { return supi_value_; }
+
+    /**
+     * @brief Get GPSI value if present
+     * @return Optional GPSI string
+     */
+    const std::optional<std::string>& get_gpsi_value() const noexcept { return gpsi_value_; }
+
+    /**
+     * @brief Get IPv4 value if present
+     * @return Optional IPv4 address string
+     */
+    const std::optional<std::string>& get_ipv4_value() const noexcept { return ipv4_value_; }
+
+    /**
+     * @brief Get IPv6 value if present
+     * @return Optional IPv6 address string
+     */
+    const std::optional<std::string>& get_ipv6_value() const noexcept { return ipv6_value_; }
+
+    /**
+     * @brief Get IPv6 prefix value if present
+     * @return Optional IPv6 prefix string
+     */
+    const std::optional<std::string>& get_ipv6_prefix_value() const noexcept { return ipv6_prefix_value_; }
+
+    /**
+     * @brief Get MAC address value if present
+     * @return Optional MAC address string
+     */
+    const std::optional<std::string>& get_mac_addr_value() const noexcept { return mac_addr_value_; }
+
+    // ============================================================================
+    // State Queries
+    // ============================================================================
+
+    /**
+     * @brief Check if this key can be promoted to SUPI-based
+     * @return true if key is not SUPI-based but has SUPI value available
+     */
+    bool can_promote_to_supi() const noexcept {
+        return type_ != KeyType::SUPI_BASED && supi_value_.has_value();
+    }
+
+    /**
+     * @brief Check if this key is provisional (not SUPI-based)
+     * @return true if key is not SUPI-based
+     */
+    bool is_provisional() const noexcept {
+        return type_ != KeyType::SUPI_BASED;
+    }
+
+    /**
+     * @brief Check if this key is fully resolved (SUPI-based)
+     * @return true if key is SUPI-based
+     */
+    bool is_resolved() const noexcept {
+        return type_ == KeyType::SUPI_BASED;
+    }
+
+    // ============================================================================
+    // State Mutations (Limited to SUPI Promotion and Type Demotion)
+    // ============================================================================
+
+    /**
+     * @brief Promote this key to SUPI-based if possible
+     * @note This is the ONLY mutable operation allowed
+     * @thread_safety This operation should be externally synchronized
+     */
+    void promote_to_supi() {
+        if (can_promote_to_supi()) {
+            type_ = KeyType::SUPI_BASED;
+        }
+    }
+
+    /**
+     * @brief Demote this key to COMPOSITE type
+     * @note Used when the primary identifier is removed but other identifiers remain
+     * @thread_safety This operation should be externally synchronized
+     */
+    void demote_to_composite() {
+        if (type_ != KeyType::COMPOSITE) {
+            type_ = KeyType::COMPOSITE;
+        }
+    }
+
+    /**
+     * @brief Create a new UeKey promoted to SUPI (immutable pattern)
+     * @return New UeKey instance with SUPI promotion, or copy if already SUPI-based
+     * @note Preferred over mutable promote_to_supi() for functional style
+     */
+    UeKey with_supi_promotion() const {
+        if (can_promote_to_supi()) {
+            return UeKey(KeyType::SUPI_BASED, supi_value_, gpsi_value_,
+                        ipv4_value_, ipv6_value_, ipv6_prefix_value_, mac_addr_value_);
+        }
+        return *this;
+    }
+
+    /**
+     * @brief Create a new composite UeKey (immutable pattern)
+     * @return New UeKey instance with COMPOSITE type
+     * @note Preferred over mutable demote_to_composite() for functional style
+     */
+    UeKey as_composite() const {
+        if (type_ == KeyType::COMPOSITE) {
+            return *this;
+        }
+        return UeKey(KeyType::COMPOSITE, supi_value_, gpsi_value_,
+                    ipv4_value_, ipv6_value_, ipv6_prefix_value_, mac_addr_value_);
+    }
+
+    // ============================================================================
+    // Comparison Operators (Value Object Semantics)
+    // ============================================================================
+
+    /**
+     * @brief Equality comparison based on primary key
+     * @param other UeKey to compare with
+     * @return true if primary keys are equal
+     */
+    bool operator==(const UeKey& other) const {
+        return get_primary_key() == other.get_primary_key();
+    }
+
+    /**
+     * @brief Inequality comparison
+     * @param other UeKey to compare with
+     * @return true if primary keys are not equal
+     */
+    bool operator!=(const UeKey& other) const {
+        return !(*this == other);
+    }
+
+    /**
+     * @brief Less-than comparison for ordered containers
+     * @param other UeKey to compare with
+     * @return true if this key is lexicographically less than other
+     */
+    bool operator<(const UeKey& other) const {
+        return get_primary_key() < other.get_primary_key();
+    }
+
+private:
+    // ============================================================================
+    // Private Members
+    // ============================================================================
+
+    KeyType type_;                                  ///< Type of key (determines which value is primary)
+    std::optional<std::string> supi_value_;        ///< SUPI value if available
+    std::optional<std::string> gpsi_value_;        ///< GPSI value if available
+    std::optional<std::string> ipv4_value_;        ///< IPv4 address if available
+    std::optional<std::string> ipv6_value_;        ///< IPv6 address if available
+    std::optional<std::string> ipv6_prefix_value_; ///< IPv6 prefix if available
+    std::optional<std::string> mac_addr_value_;    ///< MAC address if available
+
+    // ============================================================================
+    // Private Constructor (Used by Factory Methods)
+    // ============================================================================
+
+    /**
+     * @brief Private constructor for controlled object creation
+     * @note Used by factory methods to ensure validation
+     */
+    UeKey(KeyType type,
+          std::optional<std::string> supi,
+          std::optional<std::string> gpsi,
+          std::optional<std::string> ipv4,
+          std::optional<std::string> ipv6,
+          std::optional<std::string> ipv6_prefix,
+          std::optional<std::string> mac_addr)
+        : type_(type), supi_value_(std::move(supi)), gpsi_value_(std::move(gpsi)),
+          ipv4_value_(std::move(ipv4)), ipv6_value_(std::move(ipv6)),
+          ipv6_prefix_value_(std::move(ipv6_prefix)), mac_addr_value_(std::move(mac_addr)) {}
+
+    // ============================================================================
+    // Validation Helpers (Static Methods)
+    // ============================================================================
+
+    /**
+     * @brief Validate SUPI format
+     * @param value SUPI string to validate
+     * @throws std::invalid_argument if format is invalid
+     */
+    static void validate_supi_format(const std::string& value);
+
+    /**
+     * @brief Validate GPSI format
+     * @param value GPSI string to validate
+     * @throws std::invalid_argument if format is invalid
+     */
+    static void validate_gpsi_format(const std::string& value);
+
+    /**
+     * @brief Validate IPv4 address format
+     * @param value IPv4 string to validate
+     * @throws std::invalid_argument if format is invalid
+     */
+    static void validate_ipv4_format(const std::string& value);
+
+    /**
+     * @brief Validate IPv6 address format
+     * @param value IPv6 string to validate
+     * @throws std::invalid_argument if format is invalid
+     */
+    static void validate_ipv6_format(const std::string& value);
+
+    /**
+     * @brief Validate IPv6 prefix format
+     * @param value IPv6 prefix string to validate
+     * @throws std::invalid_argument if format is invalid
+     */
+    static void validate_ipv6_prefix_format(const std::string& value);
+
+    /**
+     * @brief Validate MAC address format
+     * @param value MAC address string to validate
+     * @throws std::invalid_argument if format is invalid
+     */
+    static void validate_mac_format(const std::string& value);
+};
 
 // --- Hash specializations for custom structs to use with std::unordered_map ---
 /**
@@ -36,6 +448,7 @@ struct PduSessionData {
     std::optional<DateTime> dnai_timestamp; // Timestamp of DNAI update
     std::vector<RouteToLocation> n6_traffic_routing_info; // N6 traffic routing requirement for the PDU session
     std::optional<DateTime> n6_traffic_routing_info_timestamp; // Timestamp for N6 traffic routing info update
+    std::unordered_set<std::string> active_qod_session_ids; // Set of active QoD session IDs associated with this PDU session
 
     bool operator==(const PduSessionData& other) const {
         return pdu_session_id == other.pdu_session_id &&
@@ -101,79 +514,426 @@ struct UeAccessMobilityData {
 };
 
 /**
- * @brief A comprehensive structure for an Application Function (AF) to maintain
+ * @brief A comprehensive class for an Application Function (AF) to maintain
  * periodically updated UE subscription information.
- * @details This struct combines various UE-specific data points obtainable via
+ * @details This class combines various UE-specific data points obtainable via
  * subscriptions, allowing the AF to have a holistic view of UE status,
- * IP addresses, and network context. It focuses on the requested
- * combination of UE status and IP address data.
+ * IP addresses, and network context. It uses a flexible key system to handle
+ * cases where SUPI is not initially available.
+ *
+ * @note This class manages complex state with invariants around UE identity resolution
+ * @thread_safety Not thread-safe - external synchronization required
  */
-struct AfUeSubscriptionState {
-    // **Primary UE Identifiers**
-    Supi supi; // Subscription Permanent Identifier
-    std::optional<Gpsi> gpsi; // Generic Public Subscription Identifier (GPSI)
+class AfUeSubscriptionState {
+public:
+    // **Resolution State**
+    enum class ResolutionState {
+        PROVISIONAL,    // UE identified by IP/temporary identifier only
+        PARTIAL,        // UE has some identifiers but not SUPI
+        RESOLVED        // UE has SUPI and full identity
+    };
 
-    // **UE Network Location and Access Information**
-    std::optional<UeLocationInfo> location_info; // UE's last reported location and time zone
-    std::optional<DateTime> location_timestamp; // Timestamp when the location was last updated
-    std::optional<UeAccessMobilityData> access_mobility_data; // UE's access and mobility related data
+    // ============================================================================
+    // Constructors
+    // ============================================================================
 
-    // **PDU Session(s) and Associated IP/MAC Addresses**
-    // A UE can have multiple PDU Sessions, each with its own IP/MAC and network context.
-    std::vector<PduSessionData> pdu_sessions; // List of active PDU sessions with their details
+    /**
+     * @brief Constructor for IP-based provisional state
+     * @param key The initial UeKey (typically IP-based)
+     */
+    explicit AfUeSubscriptionState(const UeKey& key)
+        : ue_key_(key), resolution_state_(ResolutionState::PROVISIONAL),
+          created_at_(std::chrono::system_clock::now()),
+          last_updated_(std::chrono::system_clock::now()) {}
 
-    // **UE Policy and Application Data Relevant to Network Interaction**
-    std::optional<std::string> ue_policy_data_info; // Represents the UE Policy data, e.g., UE Policy Set, URSP rules, as a string or more specific struct if detailed parsing is needed
-    std::optional<PduidInformation> prose_pduid_information; // ProSe Discovery UE ID and its validity timer for UE ProSe Policies
+    /**
+     * @brief Constructor for SUPI-based resolved state
+     * @param supi_val The SUPI identifier
+     */
+    explicit AfUeSubscriptionState(const Supi& supi_val)
+        : ue_key_(UeKey(supi_val)), supi_(supi_val),
+          resolution_state_(ResolutionState::RESOLVED),
+          supi_resolved_at_(std::chrono::system_clock::now()),
+          created_at_(std::chrono::system_clock::now()),
+          last_updated_(std::chrono::system_clock::now()) {}
 
-    // **Service-Related Capabilities and States**
-    std::optional<bool> time_sync_service_available_and_capable; // Indicates if 5GS/UE supports time synchronization service
-    std::vector<ServiceAreaCoverageInfo> service_area_coverage_allowed; // List of Tracking Areas per serving network where service is allowed
-    std::optional<bool> high_throughput_desired_for_ue_traffic; // Indicates if high throughput is desired for indicated UE traffic
+    // ============================================================================
+    // Accessors (Read-only)
+    // ============================================================================
+
+    const UeKey& get_ue_key() const noexcept { return ue_key_; }
+    const std::optional<Supi>& get_supi() const noexcept { return supi_; }
+    const std::optional<Gpsi>& get_gpsi() const noexcept { return gpsi_; }
+    ResolutionState get_resolution_state() const noexcept { return resolution_state_; }
+    const std::optional<std::chrono::system_clock::time_point>& get_supi_resolved_at() const noexcept { return supi_resolved_at_; }
+
+    const std::vector<std::string>& get_known_ipv4_addresses() const noexcept { return known_ipv4_addresses_; }
+    const std::vector<std::string>& get_known_ipv6_addresses() const noexcept { return known_ipv6_addresses_; }
+    const std::vector<std::string>& get_known_gpsi_values() const noexcept { return known_gpsi_values_; }
+    const std::vector<std::string>& get_known_ipv6_prefixes() const noexcept { return known_ipv6_prefixes_; }
+    const std::vector<std::string>& get_known_mac_addresses() const noexcept { return known_mac_addresses_; }
+
+    const std::optional<UeLocationInfo>& get_location_info() const noexcept { return location_info_; }
+    const std::optional<std::chrono::system_clock::time_point>& get_location_timestamp() const noexcept { return location_timestamp_; }
+    const std::optional<UeAccessMobilityData>& get_access_mobility_data() const noexcept { return access_mobility_data_; }
+
+    const std::vector<PduSessionData>& get_pdu_sessions() const noexcept { return pdu_sessions_; }
+
+    const std::optional<std::string>& get_ue_policy_data_info() const noexcept { return ue_policy_data_info_; }
+    const std::optional<PduidInformation>& get_prose_pduid_information() const noexcept { return prose_pduid_information_; }
+
+    const std::optional<bool>& get_time_sync_service_available_and_capable() const noexcept { return time_sync_service_available_and_capable_; }
+    const std::vector<ServiceAreaCoverageInfo>& get_service_area_coverage_allowed() const noexcept { return service_area_coverage_allowed_; }
+    const std::optional<bool>& get_high_throughput_desired_for_ue_traffic() const noexcept { return high_throughput_desired_for_ue_traffic_; }
+
+    std::chrono::system_clock::time_point get_created_at() const noexcept { return created_at_; }
+    std::chrono::system_clock::time_point get_last_updated() const noexcept { return last_updated_; }
+    const std::optional<std::chrono::system_clock::time_point>& get_last_activity() const noexcept { return last_activity_; }
+
+    // ============================================================================
+    // Mutators (Controlled State Modification)
+    // ============================================================================
+
+    /**
+     * @brief Set GPSI value
+     */
+    void set_gpsi(const Gpsi& gpsi) {
+        gpsi_ = gpsi;
+        touch();
+    }
+
+    /**
+     * @brief Set location information
+     */
+    void set_location_info(const UeLocationInfo& info) {
+        location_info_ = info;
+        location_timestamp_ = std::chrono::system_clock::now();
+        touch();
+    }
+
+    /**
+     * @brief Set access and mobility data
+     */
+    void set_access_mobility_data(const UeAccessMobilityData& data) {
+        access_mobility_data_ = data;
+        touch();
+    }
+
+    /**
+     * @brief Set UE policy data
+     */
+    void set_ue_policy_data_info(const std::string& info) {
+        ue_policy_data_info_ = info;
+        touch();
+    }
+
+    /**
+     * @brief Set ProSe PDUID information
+     */
+    void set_prose_pduid_information(const PduidInformation& info) {
+        prose_pduid_information_ = info;
+        touch();
+    }
+
+    /**
+     * @brief Set time sync capability
+     */
+    void set_time_sync_service_available_and_capable(bool available) {
+        time_sync_service_available_and_capable_ = available;
+        touch();
+    }
+
+    /**
+     * @brief Set service area coverage
+     */
+    void set_service_area_coverage_allowed(const std::vector<ServiceAreaCoverageInfo>& coverage) {
+        service_area_coverage_allowed_ = coverage;
+        touch();
+    }
+
+    /**
+     * @brief Set high throughput desired flag
+     */
+    void set_high_throughput_desired_for_ue_traffic(bool desired) {
+        high_throughput_desired_for_ue_traffic_ = desired;
+        touch();
+    }
+
+    /**
+     * @brief Update last activity timestamp
+     */
+    void record_activity() {
+        last_activity_ = std::chrono::system_clock::now();
+        touch();
+    }
+
+    // ============================================================================
+    // State Management Methods
+    // ============================================================================
+
+
+    /**
+     * @brief Promote provisional state when SUPI is resolved
+     * @param supi_val The resolved SUPI value
+     * @note Changes resolution state to RESOLVED
+     */
+    void resolve_supi(const Supi& supi_val) {
+        if (!supi_.has_value()) {
+            supi_ = supi_val;
+            resolution_state_ = ResolutionState::RESOLVED;
+            supi_resolved_at_ = std::chrono::system_clock::now();
+
+            // Update the key if it can be promoted
+            if (ue_key_.can_promote_to_supi()) {
+                ue_key_.promote_to_supi();
+            } else {
+                // Create a new SUPI-based key if the current key doesn't have SUPI value
+                ue_key_ = UeKey::from_supi(supi_val);
+            }
+            touch();
+        }
+    }
+
+    /**
+     * @brief Add an alternative identifier for cross-referencing
+     * @param type Identifier type ("ipv4", "ipv6", "gpsi", "ipv6_prefix", "mac")
+     * @param value The identifier value
+     * @return true if identifier was added, false if already exists
+     */
+    bool add_known_identifier(const std::string& type, const std::string& value) {
+        bool added = false;
+
+        if (type == "ipv4" && std::find(known_ipv4_addresses_.begin(), known_ipv4_addresses_.end(), value) == known_ipv4_addresses_.end()) {
+            known_ipv4_addresses_.push_back(value);
+            added = true;
+        } else if (type == "ipv6" && std::find(known_ipv6_addresses_.begin(), known_ipv6_addresses_.end(), value) == known_ipv6_addresses_.end()) {
+            known_ipv6_addresses_.push_back(value);
+            added = true;
+        } else if (type == "gpsi" && std::find(known_gpsi_values_.begin(), known_gpsi_values_.end(), value) == known_gpsi_values_.end()) {
+            known_gpsi_values_.push_back(value);
+            added = true;
+        } else if (type == "ipv6_prefix" && std::find(known_ipv6_prefixes_.begin(), known_ipv6_prefixes_.end(), value) == known_ipv6_prefixes_.end()) {
+            known_ipv6_prefixes_.push_back(value);
+            added = true;
+        } else if (type == "mac" && std::find(known_mac_addresses_.begin(), known_mac_addresses_.end(), value) == known_mac_addresses_.end()) {
+            known_mac_addresses_.push_back(value);
+            added = true;
+        }
+
+        if (added) {
+            touch();
+        }
+        return added;
+    }
+
+    /**
+     * @brief Remove a known identifier
+     * @param identifier_type Type of identifier to remove
+     * @param identifier_value Value to remove
+     * @return true if identifier was removed, false if not found
+     * @note May demote UeKey to COMPOSITE if primary identifier is removed
+     */
+    bool remove_known_identifier(const std::string& identifier_type, const std::string& identifier_value) {
+        bool removed = false;
+        bool should_demote = false;
+
+        if (identifier_type == "ipv4") {
+            auto it = std::find(known_ipv4_addresses_.begin(), known_ipv4_addresses_.end(), identifier_value);
+            if (it != known_ipv4_addresses_.end()) {
+                known_ipv4_addresses_.erase(it);
+                removed = true;
+                if (ue_key_.get_type() == UeKey::KeyType::IPV4_BASED && known_ipv4_addresses_.empty()) {
+                    should_demote = true;
+                }
+            }
+        } else if (identifier_type == "ipv6") {
+            auto it = std::find(known_ipv6_addresses_.begin(), known_ipv6_addresses_.end(), identifier_value);
+            if (it != known_ipv6_addresses_.end()) {
+                known_ipv6_addresses_.erase(it);
+                removed = true;
+                if (ue_key_.get_type() == UeKey::KeyType::IPV6_BASED && known_ipv6_addresses_.empty()) {
+                    should_demote = true;
+                }
+            }
+        } else if (identifier_type == "gpsi") {
+            auto it = std::find(known_gpsi_values_.begin(), known_gpsi_values_.end(), identifier_value);
+            if (it != known_gpsi_values_.end()) {
+                known_gpsi_values_.erase(it);
+                removed = true;
+                if (ue_key_.get_type() == UeKey::KeyType::GPSI_BASED && known_gpsi_values_.empty()) {
+                    should_demote = true;
+                }
+            }
+        } else if (identifier_type == "ipv6_prefix") {
+            auto it = std::find(known_ipv6_prefixes_.begin(), known_ipv6_prefixes_.end(), identifier_value);
+            if (it != known_ipv6_prefixes_.end()) {
+                known_ipv6_prefixes_.erase(it);
+                removed = true;
+                if (ue_key_.get_type() == UeKey::KeyType::IPV6_PREFIX_BASED && known_ipv6_prefixes_.empty()) {
+                    should_demote = true;
+                }
+            }
+        } else if (identifier_type == "mac") {
+            auto it = std::find(known_mac_addresses_.begin(), known_mac_addresses_.end(), identifier_value);
+            if (it != known_mac_addresses_.end()) {
+                known_mac_addresses_.erase(it);
+                removed = true;
+                if (ue_key_.get_type() == UeKey::KeyType::MAC_ADDR_BASED && known_mac_addresses_.empty()) {
+                    should_demote = true;
+                }
+            }
+        }
+
+        if (should_demote) {
+            ue_key_.demote_to_composite();
+        }
+
+        if (removed) {
+            touch();
+        }
+
+        return removed;
+    }
+
+    /**
+     * @brief Add or update a PDU session
+     * @param pdu_session The PDU session data
+     */
+    void add_or_update_pdu_session(const PduSessionData& pdu_session) {
+        auto it = std::find_if(pdu_sessions_.begin(), pdu_sessions_.end(),
+            [&](const PduSessionData& ps) { return ps.pdu_session_id == pdu_session.pdu_session_id; });
+
+        if (it != pdu_sessions_.end()) {
+            *it = pdu_session;
+        } else {
+            pdu_sessions_.push_back(pdu_session);
+        }
+        touch();
+    }
+
+    /**
+     * @brief Remove a PDU session by ID
+     * @param pdu_session_id The PDU session identifier
+     * @return true if session was removed
+     */
+    bool remove_pdu_session(const std::string& pdu_session_id) {
+        auto it = std::find_if(pdu_sessions_.begin(), pdu_sessions_.end(),
+            [&](const PduSessionData& ps) { return ps.pdu_session_id == pdu_session_id; });
+
+        if (it != pdu_sessions_.end()) {
+            pdu_sessions_.erase(it);
+            touch();
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * @brief Get mutable access to PDU sessions for bulk operations
+     *
+     * @warning Bypasses automatic timestamp updates - you MUST call `record_activity()` after modifications!
+     *
+     * **Use for:** Bulk updates, STL algorithms (std::remove_if, std::sort), tight loops
+     * **Advantages:** Zero-copy access, efficient bulk operations, full STL container control
+     *
+     * **Prefer instead:** `add_or_update_pdu_session(pdu)` or `remove_pdu_session(id)` for single operations
+     *
+     * @return Non-const reference to internal PDU sessions vector
+     * @example
+     * ```cpp
+     * auto& sessions = ue_state.get_mutable_pdu_sessions();
+     * for (auto& s : sessions) s.status = "INACTIVE";
+     * ue_state.record_activity(); // Required!
+     * ```
+     */
+    std::vector<PduSessionData>& get_mutable_pdu_sessions() { return pdu_sessions_; }
+
+    // ============================================================================
+    // Comparison Operators
+    // ============================================================================
 
     bool operator==(const AfUeSubscriptionState& other) const {
-        return supi == other.supi &&
-               gpsi == other.gpsi &&
-               location_info == other.location_info &&
-               location_timestamp == other.location_timestamp &&
-               access_mobility_data == other.access_mobility_data &&
-               pdu_sessions == other.pdu_sessions &&
-               ue_policy_data_info == other.ue_policy_data_info &&
-               prose_pduid_information == other.prose_pduid_information &&
-               time_sync_service_available_and_capable == other.time_sync_service_available_and_capable &&
-               service_area_coverage_allowed == other.service_area_coverage_allowed &&
-               high_throughput_desired_for_ue_traffic == other.high_throughput_desired_for_ue_traffic;
+        return ue_key_ == other.ue_key_ &&
+               supi_ == other.supi_ &&
+               gpsi_ == other.gpsi_ &&
+               location_info_ == other.location_info_ &&
+               location_timestamp_ == other.location_timestamp_ &&
+               access_mobility_data_ == other.access_mobility_data_ &&
+               pdu_sessions_ == other.pdu_sessions_ &&
+               ue_policy_data_info_ == other.ue_policy_data_info_ &&
+               prose_pduid_information_ == other.prose_pduid_information_ &&
+               time_sync_service_available_and_capable_ == other.time_sync_service_available_and_capable_ &&
+               service_area_coverage_allowed_ == other.service_area_coverage_allowed_ &&
+               high_throughput_desired_for_ue_traffic_ == other.high_throughput_desired_for_ue_traffic_;
+    }
+
+    bool operator!=(const AfUeSubscriptionState& other) const {
+        return !(*this == other);
+    }
+
+private:
+    // ============================================================================
+    // Private Members
+    // ============================================================================
+
+    // UE Identity Management
+    UeKey ue_key_;
+    std::optional<Supi> supi_;
+    std::optional<Gpsi> gpsi_;
+
+    // Resolution State
+    ResolutionState resolution_state_;
+    std::optional<std::chrono::system_clock::time_point> supi_resolved_at_;
+
+    // Alternative Identifiers (for cross-referencing and promotion)
+    std::vector<std::string> known_ipv4_addresses_;
+    std::vector<std::string> known_ipv6_addresses_;
+    std::vector<std::string> known_gpsi_values_;
+    std::vector<std::string> known_ipv6_prefixes_;
+    std::vector<std::string> known_mac_addresses_;
+
+    // UE Network Location and Access Information
+    std::optional<UeLocationInfo> location_info_;
+    std::optional<std::chrono::system_clock::time_point> location_timestamp_;
+    std::optional<UeAccessMobilityData> access_mobility_data_;
+
+    // PDU Session(s) and Associated IP/MAC Addresses
+    std::vector<PduSessionData> pdu_sessions_;
+
+    // UE Policy and Application Data Relevant to Network Interaction
+    std::optional<std::string> ue_policy_data_info_;
+    std::optional<PduidInformation> prose_pduid_information_;
+
+    // Service-Related Capabilities and States
+    std::optional<bool> time_sync_service_available_and_capable_;
+    std::vector<ServiceAreaCoverageInfo> service_area_coverage_allowed_;
+    std::optional<bool> high_throughput_desired_for_ue_traffic_;
+
+    // State Management Metadata
+    std::chrono::system_clock::time_point created_at_;
+    std::chrono::system_clock::time_point last_updated_;
+    std::optional<std::chrono::system_clock::time_point> last_activity_;
+
+    // ============================================================================
+    // Private Helper Methods
+    // ============================================================================
+
+    /**
+     * @brief Update last_updated timestamp
+     */
+    void touch() {
+        last_updated_ = std::chrono::system_clock::now();
     }
 };
 
 // --- Hash specializations for custom structs to use with std::unordered_map ---
 namespace std {
 
-// Helper for hashing optional values
-template<typename T>
-size_t hash_optional(const std::optional<T>& opt) {
-    return opt ? std::hash<T>{}(*opt) : 0;
-}
-
-// Helper for combining hashes (a common pattern similar to boost::hash_combine)
-inline void hash_combine(std::size_t& seed, const std::size_t& v) {
-    seed ^= v + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-}
-
-// Implementations for basic string-wrapped types
-template<> struct hash<Supi> { size_t operator()(const Supi& s) const { return hash<string>{}(s.value); } };
-template<> struct hash<Gpsi> { size_t operator()(const Gpsi& g) const { return hash<string>{}(g.value); } };
-template<> struct hash<Dnn> { size_t operator()(const Dnn& d) const { return hash<string>{}(d.value); } };
-template<> struct hash<Ipv4Addr> { size_t operator()(const Ipv4Addr& i) const { return hash<string>{}(i.value); } };
-template<> struct hash<Ipv6Addr> { size_t operator()(const Ipv6Addr& i) const { return hash<string>{}(i.value); } };
-template<> struct hash<Ipv6Prefix> { size_t operator()(const Ipv6Prefix& i) const { return hash<string>{}(i.value); } };
-template<> struct hash<MacAddr48> { size_t operator()(const MacAddr48& m) const { return hash<string>{}(m.value); } };
-template<> struct hash<DateTime> { size_t operator()(const DateTime& dt) const { return hash<string>{}(dt.value); } };
-template<> struct hash<Uri> { size_t operator()(const Uri& u) const { return hash<string>{}(u.value); } };
-template<> struct hash<AccessType> { size_t operator()(const AccessType& at) const { return hash<string>{}(at.value); } };
-template<> struct hash<RatType> { size_t operator()(const RatType& rt) const { return hash<string>{}(rt.value); } };
-template<> struct hash<Uinteger> { size_t operator()(const Uinteger& ui) const { return hash<unsigned int>{}(ui.value); } };
-template<> struct hash<Tac> { size_t operator()(const Tac& tac) const { return hash<string>{}(tac.value); } };
+template<> struct hash<UeKey> {
+    size_t operator()(const UeKey& key) const {
+        return hash<string>{}(key.get_primary_key());
+    }
+};
 
 template<> struct hash<Snssai> {
     size_t operator()(const Snssai& s) const {

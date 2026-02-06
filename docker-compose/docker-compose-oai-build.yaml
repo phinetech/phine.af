@@ -157,7 +157,7 @@ services:
         extra_hosts:
             - "oai-ext-dn:192.168.72.135"
             - "oai-nrf:192.168.70.130"
-    
+
     oai-ext-dn:
         privileged: true
         init: true
@@ -193,7 +193,7 @@ services:
             - TZ=Europe/Paris
         depends_on:
             - oai-pcf
-        command: 
+        command:
         - /bin/bash
         - -c
         - |
@@ -210,8 +210,8 @@ services:
             - oai-pcf
             - af_core
         build:
-            context: ../southbound/
-            dockerfile: ./pcf_handler/Dockerfile
+            context: ..
+            dockerfile: southbound/pcf_handler/Dockerfile
         networks:
             public_net:
                 ipv4_address: 192.168.70.140
@@ -221,8 +221,8 @@ services:
         image: tariromukute/af-core:${TAG:-latest}
         container_name: af-core
         build:
-            context: ../af_core
-            dockerfile: Dockerfile
+            context: ..
+            dockerfile: af_core/Dockerfile
         networks:
             public_net:
                 ipv4_address: 192.168.70.141
@@ -234,8 +234,8 @@ services:
         depends_on:
             - af_core
         build:
-            context: ../northbound/api_component
-            dockerfile: Dockerfile
+            context: ..
+            dockerfile: northbound/api_component/Dockerfile
         networks:
             public_net:
                 ipv4_address: 192.168.70.142

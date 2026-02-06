@@ -11,39 +11,53 @@ function(generate_grpc_cpp SRCS HDRS PROTO_FILES)
 
   # Get absolute paths to protoc and protoc-gen-grpc
   set(PROTOC_BIN ${Protobuf_PROTOC_EXECUTABLE})
-  if(gRPC_FOUND)
-    set(GRPC_CPP_PLUGIN $<TARGET_FILE:gRPC::grpc_cpp_plugin>)
+
+  # Always use find_program to get the grpc_cpp_plugin - imported target LOCATION doesn't work reliably
+  find_program(GRPC_CPP_PLUGIN_PATH grpc_cpp_plugin
+    PATHS /usr/local/bin /usr/bin
+    NO_DEFAULT_PATH)
+  if(NOT GRPC_CPP_PLUGIN_PATH)
+    find_program(GRPC_CPP_PLUGIN_PATH grpc_cpp_plugin)
+  endif()
+  set(GRPC_CPP_PLUGIN ${GRPC_CPP_PLUGIN_PATH})
+
+  if(NOT GRPC_CPP_PLUGIN)
+    message(WARNING "gRPC plugin not found. Will generate protobuf code only.")
   else()
-    find_program(GRPC_CPP_PLUGIN grpc_cpp_plugin)
-    if(NOT GRPC_CPP_PLUGIN)
-      message(WARNING "gRPC plugin not found. Will generate protobuf code only.")
-    endif()
+    message(STATUS "Using gRPC plugin: ${GRPC_CPP_PLUGIN}")
   endif()
 
   set(GENERATED_SRCS)
   set(GENERATED_HDRS)
-  
+
+  # Choose output directory (shared across project if PROTO_GEN_DIR is set)
+  if(DEFINED PROTO_GEN_DIR)
+    set(GEN_DIR ${PROTO_GEN_DIR})
+  else()
+    set(GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
+  endif()
+
   foreach(PROTO_FILE ${PROTO_FILES})
     get_filename_component(PROTO_NAME ${PROTO_FILE} NAME_WE)
     get_filename_component(PROTO_PATH ${PROTO_FILE} DIRECTORY)
-    
-    set(PROTO_SRC "${CMAKE_CURRENT_BINARY_DIR}/generated/${PROTO_NAME}.pb.cc")
-    set(PROTO_HDR "${CMAKE_CURRENT_BINARY_DIR}/generated/${PROTO_NAME}.pb.h")
-    
+
+    set(PROTO_SRC "${GEN_DIR}/${PROTO_NAME}.pb.cc")
+    set(PROTO_HDR "${GEN_DIR}/${PROTO_NAME}.pb.h")
+
     list(APPEND GENERATED_SRCS ${PROTO_SRC})
     list(APPEND GENERATED_HDRS ${PROTO_HDR})
-    
+
     if(GRPC_CPP_PLUGIN)
-      set(GRPC_SRC "${CMAKE_CURRENT_BINARY_DIR}/generated/${PROTO_NAME}.grpc.pb.cc")
-      set(GRPC_HDR "${CMAKE_CURRENT_BINARY_DIR}/generated/${PROTO_NAME}.grpc.pb.h")
+      set(GRPC_SRC "${GEN_DIR}/${PROTO_NAME}.grpc.pb.cc")
+      set(GRPC_HDR "${GEN_DIR}/${PROTO_NAME}.grpc.pb.h")
       list(APPEND GENERATED_SRCS ${GRPC_SRC})
       list(APPEND GENERATED_HDRS ${GRPC_HDR})
-      
+
       add_custom_command(
         OUTPUT ${PROTO_SRC} ${PROTO_HDR} ${GRPC_SRC} ${GRPC_HDR}
         COMMAND ${PROTOC_BIN}
-        ARGS --cpp_out=${CMAKE_CURRENT_BINARY_DIR}/generated
-             --grpc_out=${CMAKE_CURRENT_BINARY_DIR}/generated
+        ARGS --cpp_out=${GEN_DIR}
+             --grpc_out=${GEN_DIR}
              --plugin=protoc-gen-grpc=${GRPC_CPP_PLUGIN}
              -I${PROTO_PATH}
              ${PROTO_FILE}
@@ -55,7 +69,7 @@ function(generate_grpc_cpp SRCS HDRS PROTO_FILES)
       add_custom_command(
         OUTPUT ${PROTO_SRC} ${PROTO_HDR}
         COMMAND ${PROTOC_BIN}
-        ARGS --cpp_out=${CMAKE_CURRENT_BINARY_DIR}/generated
+        ARGS --cpp_out=${GEN_DIR}
              -I${PROTO_PATH}
              ${PROTO_FILE}
         DEPENDS ${PROTO_FILE}
@@ -64,7 +78,7 @@ function(generate_grpc_cpp SRCS HDRS PROTO_FILES)
       )
     endif()
   endforeach()
-  
+
   set(${SRCS} ${GENERATED_SRCS} PARENT_SCOPE)
   set(${HDRS} ${GENERATED_HDRS} PARENT_SCOPE)
 endfunction()

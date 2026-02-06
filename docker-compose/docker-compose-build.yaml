@@ -18,8 +18,8 @@ services:
     image: tariromukute/af-api:${TAG:-latest}
     container_name: af-north-api
     build:
-      context: ../northbound/api_component
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: northbound/api_component/Dockerfile
     networks:
       af_net:
         ipv4_address: 192.168.70.142
@@ -28,8 +28,8 @@ services:
   af_core:
     image: tariromukute/af-core:${TAG:-latest}
     build:
-      context: ../af_core
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: af_core/Dockerfile
     networks:
       af_net:
         ipv4_address: 192.168.70.141
@@ -38,8 +38,8 @@ services:
   pcf_handler:
     image: tariromukute/pcf-handler:${TAG:-latest}
     build:
-      context: ../southbound/
-      dockerfile: ./pcf_handler/Dockerfile
+      context: ..
+      dockerfile: southbound/pcf_handler/Dockerfile
     networks:
       af_net:
         ipv4_address: 192.168.70.140

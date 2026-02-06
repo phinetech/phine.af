@@ -3,7 +3,7 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <nlohmann/json.hpp>
-#include "../common/communication/include/message.h"
+#include <message.h>
 
 namespace af::northbound {
 
@@ -14,7 +14,7 @@ using namespace nghttp2::asio_http2::server;
 ApiHandlers::ApiHandlers() {
     // Setup logger
     initializeLogger(spdlog::level::debug);
-    
+
     logger_->info("API Handlers initialized");
 }
 
@@ -31,7 +31,7 @@ void ApiHandlers::getHealth(const request& req, const response& res) {
         {"status", "up"},
         {"timestamp", std::time(nullptr)}
     };
-    
+
     header_map headers;
     headers.emplace("content-type", header_value{{"application/json"}, false});
     res.write_head(200, headers);
@@ -45,7 +45,7 @@ void ApiHandlers::getVersion(const request& req, const response& res) {
         {"build_date", __DATE__},
         {"build_time", __TIME__}
     };
-    
+
     header_map headers;
     headers.emplace("content-type", header_value{{"application/json"}, false});
     res.write_head(200, headers);
@@ -57,16 +57,16 @@ void ApiHandlers::requestQoS(const request& req, const response& res) {
         try {
             // Parse request body
             auto json_body = json::parse(body);
-            
+
             // Log the received request
             logger_->info("Received QoS request: {}", json_body.dump());
-            
+
             // Create message to AF Core
             auto msg = createMessage("qos_request", json_body.dump());
-            
+
             // Send to AF Core and wait for response
             auto reply = core_comm_->send_request("af_core", msg);
-            
+
             // Send response back to client
             if (reply && reply->message_type == "qos_success") {
                 auto reply_body = json::parse(reply->payload);
@@ -110,10 +110,10 @@ void ApiHandlers::getSubscriptions(const request& req, const response& res) {
     try {
         // Create message to AF Core
         auto msg = createMessage("get_subscriptions", "");
-        
+
         // Send to AF Core and wait for response
         auto reply = core_comm_->send_request("af_core", msg);
-        
+
         // Send response back to client
         if (reply && reply->message_type == "subscriptions_list") {
             auto subscriptions = json::parse(reply->payload);
@@ -151,16 +151,16 @@ void ApiHandlers::createSubscription(const request& req, const response& res) {
         try {
             // Parse request body
             auto json_body = json::parse(body);
-            
+
             // Log the received request
             logger_->info("Received subscription creation request: {}", json_body.dump());
-            
+
             // Create message to AF Core
             auto msg = createMessage("create_subscription", json_body.dump());
-            
+
             // Send to AF Core and wait for response
             auto reply = core_comm_->send_request("af_core", msg);
-            
+
             // Send response back to client
             if (reply && reply->message_type == "subscription_created") {
                 auto subscription = json::parse(reply->payload);
@@ -205,10 +205,10 @@ void ApiHandlers::getSubscription(const request& req, const response& res, const
         // Create message to AF Core
         json content = {{"id", id}};
         auto msg = createMessage("get_subscription", content.dump());
-        
+
         // Send to AF Core and wait for response
         auto reply = core_comm_->send_request("af_core", msg);
-        
+
         // Send response back to client
         if (reply && reply->message_type == "subscription") {
             auto subscription = json::parse(reply->payload);
@@ -255,10 +255,10 @@ void ApiHandlers::deleteSubscription(const request& req, const response& res, co
         // Create message to AF Core
         json content = {{"id", id}};
         auto msg = createMessage("delete_subscription", content.dump());
-        
+
         // Send to AF Core and wait for response
         auto reply = core_comm_->send_request("af_core", msg);
-        
+
         // Send response back to client
         if (reply && reply->message_type == "subscription_deleted") {
             res.write_head(204);
@@ -299,7 +299,7 @@ void ApiHandlers::deleteSubscription(const request& req, const response& res, co
 
 void ApiHandlers::readRequestBody(const request& req, std::function<void(const std::string&)> callback) {
     std::string body;
-    
+
     req.on_data([&body, callback](const uint8_t* data, size_t len) {
         if (len > 0) {
             body.append(reinterpret_cast<const char*>(data), len);
@@ -332,15 +332,15 @@ af::communication::MessagePtr ApiHandlers::createMessage(const std::string& type
 void ApiHandlers::initializeLogger(spdlog::level::level_enum log_level) {
     // Check if a logger with this name already exists
     logger_ = spdlog::get("northbound::api_handlers");
-    
+
     if (!logger_) {
         // Create a new logger with a colored console sink
         logger_ = spdlog::stdout_color_mt("northboun::api_handlers");
     }
-    
+
     // Set the log level
     logger_->set_level(log_level);
-    
+
     // Set the log pattern: timestamp [level] [component] message
     logger_->set_pattern("%Y-%m-%d %H:%M:%S.%e [%^%l%$] [%n] %v");
 }

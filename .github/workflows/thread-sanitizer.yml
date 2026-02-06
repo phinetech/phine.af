@@ -1,0 +1,186 @@
+name: ThreadSanitizer Deadlock Detection
+
+on:
+#   pull_request:
+#     branches:
+#       - main
+#       - develop
+#       - 'feat-*'
+#     paths:
+#       - 'af_core/**'
+#       - 'common/**'
+#       - '.github/workflows/thread-sanitizer.yml'
+#       - '.github/scripts/check_deadlocks.sh'
+#   push:
+#     branches:
+#       - main
+#       - develop
+  workflow_dispatch:
+
+env:
+  TSAN_OPTIONS: "second_deadlock_stack=1 log_path=/tmp/tsan.log history_size=7"
+
+jobs:
+  thread-sanitizer-check:
+    name: ThreadSanitizer Build & Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.CI_GITHUB_TOKEN }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang \
+            clang-12 \
+            build-essential \
+            cmake \
+            git \
+            libspdlog-dev \
+            libyaml-cpp-dev \
+            libfmt-dev \
+            nlohmann-json3-dev \
+            libssl-dev \
+            libboost-all-dev \
+            pkg-config
+
+      - name: Install gRPC and Protobuf
+        run: |
+          # Check if gRPC is already installed
+          if ! pkg-config --exists grpc++ protobuf; then
+            echo "Installing gRPC and Protobuf..."
+            cd /tmp
+
+            # Install protobuf
+            git clone --depth 1 --branch v21.12 https://github.com/protocolbuffers/protobuf.git
+            cd protobuf
+            git submodule update --init --recursive
+            mkdir -p cmake/build && cd cmake/build
+            cmake -DCMAKE_BUILD_TYPE=Release \
+                  -Dprotobuf_BUILD_TESTS=OFF \
+                  -DCMAKE_INSTALL_PREFIX=/usr/local \
+                  ..
+            make -j$(nproc)
+            sudo make install
+            sudo ldconfig
+
+            # Install gRPC
+            cd /tmp
+            git clone --depth 1 --branch v1.51.1 https://github.com/grpc/grpc.git
+            cd grpc
+            git submodule update --init --recursive
+            mkdir -p cmake/build && cd cmake/build
+            cmake -DCMAKE_BUILD_TYPE=Release \
+                  -DgRPC_INSTALL=ON \
+                  -DgRPC_BUILD_TESTS=OFF \
+                  -DgRPC_PROTOBUF_PROVIDER=package \
+                  -DCMAKE_INSTALL_PREFIX=/usr/local \
+                  ../..
+            make -j$(nproc)
+            sudo make install
+            sudo ldconfig
+          else
+            echo "gRPC and Protobuf already installed"
+          fi
+
+      - name: Set executable permissions
+        run: |
+          chmod +x .github/scripts/check_deadlocks.sh
+
+      - name: Run ThreadSanitizer deadlock detection
+        id: tsan_check
+        run: |
+          echo "Starting ThreadSanitizer analysis..."
+          .github/scripts/check_deadlocks.sh
+        continue-on-error: true
+
+      - name: Upload analysis report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: thread-sanitizer-report
+          path: |
+            /tmp/deadlock_analysis_report.txt
+            /tmp/tsan_build_output.txt
+            /tmp/tsan*.log
+          retention-days: 30
+
+      - name: Display report summary
+        if: always()
+        run: |
+          echo "==================================="
+          echo "ThreadSanitizer Analysis Summary"
+          echo "==================================="
+
+          if [ -f /tmp/deadlock_analysis_report.txt ]; then
+            echo ""
+            echo "Full report available in artifacts"
+            echo ""
+            echo "--- Report Preview (first 40 lines) ---"
+            head -40 /tmp/deadlock_analysis_report.txt
+            echo ""
+            echo "--- Report Preview (last 20 lines) ---"
+            tail -20 /tmp/deadlock_analysis_report.txt
+          else
+            echo "::error::No analysis report generated"
+            exit 1
+          fi
+
+      - name: Check for TSan warnings in logs
+        if: always()
+        run: |
+          echo "Checking for ThreadSanitizer warnings..."
+
+          if ls /tmp/tsan*.log 1> /dev/null 2>&1; then
+            echo "TSan log files found:"
+            ls -lh /tmp/tsan*.log
+
+            echo ""
+            echo "Checking for data races or deadlocks..."
+
+            if grep -q "WARNING: ThreadSanitizer: data race\|WARNING: ThreadSanitizer: lock-order-inversion\|WARNING: ThreadSanitizer: thread leak" /tmp/tsan*.log 2>/dev/null; then
+              echo "::error::ThreadSanitizer detected issues!"
+              echo ""
+              echo "=== ThreadSanitizer Warnings ==="
+              grep -A 10 "WARNING: ThreadSanitizer" /tmp/tsan*.log || true
+              exit 1
+            else
+              echo "✅ No ThreadSanitizer warnings found in logs"
+            fi
+          else
+            echo "No TSan logs generated (binary may not have run with TSan enabled)"
+          fi
+
+      - name: Verify build completed
+        if: always()
+        run: |
+          if [ "${{ steps.tsan_check.outcome }}" != "success" ]; then
+            echo "::error::ThreadSanitizer build or analysis failed"
+            echo "Check the uploaded artifacts for detailed error information"
+            exit 1
+          fi
+
+          echo "✅ ThreadSanitizer analysis completed successfully"
+
+  status-check:
+    name: ThreadSanitizer Status
+    runs-on: ubuntu-latest
+    needs: [thread-sanitizer-check]
+    if: always()
+
+    steps:
+      - name: Check overall status
+        run: |
+          if [ "${{ needs.thread-sanitizer-check.result }}" != "success" ]; then
+            echo "::error::ThreadSanitizer checks failed!"
+            echo "Review the artifacts and logs for detailed information."
+            exit 1
+          fi
+
+          echo "✅ All ThreadSanitizer checks passed!"

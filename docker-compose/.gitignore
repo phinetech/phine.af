@@ -6,3 +6,6 @@ base/free5gc
 
 # cert
 cert/*_*.pem
+
+# Test logs
+results/*

@@ -21,6 +21,8 @@
 namespace af {
 namespace southbound {
 
+// TODO: Resolve issue with connection reuse, currently a new connection is made for each request
+
 /**
  * @brief Wrapper for the PCF client API
  */
@@ -70,7 +72,7 @@ public:
      * @param app_session_id Application session ID
      * @return true if deletion succeeded
      */
-    bool delete_app_session(const std::string& app_session_id);
+    bool delete_app_session(const std::string& app_session_id, const nlohmann::json& delete_data);
     
     /**
      * @brief Get information about an application session
@@ -102,6 +104,7 @@ private:
     
     // Connection state
     bool connected_;
+    bool connection_error_; // Track if connection had an error
     std::mutex session_mutex_;
     
     // Response data
@@ -129,6 +132,17 @@ private:
      * @return true if connection succeeded
      */
     bool connect();
+    
+    /**
+     * @brief Disconnect from the PCF server
+     */
+    void disconnect();
+    
+    /**
+     * @brief Check if connection is still alive
+     * @return true if connection is alive
+     */
+    bool is_connection_alive();
     
     /**
      * @brief Parse the URL into host, port, and path

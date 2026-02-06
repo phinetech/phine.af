@@ -6,8 +6,8 @@
 #include <spdlog/spdlog.h>
 #include <nghttp2/asio_http2_server.h>
 #include "api_handlers.h"
-#include "../common/component/include/af_component.h"
-#include "../common/communication/include/communication_interface.h"
+#include <af_component.h>
+#include <communication_interface.h>
 
 namespace af::northbound {
 
@@ -42,23 +42,23 @@ private:
     bool tls_enabled_;
     std::string cert_file_;
     std::string key_file_;
-    
+
     // HTTP/2 server and io_context
     std::shared_ptr<boost::asio::io_context> io_context_;
     std::unique_ptr<nghttp2::asio_http2::server::http2> server_;
-    
+
     // API handlers
     std::shared_ptr<ApiHandlers> api_handlers_;
-    
+
     // Communication interface for talking to AF Core
     std::shared_ptr<af::communication::CommunicationService> core_comm_;
-    
+
     // Logger instance
     std::shared_ptr<spdlog::logger> logger_;
-    
+
     // Load configuration
     void loadConfig(const std::string& config_path);
-    
+
     // Set up HTTP/2 server routes
     void setupRoutes();
 };

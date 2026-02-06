@@ -1,0 +1,49 @@
+# Build directories (but allow build/cmake/ which has CMake helper scripts)
+**/build/
+!build/cmake/
+!common/build/
+!southbound/pcf_handler/build/
+!northbound/api_component/build/
+!af_core/build/
+**/build-*/
+**/CMakeCache.txt
+**/CMakeFiles/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+.gitmodules
+
+# Documentation and temporary files
+*.md
+docs/
+site/
+*.log
+
+# Test results
+**/results/
+**/test_results/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+
+# Node
+node_modules/
+npm-debug.log
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -451,15 +451,18 @@ bool PolicyManager::apply_policy(QoSPolicy& policy) {
         logger_->error("Cannot apply policy: orchestrator not initialized");
         return false;
     }
-    
+    logger_->debug("Orchestrator is initialized");
     // Get PCF communication service
     auto& comm_services = orchestrator_->get_communication_services();
+        logger_->debug("Available communication services:");
     auto pcf_comm_it = comm_services.find("pcf");
+        logger_->debug("Communication services count: {}", comm_services.size());
     
     if (pcf_comm_it == comm_services.end() || !pcf_comm_it->second) {
         logger_->error("PCF communication service not available");
         return false;
     }
+        logger_->debug("PCF communication service found");
     
     auto& pcf_comm = pcf_comm_it->second;
     

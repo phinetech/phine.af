@@ -1,0 +1,63 @@
+site_name: phine.af
+site_description: Documentation for the phine.af 5G AF project
+
+# Keep docs in the existing /docs folder
+docs_dir: docs
+
+theme:
+  name: readthedocs
+
+plugins:
+  - search
+
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_div_format
+
+extra_javascript:
+    - https://unpkg.com/mermaid@10/dist/mermaid.min.js
+    - javascripts/mermaid-init.js
+
+nav:
+  - Home: index.md
+  - Status: status.md
+  - Getting Started:
+      - Prerequisites: getting-started/prerequisites.md
+      - Build: getting-started/build.md
+      - Run: getting-started/run.md
+      - First Request: getting-started/first-request.md
+      - Quickstart: getting-started/quickstart.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - Data Flow: architecture/data-flow.md
+      - Components: architecture/components.md
+      - Repository Layout: architecture/repository-layout.md
+  - APIs:
+      - Overview: apis/overview.md
+      - CAMARA Compliance: apis/camara-compliance.md
+      - Northbound: apis/northbound.md
+      - Southbound: apis/southbound.md
+  - Development:
+      - Add a CAMARA API: development/add-camara-api.md
+      - Add a Southbound Handler: development/add-southbound-handler.md
+      - Service Handlers: development/service-handlers.md
+      - Configuration: development/configuration.md
+      - Testing: development/testing.md
+      - Code Style: development/code-style.md
+  - Operations:
+      - Docker Compose: operations/docker-compose.md
+      - Observability: operations/observability.md
+      - Security: operations/security.md
+  - Troubleshooting:
+      - Common Errors: troubleshooting/common-errors.md
+      - Debugging: troubleshooting/debugging.md
+      - FAQ: troubleshooting/faq.md
+  - Reference:
+      - Configuration Reference: reference/configuration-reference.md
+      - Internal Interfaces: reference/internal-interfaces.md
+      - Glossary: reference/glossary.md
+  - ADRs: adr/README.md
+  - Contributing: contributing.md

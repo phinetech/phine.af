@@ -1,0 +1,27 @@
+{
+  "duration": 3600,
+  "ueId": "{{ueId}}",
+  "asId": "test-application-server",
+  "uePorts": {
+    "ranges": [
+      {
+        "from": 5000,
+        "to": 5010
+      }
+    ]
+  },
+  "applicationServer": {
+    "ipv4Address": "192.168.100.1"
+  },
+  "device": {
+    "phoneNumber": "{{phoneNumber}}",
+    "networkAccessIdentifier": "{{networkAccessIdentifier}}",
+    "ipv4Address": {
+      "publicAddress": "{{publicAddress}}",
+      "publicPort": {{publicPort}}
+    }
+  },
+  "qosProfile": "{{qos_profile}}",
+  "notificationUri": "http://test-callback.example.com/notifications",
+  "notificationAuthToken": "test-token-123"
+}

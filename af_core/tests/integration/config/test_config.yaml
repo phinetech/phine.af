@@ -1,0 +1,24 @@
+# Integration Test Configuration
+
+grpc:
+  host: "192.168.70.141"
+  port: 50051
+  use_tls: false
+  timeout_seconds: 30
+
+fixtures:
+  base_path: "./af_core/tests/integration/fixtures"
+
+environment:
+  cleanup_after_tests: true
+  parallel_execution: false
+  max_retries: 3
+
+logging:
+  level: "debug"
+  output_file: "./test_results/integration_test.log"
+
+test_data:
+  default_ue_id: "test-ue-001"
+  default_dnn: "internet"
+  default_qos_profile: "QOS_M"
