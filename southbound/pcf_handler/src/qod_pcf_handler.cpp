@@ -210,6 +210,48 @@ af::communication::MessagePtr QodPcfHandler::handle_qod_create_pcf_session(
             qod_session.ue_supi = Supi{json.at("ue_supi").get<std::string>()};
         }
 
+        // CRITICAL: Parse QoS profile mapping (bandwidth values, 5QI, etc.)
+        if (json.contains("qos_profile_mapping") && !json["qos_profile_mapping"].is_null()) {
+            auto& mapping_json = json["qos_profile_mapping"];
+            af::common::qod::QosProfileMapping mapping;
+
+            mapping.fiveqi = mapping_json.at("fiveqi").get<int>();
+            mapping.is_gbr = mapping_json.at("is_gbr").get<bool>();
+
+            if (mapping_json.contains("priority_level") && !mapping_json["priority_level"].is_null()) {
+                mapping.priority_level = mapping_json["priority_level"].get<int>();
+            }
+            if (mapping_json.contains("packet_delay_budget") && !mapping_json["packet_delay_budget"].is_null()) {
+                mapping.packet_delay_budget = mapping_json["packet_delay_budget"].get<int>();
+            }
+            if (mapping_json.contains("packet_error_rate") && !mapping_json["packet_error_rate"].is_null()) {
+                mapping.packet_error_rate = mapping_json["packet_error_rate"].get<double>();
+            }
+            if (mapping_json.contains("max_data_burst_volume") && !mapping_json["max_data_burst_volume"].is_null()) {
+                mapping.max_data_burst_volume = mapping_json["max_data_burst_volume"].get<int>();
+            }
+            if (mapping_json.contains("guaranteed_uplink_rate") && !mapping_json["guaranteed_uplink_rate"].is_null()) {
+                mapping.guaranteed_uplink_rate = mapping_json["guaranteed_uplink_rate"].get<std::string>();
+            }
+            if (mapping_json.contains("guaranteed_downlink_rate") && !mapping_json["guaranteed_downlink_rate"].is_null()) {
+                mapping.guaranteed_downlink_rate = mapping_json["guaranteed_downlink_rate"].get<std::string>();
+            }
+            if (mapping_json.contains("max_uplink_rate") && !mapping_json["max_uplink_rate"].is_null()) {
+                mapping.max_uplink_rate = mapping_json["max_uplink_rate"].get<std::string>();
+            }
+            if (mapping_json.contains("max_downlink_rate") && !mapping_json["max_downlink_rate"].is_null()) {
+                mapping.max_downlink_rate = mapping_json["max_downlink_rate"].get<std::string>();
+            }
+
+            qod_session.qos_profile_mapping = mapping;
+            logger_->debug("Parsed QoS profile mapping - 5QI: {}, GBR: {}, GBR_DL: {}, MBR_DL: {}",
+                          mapping.fiveqi, mapping.is_gbr,
+                          mapping.guaranteed_downlink_rate.value_or("N/A"),
+                          mapping.max_downlink_rate.value_or("N/A"));
+        } else {
+            logger_->warn("QoS profile mapping not found in message for session: {}", qod_session.session_id);
+        }
+
         logger_->debug("Parsed QoD session: {}", json.dump());
         // Create PCF session
         auto pcf_msg_opt = create_pcf_session(qod_session);
@@ -263,6 +305,48 @@ af::communication::MessagePtr QodPcfHandler::handle_qod_update_pcf_session(
         // Optional fields
         if (json.contains("ue_supi")) {
             qod_session.ue_supi = Supi{json.at("ue_supi").get<std::string>()};
+        }
+
+        // CRITICAL: Parse QoS profile mapping (bandwidth values, 5QI, etc.)
+        if (json.contains("qos_profile_mapping") && !json["qos_profile_mapping"].is_null()) {
+            auto& mapping_json = json["qos_profile_mapping"];
+            af::common::qod::QosProfileMapping mapping;
+
+            mapping.fiveqi = mapping_json.at("fiveqi").get<int>();
+            mapping.is_gbr = mapping_json.at("is_gbr").get<bool>();
+
+            if (mapping_json.contains("priority_level") && !mapping_json["priority_level"].is_null()) {
+                mapping.priority_level = mapping_json["priority_level"].get<int>();
+            }
+            if (mapping_json.contains("packet_delay_budget") && !mapping_json["packet_delay_budget"].is_null()) {
+                mapping.packet_delay_budget = mapping_json["packet_delay_budget"].get<int>();
+            }
+            if (mapping_json.contains("packet_error_rate") && !mapping_json["packet_error_rate"].is_null()) {
+                mapping.packet_error_rate = mapping_json["packet_error_rate"].get<double>();
+            }
+            if (mapping_json.contains("max_data_burst_volume") && !mapping_json["max_data_burst_volume"].is_null()) {
+                mapping.max_data_burst_volume = mapping_json["max_data_burst_volume"].get<int>();
+            }
+            if (mapping_json.contains("guaranteed_uplink_rate") && !mapping_json["guaranteed_uplink_rate"].is_null()) {
+                mapping.guaranteed_uplink_rate = mapping_json["guaranteed_uplink_rate"].get<std::string>();
+            }
+            if (mapping_json.contains("guaranteed_downlink_rate") && !mapping_json["guaranteed_downlink_rate"].is_null()) {
+                mapping.guaranteed_downlink_rate = mapping_json["guaranteed_downlink_rate"].get<std::string>();
+            }
+            if (mapping_json.contains("max_uplink_rate") && !mapping_json["max_uplink_rate"].is_null()) {
+                mapping.max_uplink_rate = mapping_json["max_uplink_rate"].get<std::string>();
+            }
+            if (mapping_json.contains("max_downlink_rate") && !mapping_json["max_downlink_rate"].is_null()) {
+                mapping.max_downlink_rate = mapping_json["max_downlink_rate"].get<std::string>();
+            }
+
+            qod_session.qos_profile_mapping = mapping;
+            logger_->debug("Parsed QoS profile mapping for update - 5QI: {}, GBR: {}, GBR_DL: {}, MBR_DL: {}",
+                          mapping.fiveqi, mapping.is_gbr,
+                          mapping.guaranteed_downlink_rate.value_or("N/A"),
+                          mapping.max_downlink_rate.value_or("N/A"));
+        } else {
+            logger_->warn("QoS profile mapping not found in update message for session: {}", qod_session.session_id);
         }
 
         logger_->debug("Parsed QoD session for update: {}", json.dump());
@@ -918,15 +1002,29 @@ nlohmann::json QodPcfHandler::build_media_components(
     }
 
     // Media sub-components (flow descriptions)
-    med_comp["medSubComps"] = map_ports_to_media_subcomponents(
+    nlohmann::json med_sub_comps = map_ports_to_media_subcomponents(
         qod_session.device_ports,
         qod_session.application_server_ports);
 
-    // Add flow descriptions
-    auto flow_descs = build_flow_descriptions(qod_session);
-    if (!flow_descs.empty()) {
-        med_comp["fDescs"] = flow_descs;
+    // Add UE-specific flow descriptions as a separate MediaSubComponent
+    auto ue_specific_flows = build_flow_descriptions(qod_session);
+    if (!ue_specific_flows.empty()) {
+        // Find the next available flow number
+        int next_flow_num = med_sub_comps.size() + 1;
+
+        // Create a new MediaSubComponent for UE-specific flows
+        nlohmann::json ue_subcomp;
+        ue_subcomp["fNum"] = next_flow_num;
+        ue_subcomp["fDescs"] = ue_specific_flows;  // ✓ CORRECT - fDescs inside MediaSubComponent
+        ue_subcomp["fStatus"] = "ENABLED";
+        ue_subcomp["flowUsage"] = "NO_INFO";  // General application data
+
+        // Add to media sub-components
+        med_sub_comps[std::to_string(next_flow_num)] = ue_subcomp;
     }
+
+    // Assign the completed media sub-components to the media component
+    med_comp["medSubComps"] = med_sub_comps;
 
     // Get QoS profile mapping from qod_session
     auto mapping_opt = qod_session.qos_profile_mapping;
@@ -946,58 +1044,62 @@ nlohmann::json QodPcfHandler::build_media_components(
         med_comp["qosReference"] = std::to_string(mapping.fiveqi);
     }
 
-    // Priority level
+    // Priority level (must be string format per TS 29.514: "PRIO_1", "PRIO_2", etc.)
     if (mapping.priority_level) {
-        med_comp["resPrio"] = *mapping.priority_level;
+        med_comp["resPrio"] = "PRIO_" + std::to_string(*mapping.priority_level);
     }
 
-    // Bandwidth requirements
+    // Bandwidth requirements per 3GPP TS 29.514
+    // marBw = Maximum Requested Bandwidth (becomes MBR in 5G)
+    // mirBw = Minimum Requested Bandwidth (becomes GBR in 5G for GBR QoS)
+    // Values are already in TS 29.571 BitRate format: "<value> <unit>" (e.g., "128 Kbps")
     if (mapping.is_gbr) {
-        // Guaranteed Bit Rate (GBR) - both MAR and MIR should be set for GBR
-        if (mapping.guaranteed_downlink_rate) {
-            // Convert from Kbps to bps for API compliance
-            uint64_t bps_dl = static_cast<uint64_t>(*mapping.guaranteed_downlink_rate) * 1000;
-            med_comp["marBwDl"] = std::to_string(bps_dl);
-            med_comp["mirBwDl"] = std::to_string(bps_dl);
+        // GBR QoS: Set both maximum (MBR) and guaranteed (GBR) rates
+
+        // Maximum Requested Bandwidth (MBR) - Downlink
+        if (mapping.max_downlink_rate) {
+            med_comp["marBwDl"] = *mapping.max_downlink_rate;
         }
+
+        // Maximum Requested Bandwidth (MBR) - Uplink
+        if (mapping.max_uplink_rate) {
+            med_comp["marBwUl"] = *mapping.max_uplink_rate;
+        }
+
+        // Minimum Requested Bandwidth (GBR) - Downlink
+        if (mapping.guaranteed_downlink_rate) {
+            med_comp["mirBwDl"] = *mapping.guaranteed_downlink_rate;
+        }
+
+        // Minimum Requested Bandwidth (GBR) - Uplink
         if (mapping.guaranteed_uplink_rate) {
-            // Convert from Kbps to bps for API compliance
-            uint64_t bps_ul = static_cast<uint64_t>(*mapping.guaranteed_uplink_rate) * 1000;
-            med_comp["marBwUl"] = std::to_string(bps_ul);
-            med_comp["mirBwUl"] = std::to_string(bps_ul);
+            med_comp["mirBwUl"] = *mapping.guaranteed_uplink_rate;
         }
     } else {
-        // Non-GBR - only set maximum rates if no guaranteed rates
+        // Non-GBR QoS: Only set maximum rates (no guaranteed rates)
         if (mapping.max_downlink_rate) {
-            uint64_t bps_dl = static_cast<uint64_t>(*mapping.max_downlink_rate) * 1000;
-            med_comp["marBwDl"] = std::to_string(bps_dl);
+            med_comp["marBwDl"] = *mapping.max_downlink_rate;
         }
         if (mapping.max_uplink_rate) {
-            uint64_t bps_ul = static_cast<uint64_t>(*mapping.max_uplink_rate) * 1000;
-            med_comp["marBwUl"] = std::to_string(bps_ul);
+            med_comp["marBwUl"] = *mapping.max_uplink_rate;
         }
     }
 
     // Additional QoS parameters if available from mapping
-    // Minimum desired bandwidth - typically lower than guaranteed for GBR
+    // Minimum desired bandwidth - use guaranteed rate for GBR
     if (mapping.is_gbr && mapping.guaranteed_downlink_rate) {
-        // Set minimum desired as 80% of guaranteed rate
-        uint64_t min_bps_dl = static_cast<uint64_t>(*mapping.guaranteed_downlink_rate * 0.8) * 1000;
-        med_comp["minDesBwDl"] = std::to_string(min_bps_dl);
+        med_comp["minDesBwDl"] = *mapping.guaranteed_downlink_rate;
     }
     if (mapping.is_gbr && mapping.guaranteed_uplink_rate) {
-        uint64_t min_bps_ul = static_cast<uint64_t>(*mapping.guaranteed_uplink_rate * 0.8) * 1000;
-        med_comp["minDesBwUl"] = std::to_string(min_bps_ul);
+        med_comp["minDesBwUl"] = *mapping.guaranteed_uplink_rate;
     }
 
-    // Maximum supported bandwidth - typically higher than requested
+    // Maximum supported bandwidth - use max rate
     if (mapping.max_downlink_rate) {
-        uint64_t max_supp_dl = static_cast<uint64_t>(*mapping.max_downlink_rate) * 1000;
-        med_comp["maxSuppBwDl"] = std::to_string(max_supp_dl);
+        med_comp["maxSuppBwDl"] = *mapping.max_downlink_rate;
     }
     if (mapping.max_uplink_rate) {
-        uint64_t max_supp_ul = static_cast<uint64_t>(*mapping.max_uplink_rate) * 1000;
-        med_comp["maxSuppBwUl"] = std::to_string(max_supp_ul);
+        med_comp["maxSuppBwUl"] = *mapping.max_uplink_rate;
     }
 
     // Latency requirements - typical values based on 5QI

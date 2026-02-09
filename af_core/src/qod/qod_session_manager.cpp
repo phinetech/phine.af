@@ -1170,20 +1170,60 @@ nlohmann::json QodSessionManager::build_pcf_request(const af::common::qod::QodSe
         }
     }
 
-    // Map QoS profile to 5QI and other parameters
-    // This mapping would be configured based on operator policies
-    int fiveqi = 9;  // Default
-    if (session.qos_profile == "QOS_E" || session.qos_profile == "voice") {
-        fiveqi = 1;  // Conversational voice
-    } else if (session.qos_profile == "QOS_S" || session.qos_profile == "video") {
-        fiveqi = 2;  // Conversational video
-    } else if (session.qos_profile == "QOS_M" || session.qos_profile == "game") {
-        fiveqi = 3;  // Real-time gaming
-    } else if (session.qos_profile == "QOS_L") {
-        fiveqi = 4;  // Non-conversational video
-    }
+    // Include QoS profile mapping with bandwidth values
+    if (session.qos_profile_mapping) {
+        nlohmann::json mapping;
+        mapping["fiveqi"] = session.qos_profile_mapping->fiveqi;
+        mapping["is_gbr"] = session.qos_profile_mapping->is_gbr;
 
-    request["5qi"] = fiveqi;
+        if (session.qos_profile_mapping->priority_level) {
+            mapping["priority_level"] = *session.qos_profile_mapping->priority_level;
+        }
+        if (session.qos_profile_mapping->packet_delay_budget) {
+            mapping["packet_delay_budget"] = *session.qos_profile_mapping->packet_delay_budget;
+        }
+        if (session.qos_profile_mapping->packet_error_rate) {
+            mapping["packet_error_rate"] = *session.qos_profile_mapping->packet_error_rate;
+        }
+        if (session.qos_profile_mapping->max_data_burst_volume) {
+            mapping["max_data_burst_volume"] = *session.qos_profile_mapping->max_data_burst_volume;
+        }
+        if (session.qos_profile_mapping->guaranteed_uplink_rate) {
+            mapping["guaranteed_uplink_rate"] = *session.qos_profile_mapping->guaranteed_uplink_rate;
+        }
+        if (session.qos_profile_mapping->guaranteed_downlink_rate) {
+            mapping["guaranteed_downlink_rate"] = *session.qos_profile_mapping->guaranteed_downlink_rate;
+        }
+        if (session.qos_profile_mapping->max_uplink_rate) {
+            mapping["max_uplink_rate"] = *session.qos_profile_mapping->max_uplink_rate;
+        }
+        if (session.qos_profile_mapping->max_downlink_rate) {
+            mapping["max_downlink_rate"] = *session.qos_profile_mapping->max_downlink_rate;
+        }
+
+        request["qos_profile_mapping"] = mapping;
+
+        logger_->debug("Added QoS profile mapping to PCF request - 5QI: {}, GBR: {}, GBR_DL: {}, MBR_DL: {}",
+                      mapping["fiveqi"].get<int>(),
+                      mapping["is_gbr"].get<bool>(),
+                      session.qos_profile_mapping->guaranteed_downlink_rate.value_or("N/A"),
+                      session.qos_profile_mapping->max_downlink_rate.value_or("N/A"));
+    } else {
+        logger_->warn("No QoS profile mapping available for session: {}", session.session_id);
+
+        // Fallback: Map QoS profile to 5QI only (for backward compatibility)
+        int fiveqi = 9;  // Default
+        if (session.qos_profile == "QOS_E" || session.qos_profile == "voice") {
+            fiveqi = 1;  // Conversational voice
+        } else if (session.qos_profile == "QOS_S" || session.qos_profile == "video") {
+            fiveqi = 2;  // Conversational video
+        } else if (session.qos_profile == "QOS_M" || session.qos_profile == "game") {
+            fiveqi = 3;  // Real-time gaming
+        } else if (session.qos_profile == "QOS_L") {
+            fiveqi = 4;  // Non-conversational video
+        }
+        request["5qi"] = fiveqi;
+    }
 
     return request;
 }

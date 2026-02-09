@@ -38,74 +38,76 @@ void QodStateManager::initializeLogger(spdlog::level::level_enum log_level) {
 
 void QodStateManager::initialize_default_mappings() {
     // CAMARA standard profiles
+    // Note: Priority values must be 1-16 per 3GPP TS 29.514 ReservPriority (PRIO_1 to PRIO_16)
+    // Bandwidth values use TS 29.571 BitRate format: "<value> <unit>"
     qos_profile_mappings_["QOS_E"] = {
         1,          // 5QI = 1 (Conversational Voice)
-        20,         // Priority
+        2,          // Priority (PRIO_2 - highest priority conversational)
         100,        // Packet Delay Budget (ms)
         0.001,      // Packet Error Rate (10^-3)
         std::nullopt, // Max Data Burst
         true,       // GBR
-        64,         // Guaranteed UL (kbps)
-        64,         // Guaranteed DL (kbps)
-        128,        // Max UL (kbps)
-        128         // Max DL (kbps)
+        "64 Kbps",  // Guaranteed UL
+        "64 Kbps",  // Guaranteed DL
+        "128 Kbps", // Max UL
+        "128 Kbps"  // Max DL
     };
 
     qos_profile_mappings_["QOS_S"] = {
         2,          // 5QI = 2 (Conversational Video)
-        40,         // Priority
+        4,          // Priority (PRIO_4 - high priority video)
         150,        // Packet Delay Budget (ms)
         0.001,      // Packet Error Rate
         std::nullopt,
         true,       // GBR
-        384,        // Guaranteed UL (kbps)
-        384,        // Guaranteed DL (kbps)
-        512,        // Max UL (kbps)
-        512         // Max DL (kbps)
+        "384 Kbps", // Guaranteed UL
+        "384 Kbps", // Guaranteed DL
+        "512 Kbps", // Max UL
+        "512 Kbps"  // Max DL
     };
 
     qos_profile_mappings_["QOS_M"] = {
         3,          // 5QI = 3 (Real Time Gaming)
-        30,         // Priority
+        3,          // Priority (PRIO_3 - high priority gaming)
         50,         // Packet Delay Budget (ms)
         0.001,      // Packet Error Rate
         std::nullopt,
         true,       // GBR
-        512,        // Guaranteed UL (kbps)
-        512,        // Guaranteed DL (kbps)
-        1024,       // Max UL (kbps)
-        1024        // Max DL (kbps)
+        "512 Kbps", // Guaranteed UL
+        "512 Kbps", // Guaranteed DL
+        "1024 Kbps", // Max UL
+        "1024 Kbps"  // Max DL
     };
 
     qos_profile_mappings_["QOS_L"] = {
         4,          // 5QI = 4 (Non-Conversational Video)
-        50,         // Priority
+        5,          // Priority (PRIO_5 - medium priority buffered video)
         300,        // Packet Delay Budget (ms)
         0.000001,   // Packet Error Rate (10^-6)
         std::nullopt,
         true,       // GBR
-        256,        // Guaranteed UL (kbps)
-        256,        // Guaranteed DL (kbps)
-        512,        // Max UL (kbps)
-        512         // Max DL (kbps)
+        "256 Kbps", // Guaranteed UL
+        "256 Kbps", // Guaranteed DL
+        "512 Kbps", // Max UL
+        "512 Kbps"  // Max DL
     };
 
     // Custom profiles
     qos_profile_mappings_["voice"] = {
-        1, 20, 100, 0.001, std::nullopt, true, 64, 64, 128, 128
+        1, 2, 100, 0.001, std::nullopt, true, "64 Kbps", "64 Kbps", "128 Kbps", "128 Kbps"
     };
 
     qos_profile_mappings_["video"] = {
-        2, 40, 150, 0.001, std::nullopt, true, 1024, 2048, 2048, 4096
+        2, 4, 150, 0.001, std::nullopt, true, "1024 Kbps", "2048 Kbps", "2048 Kbps", "4096 Kbps"
     };
 
     qos_profile_mappings_["game"] = {
-        3, 30, 50, 0.001, std::nullopt, true, 512, 512, 1024, 1024
+        3, 3, 50, 0.001, std::nullopt, true, "512 Kbps", "512 Kbps", "1024 Kbps", "1024 Kbps"
     };
 
     qos_profile_mappings_["data"] = {
         9,          // 5QI = 9 (Default non-GBR)
-        60,         // Priority
+        9,          // Priority (PRIO_9 - default best effort)
         300,        // Packet Delay Budget (ms)
         0.000001,   // Packet Error Rate
         std::nullopt,
