@@ -407,18 +407,18 @@ services:
       public_net:
         ipv4_address: 192.168.70.141
 
-  # Northbound Components
-  api_component:
-    image: tariromukute/af-api:${TAG:-latest}
-    container_name: af-north-api
-    depends_on:
-      - af_core
-    build:
-      context: ..
-      dockerfile: northbound/api_component/Dockerfile
-    networks:
-      public_net:
-        ipv4_address: 192.168.70.142
+  # # Northbound Components
+  # api_component:
+  #   image: tariromukute/af-api:${TAG:-latest}
+  #   container_name: af-north-api
+  #   depends_on:
+  #     - af_core
+  #   build:
+  #     context: ..
+  #     dockerfile: northbound/api_component/Dockerfile
+  #   networks:
+  #     public_net:
+  #       ipv4_address: 192.168.70.142
 
 networks:
   public_net:

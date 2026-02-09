@@ -55,6 +55,34 @@ function install_gtp5g() {
     fi
 }
 
+function check_submodules() {
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+    if [ -f "${PROJECT_ROOT}/.gitmodules" ]; then
+        echo "Checking submodules..."
+        cd "${PROJECT_ROOT}"
+
+        # Check if any submodules are uninitialized (start with -)
+        if git submodule status | grep -q '^-'; then
+            echo "⚠️  Uninitialized submodules detected!"
+            echo "Initializing submodules automatically..."
+            git submodule update --init --recursive
+            echo "✓ Submodules initialized successfully"
+        else
+            # Check if submodules are out of sync
+            if git submodule status | grep -q '^+'; then
+                echo "⚠️  Submodules are out of sync with the current commit"
+                echo "Updating submodules..."
+                git submodule update --recursive
+                echo "✓ Submodules updated successfully"
+            else
+                echo "✓ All submodules are up to date"
+            fi
+        fi
+    fi
+}
+
 function wait_for_nrf() {
     local retries=30
     local wait_time=2
@@ -180,6 +208,9 @@ shift || true
 function run_all_local_validation() {
     echo "Running full local validation sequence..."
 
+    # 0. Check and initialize submodules
+    check_submodules
+
     # 1. Install dependencies
     install_dependencies
 
@@ -249,6 +280,9 @@ case "$COMMAND" in
     install_gtp5g)
         install_gtp5g
         ;;
+    check_submodules)
+        check_submodules
+        ;;
     wait_for_nrf)
         wait_for_nrf
         ;;
@@ -269,7 +303,7 @@ case "$COMMAND" in
         run_all_local_validation
         ;;
     *)
-        echo "Usage: $0 {install_gtp5g|wait_for_nrf|wait_for_af|collect_logs|parse_results}"
+        echo "Usage: $0 {check_submodules|install_dependencies|install_gtp5g|wait_for_nrf|wait_for_af|collect_logs|parse_results|cleanup_services}"
         exit 1
         ;;
 esac

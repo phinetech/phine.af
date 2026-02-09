@@ -267,6 +267,11 @@ See [docs/README.md](docs/README.md) for details.
 - Run: [docs/getting-started/run.md](docs/getting-started/run.md)
 - First request: [docs/getting-started/first-request.md](docs/getting-started/first-request.md)
 
+**Important**: This project uses git submodules. After cloning, run:
+```bash
+git submodule update --init --recursive
+```
+
 For more request examples, see [af_core/README.md](af_core/README.md).
 
 ## Build & test (entry points)
@@ -278,6 +283,7 @@ For more request examples, see [af_core/README.md](af_core/README.md).
 
 ## Development
 
+- Submodule management: [docs/development/submodule-management.md](docs/development/submodule-management.md)
 - Configuration guide: [docs/development/configuration.md](docs/development/configuration.md)
 - Add a CAMARA API: [docs/development/add-camara-api.md](docs/development/add-camara-api.md)
 - Add a southbound handler: [docs/development/add-southbound-handler.md](docs/development/add-southbound-handler.md)

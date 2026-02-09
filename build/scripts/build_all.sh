@@ -24,6 +24,35 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 BUILD_DIR="${PROJECT_ROOT}/build-output"
 
+# Function to check and initialize submodules
+check_submodules() {
+  if [ -f "${PROJECT_ROOT}/.gitmodules" ]; then
+    echo "Checking submodules..."
+    cd "${PROJECT_ROOT}"
+
+    # Check if any submodules are uninitialized (start with -)
+    if git submodule status | grep -q '^-'; then
+      echo "⚠️  Uninitialized submodules detected!"
+      echo "Initializing submodules automatically..."
+      git submodule update --init --recursive
+      echo "✓ Submodules initialized successfully"
+    else
+      # Check if submodules are out of sync
+      if git submodule status | grep -q '^+'; then
+        echo "⚠️  Submodules are out of sync with the current commit"
+        echo "Updating submodules..."
+        git submodule update --recursive
+        echo "✓ Submodules updated successfully"
+      else
+        echo "✓ All submodules are up to date"
+      fi
+    fi
+  fi
+}
+
+# Check submodules before building
+check_submodules
+
 # Source the build helper
 source ${SCRIPT_DIR}/build_helper.af
 
