@@ -72,6 +72,15 @@ graph RL
         SBI_Bus --- SMF
     end
 
+    %% --- Northbound Adapters (External) ---
+    subgraph NB_Adapters [Northbound Adapters]
+        direction TB
+        TSN_Adapter_Ext[TSN CNC gateway]
+        QoD_Adapter_Ext["QoS Adapters (e.g., ROS2 gateway)"]
+        Device_Location_Ext[Device Location]
+        Traffic_Influence_Ext[Traffic Influence]
+    end
+
     %% --- Application Function Domain ---
     subgraph Phine_AF [phine.af]
         direction TB
@@ -79,7 +88,7 @@ graph RL
         AF_Core[af.core]
 
         %% Northbound Interface Group
-        subgraph NB_Interfaces [Northbound Adapters]
+        subgraph NB_Interfaces [Northbound Handlers]
             direction TB
             App_Spec_API[App-specific API]
             TSN_Adapter[TSN]
@@ -153,12 +162,18 @@ graph RL
 
     %% --- External Interfaces ---
 
-    %% Northbound Requests
+    %% Northbound Requests (App Management to Adapters)
     App_Mgmt -- "gRPC, REST" --> App_Spec_API
-    App_Mgmt -- "REST / NETCONF" --> TSN_Adapter
-    App_Mgmt -- "CAMARA" --> QoD_Adapter
-    App_Mgmt -- "CAMARA" --> Device_Location
-    App_Mgmt -- "CAMARA" --> Traffic_Influence
+    App_Mgmt --> TSN_Adapter_Ext
+    App_Mgmt --> QoD_Adapter_Ext
+    App_Mgmt --> Device_Location_Ext
+    App_Mgmt --> Traffic_Influence_Ext
+
+    %% Northbound Adapters to Handlers
+    TSN_Adapter_Ext -- "REST / NETCONF" --> TSN_Adapter
+    QoD_Adapter_Ext -- "CAMARA" --> QoD_Adapter
+    Device_Location_Ext -- "CAMARA" --> Device_Location
+    Traffic_Influence_Ext -- "CAMARA" --> Traffic_Influence
 
     %% Southbound Requests
     PCF_Handler -- N5 --> PCF
@@ -194,6 +209,7 @@ graph RL
 
     class Phine_AF afSubgraph
     class NB_Interfaces,SB_Interfaces afSubSubgraph
+    class NB_Adapters afSubSubgraph
 
     %% Implementation Status Styles for phine.af components
     %% Fully Implemented (Solid fill with #49c9c1)
@@ -209,6 +225,10 @@ graph RL
     class AF_Core,QoD_Adapter,PCF_Handler afImplemented
     class App_Spec_API afPartial
     class TSN_Adapter,TSCTSF_Handler,BSF_Handler,NEF_Handler,Traffic_Influence,UDR_Handler,GMLC_Handler,LMF_Handler,AMF_Handler,Device_Location afNotImplemented
+
+    %% Apply styles to external northbound adapters
+    class App_Spec_API_Ext afPartial
+    class TSN_Adapter_Ext,Device_Location_Ext,Traffic_Influence_Ext afNotImplemented
 
     %% --- Data Plane Styles (Deep Purple/Magenta theme with #741b47) ---
     classDef dataPlaneSubgraph fill:#F4E3ED,stroke:#741b47,stroke-width:2px
