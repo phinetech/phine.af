@@ -13,6 +13,7 @@
 
 #include "helpers.h"
 #include "handlers/service_handler_helpers.h"
+#include "models/qod/qos_profile_mapper.h"
 
 namespace af {
 namespace southbound {
@@ -212,35 +213,25 @@ af::communication::MessagePtr QodPcfHandler::handle_qod_create_pcf_session(
 
         // CRITICAL: Parse QoS profile mapping (bandwidth values, 5QI, etc.)
         if (json.contains("qos_profile_mapping") && !json["qos_profile_mapping"].is_null()) {
-            auto& mapping_json = json["qos_profile_mapping"];
             af::common::qod::QosProfileMapping mapping;
+            auto parse_result = af::common::qod::QosProfileMapper::try_deserialize_qos_mapping(
+                json["qos_profile_mapping"],
+                mapping);
+            auto validation_result = af::common::qod::QosProfileMapper::validate_qos_mapping(mapping);
 
-            mapping.fiveqi = mapping_json.at("fiveqi").get<int>();
-            mapping.is_gbr = mapping_json.at("is_gbr").get<bool>();
+            if (!parse_result.is_valid || !validation_result.is_valid) {
+                // Combine validation errors using helper
+                std::ostringstream error_stream;
+                error_stream << "Invalid qos_profile_mapping";
+                af::utils::append_validation_errors(error_stream, parse_result);
+                af::utils::append_validation_errors(error_stream, validation_result);
 
-            if (mapping_json.contains("priority_level") && !mapping_json["priority_level"].is_null()) {
-                mapping.priority_level = mapping_json["priority_level"].get<int>();
-            }
-            if (mapping_json.contains("packet_delay_budget") && !mapping_json["packet_delay_budget"].is_null()) {
-                mapping.packet_delay_budget = mapping_json["packet_delay_budget"].get<int>();
-            }
-            if (mapping_json.contains("packet_error_rate") && !mapping_json["packet_error_rate"].is_null()) {
-                mapping.packet_error_rate = mapping_json["packet_error_rate"].get<double>();
-            }
-            if (mapping_json.contains("max_data_burst_volume") && !mapping_json["max_data_burst_volume"].is_null()) {
-                mapping.max_data_burst_volume = mapping_json["max_data_burst_volume"].get<int>();
-            }
-            if (mapping_json.contains("guaranteed_uplink_rate") && !mapping_json["guaranteed_uplink_rate"].is_null()) {
-                mapping.guaranteed_uplink_rate = mapping_json["guaranteed_uplink_rate"].get<std::string>();
-            }
-            if (mapping_json.contains("guaranteed_downlink_rate") && !mapping_json["guaranteed_downlink_rate"].is_null()) {
-                mapping.guaranteed_downlink_rate = mapping_json["guaranteed_downlink_rate"].get<std::string>();
-            }
-            if (mapping_json.contains("max_uplink_rate") && !mapping_json["max_uplink_rate"].is_null()) {
-                mapping.max_uplink_rate = mapping_json["max_uplink_rate"].get<std::string>();
-            }
-            if (mapping_json.contains("max_downlink_rate") && !mapping_json["max_downlink_rate"].is_null()) {
-                mapping.max_downlink_rate = mapping_json["max_downlink_rate"].get<std::string>();
+                return af::common::handlers::ServiceHandlerHelpers::create_error_response(
+                    400,
+                    "bad_request",
+                    error_stream.str(),
+                    message->correlation_id,
+                    logger_);
             }
 
             qod_session.qos_profile_mapping = mapping;
@@ -309,35 +300,25 @@ af::communication::MessagePtr QodPcfHandler::handle_qod_update_pcf_session(
 
         // CRITICAL: Parse QoS profile mapping (bandwidth values, 5QI, etc.)
         if (json.contains("qos_profile_mapping") && !json["qos_profile_mapping"].is_null()) {
-            auto& mapping_json = json["qos_profile_mapping"];
             af::common::qod::QosProfileMapping mapping;
+            auto parse_result = af::common::qod::QosProfileMapper::try_deserialize_qos_mapping(
+                json["qos_profile_mapping"],
+                mapping);
+            auto validation_result = af::common::qod::QosProfileMapper::validate_qos_mapping(mapping);
 
-            mapping.fiveqi = mapping_json.at("fiveqi").get<int>();
-            mapping.is_gbr = mapping_json.at("is_gbr").get<bool>();
+            if (!parse_result.is_valid || !validation_result.is_valid) {
+                // Combine validation errors using helper
+                std::ostringstream error_stream;
+                error_stream << "Invalid qos_profile_mapping";
+                af::utils::append_validation_errors(error_stream, parse_result);
+                af::utils::append_validation_errors(error_stream, validation_result);
 
-            if (mapping_json.contains("priority_level") && !mapping_json["priority_level"].is_null()) {
-                mapping.priority_level = mapping_json["priority_level"].get<int>();
-            }
-            if (mapping_json.contains("packet_delay_budget") && !mapping_json["packet_delay_budget"].is_null()) {
-                mapping.packet_delay_budget = mapping_json["packet_delay_budget"].get<int>();
-            }
-            if (mapping_json.contains("packet_error_rate") && !mapping_json["packet_error_rate"].is_null()) {
-                mapping.packet_error_rate = mapping_json["packet_error_rate"].get<double>();
-            }
-            if (mapping_json.contains("max_data_burst_volume") && !mapping_json["max_data_burst_volume"].is_null()) {
-                mapping.max_data_burst_volume = mapping_json["max_data_burst_volume"].get<int>();
-            }
-            if (mapping_json.contains("guaranteed_uplink_rate") && !mapping_json["guaranteed_uplink_rate"].is_null()) {
-                mapping.guaranteed_uplink_rate = mapping_json["guaranteed_uplink_rate"].get<std::string>();
-            }
-            if (mapping_json.contains("guaranteed_downlink_rate") && !mapping_json["guaranteed_downlink_rate"].is_null()) {
-                mapping.guaranteed_downlink_rate = mapping_json["guaranteed_downlink_rate"].get<std::string>();
-            }
-            if (mapping_json.contains("max_uplink_rate") && !mapping_json["max_uplink_rate"].is_null()) {
-                mapping.max_uplink_rate = mapping_json["max_uplink_rate"].get<std::string>();
-            }
-            if (mapping_json.contains("max_downlink_rate") && !mapping_json["max_downlink_rate"].is_null()) {
-                mapping.max_downlink_rate = mapping_json["max_downlink_rate"].get<std::string>();
+                return af::common::handlers::ServiceHandlerHelpers::create_error_response(
+                    400,
+                    "bad_request",
+                    error_stream.str(),
+                    message->correlation_id,
+                    logger_);
             }
 
             qod_session.qos_profile_mapping = mapping;

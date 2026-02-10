@@ -12,29 +12,13 @@
 #include <vector>
 #include <optional>
 #include <nlohmann/json.hpp>
+#include "cpp_utils/validation.h"
 
 namespace af {
 namespace southbound {
 
-// Forward declarations for validation result structure
-struct ValidationResult {
-    bool is_valid;
-    std::vector<std::string> errors;
-
-    ValidationResult(bool valid = true) : is_valid(valid) {}
-
-    void add_error(const std::string& error) {
-        is_valid = false;
-        errors.push_back(error);
-    }
-
-    void merge(const ValidationResult& other) {
-        if (!other.is_valid) {
-            is_valid = false;
-            errors.insert(errors.end(), other.errors.begin(), other.errors.end());
-        }
-    }
-};
+// Import ValidationResult from common utils
+using ValidationResult = af::utils::ValidationResult;
 
 /**
  * @brief Validate if a string is a valid URL
