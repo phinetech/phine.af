@@ -918,8 +918,9 @@ nlohmann::json QodPcfHandler::build_app_session_context(const af::common::qod::Q
     //         }
     //     }
     // }
-    // AF request data
-    context["afReqData"] = build_af_request_data(qod_session);
+
+    // Only set when specific data is needed from PCF; omit when not required
+    // context["afReqData"] = "UE_IDENTITY";
 
     // Media components
     context["medComponents"] = build_media_components(qod_session);
