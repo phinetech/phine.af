@@ -4,8 +4,8 @@
 ## Build using the repository script
 
 ```bash
-chmod +x build/scripts/build_all.sh
-./build/scripts/build_all.sh
+chmod +x build/scripts/ci_helper.sh
+./build/scripts/ci_helper.sh build_all
 ```
 
 ### Common options
@@ -30,6 +30,4 @@ cmake --install .
 
 <!---
 TODO: Document which dependencies are installed by `--deps`.
-The script delegates to `build/scripts/build_helper.af` which should be inspected when we document dependency installation.
-Source: [build/scripts/build_all.sh](../../build/scripts/build_all.sh).
 -->

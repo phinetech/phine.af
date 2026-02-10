@@ -6,5 +6,3 @@ We need to inspect existing Dockerfiles/build options and confirm how to enable 
 -->
 
 ## Build a debug configuration
-
-Use `./build/scripts/build_all.sh --debug`.

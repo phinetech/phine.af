@@ -201,6 +201,138 @@ function cleanup_services() {
     fi
 }
 
+function build_image() {
+    local service_name=$1
+    local tag=${2:-latest}
+
+    if [ -z "$service_name" ]; then
+        echo "Usage: $0 build <service_name> [tag]"
+        exit 1
+    fi
+
+    # Ensure submodules are initialized and up to date before building.
+    check_submodules
+
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+    local compose_dir="${PROJECT_ROOT}/docker-compose"
+
+    if [ ! -d "$compose_dir" ]; then
+        echo "Directory 'docker-compose' not found."
+        exit 1
+    fi
+
+    echo "Building ${service_name} with tag ${tag}..."
+    (cd "$compose_dir" && TAG="$tag" docker compose -f docker-compose-test.yaml build "$service_name")
+}
+
+function build_all_images() {
+    local tag=${1:-latest}
+
+    # Ensure submodules are initialized and up to date before building.
+    check_submodules
+
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+    local compose_dir="${PROJECT_ROOT}/docker-compose"
+
+    if [ ! -d "$compose_dir" ]; then
+        echo "Directory 'docker-compose' not found."
+        exit 1
+    fi
+
+    local services=(af_core pcf_handler api_component af-integration-tests)
+
+    echo "Building all AF images with tag ${tag}..."
+    (cd "$compose_dir" && TAG="$tag" docker compose -f docker-compose-test.yaml build "${services[@]}")
+}
+
+function build_standalone() {
+    # Ensure submodules are initialized and up to date before building.
+    check_submodules
+
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+    local BUILD_DIR="${PROJECT_ROOT}/build-output"
+
+    local CLEAN=0
+    local BUILD_TYPE="Release"
+    local BUILD_TESTS=0
+    local INSTALL=0
+    local JOBS
+    JOBS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --clean)
+                CLEAN=1
+                shift
+                ;;
+            --debug)
+                BUILD_TYPE="Debug"
+                shift
+                ;;
+            --tests)
+                BUILD_TESTS=1
+                shift
+                ;;
+            --install)
+                INSTALL=1
+                shift
+                ;;
+            --help)
+                echo "Usage: $0 build_standalone [options]"
+                echo "Options:"
+                echo "  --clean        Clean build directory before building"
+                echo "  --debug        Build in debug mode"
+                echo "  --tests        Build tests"
+                echo "  --install      Install after building"
+                echo "  --help         Show this help message"
+                exit 0
+                ;;
+            *)
+                echo "Unknown option: $1"
+                echo "Use --help for usage information"
+                exit 1
+                ;;
+        esac
+    done
+
+    echo "Running standalone root CMake build..."
+    echo "  Project root: ${PROJECT_ROOT}"
+    echo "  Build directory: ${BUILD_DIR}"
+    echo "  Build type: ${BUILD_TYPE}"
+    echo "  Clean build: ${CLEAN}"
+    echo "  Build tests: ${BUILD_TESTS}"
+    echo "  Install after build: ${INSTALL}"
+    echo "  Parallel jobs: ${JOBS}"
+
+    if [ $CLEAN -eq 1 ] && [ -d "${BUILD_DIR}" ]; then
+        echo "Cleaning build directory..."
+        rm -rf "${BUILD_DIR}"
+    fi
+
+    if [ ! -d "${BUILD_DIR}" ]; then
+        echo "Creating build directory..."
+        mkdir -p "${BUILD_DIR}"
+    fi
+
+    cd "${BUILD_DIR}"
+
+    echo "Configuring CMake..."
+    cmake -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
+          -DBUILD_TESTS=$([[ $BUILD_TESTS -eq 1 ]] && echo "ON" || echo "OFF") \
+          "${PROJECT_ROOT}"
+
+    echo "Building..."
+    cmake --build . -- -j${JOBS}
+
+    if [ $INSTALL -eq 1 ]; then
+        echo "Installing..."
+        cmake --install .
+    fi
+}
+
 # Main dispatch
 COMMAND=$1
 shift || true
@@ -295,6 +427,15 @@ case "$COMMAND" in
     cleanup_services)
         cleanup_services
         ;;
+    build)
+        build_image "$@"
+        ;;
+    build_all)
+        build_all_images "$@"
+        ;;
+    build_standalone)
+        build_standalone "$@"
+        ;;
     parse_results)
         parse_results "$@"
         ;;
@@ -303,7 +444,7 @@ case "$COMMAND" in
         run_all_local_validation
         ;;
     *)
-        echo "Usage: $0 {check_submodules|install_dependencies|install_gtp5g|wait_for_nrf|wait_for_af|collect_logs|parse_results|cleanup_services}"
+        echo "Usage: $0 {check_submodules|install_dependencies|install_gtp5g|wait_for_nrf|wait_for_af|collect_logs|parse_results|cleanup_services|build|build_all|build_standalone}"
         exit 1
         ;;
 esac
