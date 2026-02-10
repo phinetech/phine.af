@@ -4,6 +4,7 @@
  */
 
 #include "qod_pcf_handler.h"
+#include "flow_description_utils.h"
 #include <yaml-cpp/yaml.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
@@ -983,27 +984,10 @@ nlohmann::json QodPcfHandler::build_media_components(
         med_comp["medType"] = "APPLICATION";
     }
 
-    // Media sub-components (flow descriptions)
-    nlohmann::json med_sub_comps = map_ports_to_media_subcomponents(
-        qod_session.device_ports,
-        qod_session.application_server_ports);
-
-    // Add UE-specific flow descriptions as a separate MediaSubComponent
-    auto ue_specific_flows = build_flow_descriptions(qod_session);
-    if (!ue_specific_flows.empty()) {
-        // Find the next available flow number
-        int next_flow_num = med_sub_comps.size() + 1;
-
-        // Create a new MediaSubComponent for UE-specific flows
-        nlohmann::json ue_subcomp;
-        ue_subcomp["fNum"] = next_flow_num;
-        ue_subcomp["fDescs"] = ue_specific_flows;  // ✓ CORRECT - fDescs inside MediaSubComponent
-        ue_subcomp["fStatus"] = "ENABLED";
-        ue_subcomp["flowUsage"] = "NO_INFO";  // General application data
-
-        // Add to media sub-components
-        med_sub_comps[std::to_string(next_flow_num)] = ue_subcomp;
-    }
+    // Media sub-components with complete flow descriptions (IPs + ports).
+    // Each sub-component represents a specific port combination with
+    // bidirectional (uplink + downlink) IPFilterRule flow descriptions.
+    nlohmann::json med_sub_comps = map_ports_to_media_subcomponents(qod_session);
 
     // Assign the completed media sub-components to the media component
     med_comp["medSubComps"] = med_sub_comps;
@@ -1125,22 +1109,27 @@ nlohmann::json QodPcfHandler::build_media_components(
     return med_comps;
 }
 
+// Import shared flow description utilities into this translation unit
+using af::southbound::flow_utils::collect_port_specs;
+using af::southbound::flow_utils::format_flow_description;
+
 nlohmann::json QodPcfHandler::build_flow_descriptions(const af::common::qod::QodSession& qod_session) {
     nlohmann::json flows = nlohmann::json::array();
 
-    // Build flow description strings based on IP addresses and ports
-    // Format: "permit out <protocol> from <src_ip> <src_port> to <dst_ip> <dst_port>"
-
-    std::string protocol = "17"; // UDP by default, could be made configurable
+    // Protocol is always "ip" (any protocol) per CAMARA specification.
+    // The CAMARA QoD API does not expose protocol selection to API consumers.
+    // Format: "permit {in|out} ip from <src> [<port>] to <dst> [<port>]"
 
     // Source IP (device)
     std::string src_ip = "any";
     if (qod_session.device && qod_session.device->ipv4_address) {
         src_ip = qod_session.device->ipv4_address->public_address.value;
         if (qod_session.device->ipv4_address->private_address) {
-            // Include private address for NAT scenarios
+            // Prefer private address for NAT scenarios
             src_ip = qod_session.device->ipv4_address->private_address->value;
         }
+    } else if (qod_session.device && qod_session.device->ipv6_address) {
+        src_ip = qod_session.device->ipv6_address->value;
     }
 
     // Destination IP (application server)
@@ -1151,33 +1140,43 @@ nlohmann::json QodPcfHandler::build_flow_descriptions(const af::common::qod::Qod
         dst_ip = *qod_session.application_server.ipv6_address;
     }
 
-    // Build flow descriptions for different port combinations
-    if (qod_session.device_ports && qod_session.application_server_ports) {
-        // Specific ports on both sides
-        for (const auto& src_port : qod_session.device_ports->ports) {
-            for (const auto& dst_port : qod_session.application_server_ports->ports) {
-                std::stringstream flow;
-                flow << "permit out " << protocol << " from " << src_ip
-                     << " " << src_port << " to " << dst_ip << " " << dst_port;
-                flows.push_back(flow.str());
+    // Collect port specs (individual ports and ranges) from both sides
+    std::vector<std::string> src_port_specs;
+    std::vector<std::string> dst_port_specs;
 
-                // Bidirectional - reverse flow
-                std::stringstream reverse_flow;
-                reverse_flow << "permit in " << protocol << " from " << dst_ip
-                            << " " << dst_port << " to " << src_ip << " " << src_port;
-                flows.push_back(reverse_flow.str());
+    if (qod_session.device_ports && !qod_session.device_ports->is_empty()) {
+        src_port_specs = collect_port_specs(*qod_session.device_ports);
+    }
+    if (qod_session.application_server_ports && !qod_session.application_server_ports->is_empty()) {
+        dst_port_specs = collect_port_specs(*qod_session.application_server_ports);
+    }
+
+    // Generate bidirectional flow descriptions for all port combinations.
+    // Each combination produces an uplink (out) and downlink (in) flow.
+    if (!src_port_specs.empty() && !dst_port_specs.empty()) {
+        // Both device and server ports specified
+        for (const auto& sp : src_port_specs) {
+            for (const auto& dp : dst_port_specs) {
+                flows.push_back(format_flow_description("out", src_ip, sp, dst_ip, dp));
+                flows.push_back(format_flow_description("in", dst_ip, dp, src_ip, sp));
             }
         }
+    } else if (!src_port_specs.empty()) {
+        // Only device ports specified
+        for (const auto& sp : src_port_specs) {
+            flows.push_back(format_flow_description("out", src_ip, sp, dst_ip, ""));
+            flows.push_back(format_flow_description("in", dst_ip, "", src_ip, sp));
+        }
+    } else if (!dst_port_specs.empty()) {
+        // Only server ports specified
+        for (const auto& dp : dst_port_specs) {
+            flows.push_back(format_flow_description("out", src_ip, "", dst_ip, dp));
+            flows.push_back(format_flow_description("in", dst_ip, dp, src_ip, ""));
+        }
     } else {
-        // Generic flow between device and server
-        std::stringstream flow;
-        flow << "permit out " << protocol << " from " << src_ip << " to " << dst_ip;
-        flows.push_back(flow.str());
-
-        // Bidirectional - reverse flow
-        std::stringstream reverse_flow;
-        reverse_flow << "permit in " << protocol << " from " << dst_ip << " to " << src_ip;
-        flows.push_back(reverse_flow.str());
+        // No ports specified — generic bidirectional flow
+        flows.push_back(format_flow_description("out", src_ip, "", dst_ip, ""));
+        flows.push_back(format_flow_description("in", dst_ip, "", src_ip, ""));
     }
 
     return flows;
@@ -1236,131 +1235,82 @@ nlohmann::json QodPcfHandler::build_af_request_data(const af::common::qod::QodSe
 }
 
 nlohmann::json QodPcfHandler::map_ports_to_media_subcomponents(
-    const std::optional<af::common::qod::PortsSpec>& device_ports,
-    const std::optional<af::common::qod::PortsSpec>& server_ports) {
+    const af::common::qod::QodSession& qod_session) {
 
     nlohmann::json med_sub_comps = nlohmann::json::object();
-
     int flow_number = 1;
 
-    // Create sub-component for each port combination
-    auto add_subcomp = [&](uint16_t src_port, uint16_t dst_port, const std::string& direction) {
-        nlohmann::json sub_comp;
+    // Resolve source IP (device)
+    std::string src_ip = "any";
+    if (qod_session.device && qod_session.device->ipv4_address) {
+        src_ip = qod_session.device->ipv4_address->public_address.value;
+        if (qod_session.device->ipv4_address->private_address) {
+            src_ip = qod_session.device->ipv4_address->private_address->value;
+        }
+    } else if (qod_session.device && qod_session.device->ipv6_address) {
+        src_ip = qod_session.device->ipv6_address->value;
+    }
 
-        // Required field: fNum (flow number) - must be integer
+    // Resolve destination IP (application server)
+    std::string dst_ip = "any";
+    if (qod_session.application_server.ipv4_address) {
+        dst_ip = *qod_session.application_server.ipv4_address;
+    } else if (qod_session.application_server.ipv6_address) {
+        dst_ip = *qod_session.application_server.ipv6_address;
+    }
+
+    // Helper: create one MediaSubComponent with bidirectional flow descriptions
+    auto add_subcomp = [&](const std::string& src_port_spec,
+                           const std::string& dst_port_spec) {
+        nlohmann::json sub_comp;
         sub_comp["fNum"] = flow_number;
 
-        // Flow descriptions - array of flow description strings
         nlohmann::json flow_descs = nlohmann::json::array();
-        std::string protocol = "any"; // any by default
+        // Uplink: UE -> network
+        flow_descs.push_back(
+            format_flow_description("out", src_ip, src_port_spec, dst_ip, dst_port_spec));
+        // Downlink: network -> UE
+        flow_descs.push_back(
+            format_flow_description("in", dst_ip, dst_port_spec, src_ip, src_port_spec));
 
-        // TODO: use the build_flow_descriptions function to generate descriptions
-        // Build flow description strings based on ports
-        if (src_port != 0 && dst_port != 0) {
-            // Specific port flow descriptions
-            std::string uplink_flow = "permit out " + protocol + " from any " +
-                                    std::to_string(src_port) + " to any " + std::to_string(dst_port);
-            std::string downlink_flow = "permit in " + protocol + " from any " +
-                                      std::to_string(dst_port) + " to any " + std::to_string(src_port);
-
-            flow_descs.push_back(uplink_flow);
-            if (direction == "BIDIRECTIONAL") {
-                flow_descs.push_back(downlink_flow);
-            }
-        } else {
-            // Generic flow descriptions (any port)
-            std::string uplink_flow = "permit out " + protocol + " from any to any";
-            std::string downlink_flow = "permit in " + protocol + " from any to any";
-
-            flow_descs.push_back(uplink_flow);
-            if (direction == "BIDIRECTIONAL") {
-                flow_descs.push_back(downlink_flow);
-            }
-        }
-
-        // Only add flow descriptions if we have them
-        if (!flow_descs.empty()) {
-            sub_comp["fDescs"] = flow_descs;
-        }
-
-        // Flow status - optional
+        sub_comp["fDescs"] = flow_descs;
         sub_comp["fStatus"] = "ENABLED";
-
-        // Flow usage - optional (describes the type of flow)
-        if (src_port == 0 && dst_port == 0) {
-            sub_comp["flowUsage"] = "NO_INFO"; // Generic flow
-        } else {
-            // Check for known service ports
-            if (src_port == 5060 || dst_port == 5060 ||
-                src_port == 5061 || dst_port == 5061) {
-                sub_comp["flowUsage"] = "AF_SIGNALLING"; // SIP signaling
-            } else if (src_port >= 16384 && src_port <= 32767) {
-                sub_comp["flowUsage"] = "RTCP"; // Typical RTCP port range
-            } else {
-                sub_comp["flowUsage"] = "NO_INFO"; // General application data
-            }
-        }
-
-        // TODO: Add optional fields as needed
-        // Maximum bandwidth (optional) - can be set based on QoS requirements
-        // These would typically come from QoS profile mapping
-        // sub_comp["marBwDl"] = "1000000"; // 1 Mbps downlink
-        // sub_comp["marBwUl"] = "1000000"; // 1 Mbps uplink
-
-        // TOS/Traffic Class (optional) - for packet marking
-        // Format: "XX YY" where XX is ToS/Traffic Class, YY is mask
-        // sub_comp["tosTrCl"] = "46 FC"; // EF (Expedited Forwarding) marking
-
-        // AF signaling protocol (optional) - for specific protocols
-        // sub_comp["afSigProtocol"] = "SIP"; // If this is SIP signaling
+        sub_comp["flowUsage"] = "NO_INFO";
 
         med_sub_comps[std::to_string(flow_number)] = sub_comp;
         flow_number++;
     };
 
-    if (device_ports && server_ports) {
-        // Specific port mappings
-        for (const auto& dev_port : device_ports->ports) {
-            for (const auto& srv_port : server_ports->ports) {
-                add_subcomp(dev_port, srv_port, "BIDIRECTIONAL");
+    // Collect all port spec strings (individual ports + ranges)
+    std::vector<std::string> src_port_specs;
+    std::vector<std::string> dst_port_specs;
+
+    if (qod_session.device_ports && !qod_session.device_ports->is_empty()) {
+        src_port_specs = collect_port_specs(*qod_session.device_ports);
+    }
+    if (qod_session.application_server_ports &&
+        !qod_session.application_server_ports->is_empty()) {
+        dst_port_specs = collect_port_specs(*qod_session.application_server_ports);
+    }
+
+    // Create one sub-component per port combination
+    if (!src_port_specs.empty() && !dst_port_specs.empty()) {
+        for (const auto& sp : src_port_specs) {
+            for (const auto& dp : dst_port_specs) {
+                add_subcomp(sp, dp);
             }
         }
-
-        // Port ranges - create representative flows for ranges
-        for (const auto& dev_range : device_ports->ranges) {
-            for (const auto& srv_range : server_ports->ranges) {
-                // Add flow for start of range
-                add_subcomp(dev_range.from, srv_range.from, "BIDIRECTIONAL");
-
-                // Optionally add flow for end of range if range is large
-                if ((dev_range.to - dev_range.from) > 10 ||
-                    (srv_range.to - srv_range.from) > 10) {
-                    add_subcomp(dev_range.to, srv_range.to, "BIDIRECTIONAL");
-                }
-            }
+    } else if (!src_port_specs.empty()) {
+        for (const auto& sp : src_port_specs) {
+            add_subcomp(sp, "");
         }
-    }
-    else if (device_ports) {
-        // Only device ports specified
-        for (const auto& dev_port : device_ports->ports) {
-            add_subcomp(dev_port, 0, "BIDIRECTIONAL");
+    } else if (!dst_port_specs.empty()) {
+        for (const auto& dp : dst_port_specs) {
+            add_subcomp("", dp);
         }
-        for (const auto& dev_range : device_ports->ranges) {
-            add_subcomp(dev_range.from, 0, "BIDIRECTIONAL");
-        }
-    }
-    else if (server_ports) {
-        // Only server ports specified
-        for (const auto& srv_port : server_ports->ports) {
-            add_subcomp(0, srv_port, "BIDIRECTIONAL");
-        }
-        for (const auto& srv_range : server_ports->ranges) {
-            add_subcomp(0, srv_range.from, "BIDIRECTIONAL");
-        }
-    }
-    else {
-        // No specific ports - create default bidirectional flow
-        add_subcomp(0, 0, "BIDIRECTIONAL");
+    } else {
+        // No ports specified — single default bidirectional flow
+        add_subcomp("", "");
     }
 
     return med_sub_comps;

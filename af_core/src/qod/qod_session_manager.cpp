@@ -1239,46 +1239,92 @@ nlohmann::json QodSessionManager::build_flow_filters(const af::common::qod::QodS
     flow["flow_id"] = 1;
     flow["flow_direction"] = "BIDIRECTIONAL";
 
-    // Build flow description based on ports
+    // Protocol is always "ip" (any protocol) per CAMARA specification.
+    // The CAMARA QoD API does not expose protocol selection to API consumers.
+    // Format: "permit {in|out} ip from <src> [<port>] to <dst> [<port>]"
+
     std::vector<std::string> flow_descs;
 
-    // Basic flow: permit all between device and app server
-    std::string base_flow = "permit out ";
-
-    // Add protocol (assume TCP/UDP for now)
-    base_flow += "17 from ";  // UDP
-
-    // Source (device)
+    // Source (device) IP
+    std::string src_ip = "any";
     if (session.device && session.device->ipv4_address) {
-        base_flow += session.device->ipv4_address->public_address.value;
-    } else {
-        base_flow += "any";
+        src_ip = session.device->ipv4_address->public_address.value;
+    } else if (session.device && session.device->ipv6_address) {
+        src_ip = session.device->ipv6_address->value;
     }
 
-    // Source ports
-    if (session.device_ports && !session.device_ports->ports.empty()) {
-        base_flow += " " + std::to_string(session.device_ports->ports[0]);
-    } else {
-        base_flow += " to ";
-    }
-
-    // Destination (app server)
+    // Destination (application server) IP
+    std::string dst_ip = "any";
     if (session.application_server.ipv4_address) {
-        base_flow += " " + *session.application_server.ipv4_address;
+        dst_ip = *session.application_server.ipv4_address;
     } else if (session.application_server.ipv6_address) {
-        base_flow += " " + *session.application_server.ipv6_address;
+        dst_ip = *session.application_server.ipv6_address;
+    }
+
+    // Collect all port specification strings (individual ports + ranges)
+    std::vector<std::string> src_port_specs;
+    std::vector<std::string> dst_port_specs;
+
+    if (session.device_ports) {
+        for (const auto port : session.device_ports->ports) {
+            src_port_specs.push_back(std::to_string(port));
+        }
+        for (const auto& range : session.device_ports->ranges) {
+            if (range.from == range.to) {
+                src_port_specs.push_back(std::to_string(range.from));
+            } else {
+                src_port_specs.push_back(
+                    std::to_string(range.from) + "-" + std::to_string(range.to));
+            }
+        }
+    }
+
+    if (session.application_server_ports) {
+        for (const auto port : session.application_server_ports->ports) {
+            dst_port_specs.push_back(std::to_string(port));
+        }
+        for (const auto& range : session.application_server_ports->ranges) {
+            if (range.from == range.to) {
+                dst_port_specs.push_back(std::to_string(range.from));
+            } else {
+                dst_port_specs.push_back(
+                    std::to_string(range.from) + "-" + std::to_string(range.to));
+            }
+        }
+    }
+
+    // Helper to build a single IPFilterRule flow description
+    auto build_desc = [](const std::string& dir,
+                         const std::string& src, const std::string& sp,
+                         const std::string& dst, const std::string& dp) {
+        std::string desc = "permit " + dir + " ip from " + src;
+        if (!sp.empty()) { desc += " " + sp; }
+        desc += " to " + dst;
+        if (!dp.empty()) { desc += " " + dp; }
+        return desc;
+    };
+
+    // Generate flow descriptions for all port combinations
+    if (!src_port_specs.empty() && !dst_port_specs.empty()) {
+        for (const auto& sp : src_port_specs) {
+            for (const auto& dp : dst_port_specs) {
+                flow_descs.push_back(build_desc("out", src_ip, sp, dst_ip, dp));
+            }
+        }
+    } else if (!src_port_specs.empty()) {
+        for (const auto& sp : src_port_specs) {
+            flow_descs.push_back(build_desc("out", src_ip, sp, dst_ip, ""));
+        }
+    } else if (!dst_port_specs.empty()) {
+        for (const auto& dp : dst_port_specs) {
+            flow_descs.push_back(build_desc("out", src_ip, "", dst_ip, dp));
+        }
     } else {
-        base_flow += " any";
+        // No ports — generic flow
+        flow_descs.push_back(build_desc("out", src_ip, "", dst_ip, ""));
     }
 
-    // Destination ports
-    if (session.application_server_ports && !session.application_server_ports->ports.empty()) {
-        base_flow += " " + std::to_string(session.application_server_ports->ports[0]);
-    }
-
-    flow_descs.push_back(base_flow);
     flow["flow_descriptions"] = flow_descs;
-
     flow_info.push_back(flow);
 
     return flow_info;
