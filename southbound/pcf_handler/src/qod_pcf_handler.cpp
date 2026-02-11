@@ -1259,25 +1259,36 @@ nlohmann::json QodPcfHandler::map_ports_to_media_subcomponents(
         dst_ip = *qod_session.application_server.ipv6_address;
     }
 
-    // Helper: create one MediaSubComponent with bidirectional flow descriptions
-    auto add_subcomp = [&](const std::string& src_port_spec,
-                           const std::string& dst_port_spec) {
-        nlohmann::json sub_comp;
-        sub_comp["fNum"] = flow_number;
-
-        nlohmann::json flow_descs = nlohmann::json::array();
-        // Uplink: UE -> network
-        flow_descs.push_back(
+    // Helper: create separate MediaSubComponents for uplink and downlink
+    /*
+     * Seperate the flow descriptions into distinct MediaSubComponents for uplink and downlink traffic.
+     * This is because the SMF doesn't seem to handle bidirectional flow descriptions within a single MediaSubComponent correctly.
+     * It appears to only create PDR with first flow description (uplink) and ignore the second (downlink) when both are in the same sub-component.
+     */
+    auto add_subcomp_pair = [&](const std::string& src_port_spec,
+                                const std::string& dst_port_spec) {
+        // Uplink MediaSubComponent (UE -> network)
+        nlohmann::json uplink_sub_comp;
+        uplink_sub_comp["fNum"] = flow_number;
+        nlohmann::json uplink_flow_descs = nlohmann::json::array();
+        uplink_flow_descs.push_back(
             format_flow_description("out", src_ip, src_port_spec, dst_ip, dst_port_spec));
-        // Downlink: network -> UE
-        flow_descs.push_back(
-            format_flow_description("in", dst_ip, dst_port_spec, src_ip, src_port_spec));
+        uplink_sub_comp["fDescs"] = uplink_flow_descs;
+        uplink_sub_comp["fStatus"] = "ENABLED";
+        uplink_sub_comp["flowUsage"] = "NO_INFO";
+        med_sub_comps[std::to_string(flow_number)] = uplink_sub_comp;
+        flow_number++;
 
-        sub_comp["fDescs"] = flow_descs;
-        sub_comp["fStatus"] = "ENABLED";
-        sub_comp["flowUsage"] = "NO_INFO";
-
-        med_sub_comps[std::to_string(flow_number)] = sub_comp;
+        // Downlink MediaSubComponent (network -> UE)
+        nlohmann::json downlink_sub_comp;
+        downlink_sub_comp["fNum"] = flow_number;
+        nlohmann::json downlink_flow_descs = nlohmann::json::array();
+        downlink_flow_descs.push_back(
+            format_flow_description("out", dst_ip, dst_port_spec, src_ip, src_port_spec));
+        downlink_sub_comp["fDescs"] = downlink_flow_descs;
+        downlink_sub_comp["fStatus"] = "ENABLED";
+        downlink_sub_comp["flowUsage"] = "NO_INFO";
+        med_sub_comps[std::to_string(flow_number)] = downlink_sub_comp;
         flow_number++;
     };
 
@@ -1293,24 +1304,24 @@ nlohmann::json QodPcfHandler::map_ports_to_media_subcomponents(
         dst_port_specs = collect_port_specs(*qod_session.application_server_ports);
     }
 
-    // Create one sub-component per port combination
+    // Create separate uplink and downlink sub-components per port combination
     if (!src_port_specs.empty() && !dst_port_specs.empty()) {
         for (const auto& sp : src_port_specs) {
             for (const auto& dp : dst_port_specs) {
-                add_subcomp(sp, dp);
+                add_subcomp_pair(sp, dp);
             }
         }
     } else if (!src_port_specs.empty()) {
         for (const auto& sp : src_port_specs) {
-            add_subcomp(sp, "");
+            add_subcomp_pair(sp, "");
         }
     } else if (!dst_port_specs.empty()) {
         for (const auto& dp : dst_port_specs) {
-            add_subcomp("", dp);
+            add_subcomp_pair("", dp);
         }
     } else {
-        // No ports specified — single default bidirectional flow
-        add_subcomp("", "");
+        // No ports specified — separate default uplink and downlink flows
+        add_subcomp_pair("", "");
     }
 
     return med_sub_comps;

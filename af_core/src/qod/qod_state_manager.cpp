@@ -114,6 +114,33 @@ void QodStateManager::initialize_default_mappings() {
         false,      // Non-GBR
         std::nullopt, std::nullopt, std::nullopt, std::nullopt
     };
+
+    // High bandwidth profiles
+    qos_profile_mappings_["premium"] = {
+        7,          // 5QI = 7 (Interactive Gaming, Live Streaming)
+        6,          // Priority (PRIO_6 - medium-high priority)
+        100,        // Packet Delay Budget (ms)
+        0.001,      // Packet Error Rate
+        std::nullopt,
+        true,       // GBR
+        "5 Mbps",  // Guaranteed UL (5 Mbps)
+        "5 Mbps",  // Guaranteed DL (5 Mbps)
+        "10 Mbps", // Max UL (10 Mbps)
+        "10 Mbps"  // Max DL (10 Mbps)
+    };
+
+    qos_profile_mappings_["enterprise"] = {
+        8,          // 5QI = 8 (TCP-based video, buffer-tolerant)
+        7,          // Priority (PRIO_7 - medium priority)
+        300,        // Packet Delay Budget (ms)
+        0.000001,   // Packet Error Rate
+        std::nullopt,
+        true,       // GBR
+        "1 Gbps",   // Guaranteed UL (1 Gbps)
+        "1 Gbps",   // Guaranteed DL (1 Gbps)
+        "10 Gbps",  // Max UL (10 Gbps)
+        "10 Gbps"   // Max DL (10 Gbps)
+    };
 }
 
 void QodStateManager::add_session(const af::common::qod::QodSession& session) {

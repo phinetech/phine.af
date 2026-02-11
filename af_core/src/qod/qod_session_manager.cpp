@@ -30,14 +30,16 @@ QodSessionManager::QodSessionManager(
     // Initialize default max durations for standard profiles if not configured
     if (config_.qos_profile_max_durations.empty()) {
         config_.qos_profile_max_durations = {
-            {"QOS_E", std::chrono::seconds(3600)},    // 1 hour for enhanced
-            {"QOS_S", std::chrono::seconds(7200)},    // 2 hours for standard
-            {"QOS_M", std::chrono::seconds(14400)},   // 4 hours for medium
-            {"QOS_L", std::chrono::seconds(28800)},   // 8 hours for low latency
-            {"voice", std::chrono::seconds(7200)},    // 2 hours for voice
-            {"video", std::chrono::seconds(14400)},   // 4 hours for video
-            {"game", std::chrono::seconds(28800)},    // 8 hours for gaming
-            {"data", std::chrono::seconds(86400)}     // 24 hours for data
+            {"QOS_E", std::chrono::seconds(3600)},      // 1 hour for enhanced
+            {"QOS_S", std::chrono::seconds(7200)},      // 2 hours for standard
+            {"QOS_M", std::chrono::seconds(14400)},     // 4 hours for medium
+            {"QOS_L", std::chrono::seconds(28800)},     // 8 hours for low latency
+            {"voice", std::chrono::seconds(7200)},      // 2 hours for voice
+            {"video", std::chrono::seconds(14400)},     // 4 hours for video
+            {"game", std::chrono::seconds(28800)},      // 8 hours for gaming
+            {"data", std::chrono::seconds(86400)},      // 24 hours for data
+            {"premium", std::chrono::seconds(43200)},   // 12 hours for premium Mbps
+            {"enterprise", std::chrono::seconds(28800)} // 8 hours for enterprise Gbps
         };
     }
 }

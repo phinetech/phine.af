@@ -4,6 +4,7 @@ services:
   free5gc-upf:
     container_name: "upf"
     image: tariromukute/oai-upf:fix-measurement-ie-v2
+    # image: tariromukute/oai-upf:measurement-ie-debug-v4
     expose:
       - 2152/udp
       - 8805/udp

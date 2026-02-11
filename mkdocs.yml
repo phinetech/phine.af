@@ -30,6 +30,7 @@ nav:
       - Run: getting-started/run.md
       - First Request: getting-started/first-request.md
       - Quickstart: getting-started/quickstart.md
+      - QoS Enforcement Tutorial: getting-started/qos-enforcement-tutorial.md
   - Architecture:
       - Overview: architecture/overview.md
       - Data Flow: architecture/data-flow.md

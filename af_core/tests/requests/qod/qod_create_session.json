@@ -36,7 +36,7 @@
       5070
     ]
   },
-  "qosProfile": "voice",
+  "qosProfile": "premium",
   "sink": "https://endpoint.example.com/sink",
   "sinkCredential": {
     "credentialType": "ACCESSTOKEN",
