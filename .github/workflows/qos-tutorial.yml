@@ -65,7 +65,7 @@ jobs:
         run: |
           RUNME_VERSION="3.16.5"
           wget https://downloads.runme.dev/runme/${RUNME_VERSION}/runme_linux_x86_64.deb
-          dpkg -i runme_linux_x86_64.deb
+          sudo dpkg -i runme_linux_x86_64.deb
           runme --version
 
       - name: Create folder for tutorial logs
