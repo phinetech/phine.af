@@ -47,6 +47,7 @@ nav:
       - Service Handlers: development/service-handlers.md
       - Configuration: development/configuration.md
       - Testing: development/testing.md
+      - Runme Guide: development/runme-guide.md
       - Code Style: development/code-style.md
   - Operations:
       - Docker Compose: operations/docker-compose.md

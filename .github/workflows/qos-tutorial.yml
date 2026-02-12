@@ -1,0 +1,95 @@
+name: QoS Tutorial Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+      - 'feat-*'
+    paths:
+      - 'docs/getting-started/qos-enforcement-tutorial.md'
+      - 'af_core/**'
+      - 'northbound/**'
+      - 'southbound/**'
+      - 'common/**'
+      - 'docker-compose/**'
+      - '.github/workflows/qos-tutorial.yml'
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+env:
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+
+jobs:
+  qos-tutorial:
+    name: Run QoS Enforcement Tutorial
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.CI_GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-tutorial-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-tutorial-
+
+      - name: Login to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+        continue-on-error: true
+
+      - name: Install gtp5g kernel module
+        run: |
+          chmod +x build/scripts/ci_helper.sh
+          ./build/scripts/ci_helper.sh install_gtp5g
+
+      - name: Install Runme CLI
+        run: |
+          RUNME_VERSION="3.16.5"
+          wget https://downloads.runme.dev/runme/${RUNME_VERSION}/runme_linux_x86_64.deb
+          dpkg -i runme_linux_x86_64.deb
+          runme --version
+
+      - name: Create folder for tutorial logs
+        run: mkdir -p tutorial-logs
+
+      - name: Run tutorial
+        run: runme run --all --skip-prompts --filename docs/getting-started/qos-enforcement-tutorial.md
+
+      - name: Run tutorial — cleanup
+        if: always()
+        run: runme run cleanup --filename docs/getting-started/qos-enforcement-tutorial.md
+        continue-on-error: true
+
+      - name: Collect container logs
+        if: always()
+        run: |
+          chmod +x build/scripts/ci_helper.sh
+          ./build/scripts/ci_helper.sh collect_logs tutorial-logs
+        continue-on-error: true
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qos-tutorial-logs
+          path: tutorial-logs/
+          retention-days: 14
