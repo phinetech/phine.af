@@ -1,6 +1,6 @@
 /**
  * @brief Helper functions for PCF interactions
- * 
+ *
  * Provides utility functions for validating and transforming data
  * related to the Policy Control Function (PCF) interactions.
  */
@@ -12,29 +12,13 @@
 #include <vector>
 #include <optional>
 #include <nlohmann/json.hpp>
+#include "cpp_utils/validation.h"
 
 namespace af {
 namespace southbound {
 
-// Forward declarations for validation result structure
-struct ValidationResult {
-    bool is_valid;
-    std::vector<std::string> errors;
-    
-    ValidationResult(bool valid = true) : is_valid(valid) {}
-    
-    void add_error(const std::string& error) {
-        is_valid = false;
-        errors.push_back(error);
-    }
-    
-    void merge(const ValidationResult& other) {
-        if (!other.is_valid) {
-            is_valid = false;
-            errors.insert(errors.end(), other.errors.begin(), other.errors.end());
-        }
-    }
-};
+// Import ValidationResult from common utils
+using ValidationResult = af::utils::ValidationResult;
 
 /**
  * @brief Validate if a string is a valid URL
@@ -70,6 +54,21 @@ bool is_valid_ipv6(const std::string& ipv6);
  * @return True if valid, false otherwise
  */
 bool is_valid_mac_addr48(const std::string& mac);
+
+// TS 29.571 Common Data Type format validators
+/**
+ * @brief Validate if a string matches TS 29.571 BitRate format
+ * @param bitrate The string to validate (e.g., "1000 Kbps")
+ * @return True if matches pattern "^\d+(\.\d+)? (bps|Kbps|Mbps|Gbps|Tbps)$"
+ */
+bool is_valid_bitrate(const std::string& bitrate);
+
+/**
+ * @brief Validate if a string is a valid RFC 3339 date-time (TS 29.571 DateTime)
+ * @param datetime The string to validate (e.g., "2023-01-01T00:00:00Z")
+ * @return True if valid RFC 3339 date-time
+ */
+bool is_valid_datetime(const std::string& datetime);
 
 // Enumeration validation functions
 bool is_valid_media_type(const std::string& media_type);

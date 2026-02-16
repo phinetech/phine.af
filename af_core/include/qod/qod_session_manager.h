@@ -339,7 +339,8 @@ private:
     // Supported QoS profiles (would be loaded from configuration)
     std::unordered_set<std::string> supported_profiles_{
         "QOS_E", "QOS_S", "QOS_M", "QOS_L",  // Standard CAMARA profiles
-        "voice", "video", "game", "data"      // Custom profiles
+        "voice", "video", "game", "data",      // Custom profiles
+        "premium", "enterprise"                 // High bandwidth profiles
     };
 };
 
