@@ -8,6 +8,7 @@ The project is designed to expose 3GPP 5G network capabilities to third-party ap
 
 
 - Start here: [Getting Started](getting-started/quickstart.md)
+- Run the QoD adapter demo: [Adapter Tutorial](getting-started/adapter-qod-tutorial.md)
 - Understand the design: [Architecture Overview](architecture/overview.md)
 - See what is implemented: [Status](status.md)
 - Developer workflows: [Development](development/add-camara-api.md)
@@ -19,6 +20,7 @@ The project is designed to expose 3GPP 5G network capabilities to third-party ap
 - `northbound/`: Northbound interface adapters
 - `af_core/`: Core orchestration logic
 - `southbound/`: 5G Core Network interface handlers
+- `adapters/`: Demo adapter applications (e.g. [demo-qod-adapter](../adapters/demo-qod-adapter/README.md))
 - `docker-compose/`: Docker Compose environments
 - `build/`: Build scripts and configuration
 - `tests/`: Test suites

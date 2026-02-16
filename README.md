@@ -242,6 +242,8 @@ graph RL
 |-- northbound/           # Northbound interface adapters
 |-- af_core/              # Core orchestration logic
 |-- southbound/           # 5G Core Network interface handlers
+|-- adapters/             # Demo adapter applications
+|   |-- demo-qod-adapter/ # QoD session management demo
 |-- build/                # Build scripts and configuration
 |-- tests/                # Test suites
 |-- docs/                 # Documentation

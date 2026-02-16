@@ -9,3 +9,4 @@ cert/*_*.pem
 
 # Test logs
 results/*
+logs/*
