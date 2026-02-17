@@ -1,4 +1,4 @@
-name: QoS Tutorial Validation
+name: Tutorials Validation
 
 on:
   pull_request:
@@ -8,12 +8,13 @@ on:
       - 'feat-*'
     paths:
       - 'docs/getting-started/qos-enforcement-tutorial.md'
+      - 'docs/getting-started/adapter-qod-tutorial.md'
       - 'af_core/**'
       - 'northbound/**'
       - 'southbound/**'
       - 'common/**'
       - 'docker-compose/**'
-      - '.github/workflows/qos-tutorial.yml'
+      - '.github/workflows/test-tutorials.yml'
   push:
     branches:
       - main
@@ -25,13 +26,26 @@ env:
   COMPOSE_DOCKER_CLI_BUILD: 1
 
 jobs:
-  qos-tutorial:
-    name: Run QoS Enforcement Tutorial
+  tutorials:
+    name: Run ${{ matrix.tutorial.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        tutorial:
+          - name: QoS Enforcement Tutorial
+            file: docs/getting-started/qos-enforcement-tutorial.md
+            artifact-name: qos-tutorial-logs
+            log-path: /tmp/phine.af/qos-enforcement-tutorial/logs
+          - name: Demo Adapter Tutorial
+            file: docs/getting-started/adapter-qod-tutorial.md
+            artifact-name: demo-adapter-tutorial-logs
+            log-path: /tmp/phine.af/adapter-qod-tutorial/logs
 
     steps:
       - name: Checkout code
+        if: ${{ !hashFiles('.git/HEAD') }}
         uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -39,6 +53,7 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        if: steps.buildx.outputs.driver == ''
 
       - name: Cache Docker layers
         uses: actions/cache@v3
@@ -58,44 +73,38 @@ jobs:
 
       - name: Install gtp5g kernel module
         run: |
-          chmod +x build/scripts/ci_helper.sh
-          ./build/scripts/ci_helper.sh install_gtp5g
+          if ! lsmod | grep -q gtp5g; then
+            echo "Installing gtp5g..."
+            chmod +x build/scripts/ci_helper.sh
+            ./build/scripts/ci_helper.sh install_gtp5g
+          else
+            echo "gtp5g already installed."
+          fi
 
       - name: Install Runme CLI
         run: |
-          RUNME_VERSION="3.16.5"
-          wget https://downloads.runme.dev/runme/${RUNME_VERSION}/runme_linux_x86_64.deb
-          sudo dpkg -i runme_linux_x86_64.deb
+          if ! command -v runme &> /dev/null; then
+            echo "Installing Runme..."
+            RUNME_VERSION="3.16.5"
+            wget https://downloads.runme.dev/runme/${RUNME_VERSION}/runme_linux_x86_64.deb
+            sudo dpkg -i runme_linux_x86_64.deb
+          else
+            echo "Runme already installed."
+          fi
           runme --version
 
-      - name: Run QoS Enforcement Tutorial
-        run: runme run --all --skip-prompts --filename docs/getting-started/qos-enforcement-tutorial.md
+      - name: Run ${{ matrix.tutorial.name }}
+        run: runme run --all --skip-prompts --filename ${{ matrix.tutorial.file }}
 
-      - name: Run tutorial — cleanup
+      - name: Cleanup ${{ matrix.tutorial.name }}
         if: always()
-        run: runme run cleanup --filename docs/getting-started/qos-enforcement-tutorial.md
+        run: runme run cleanup --filename ${{ matrix.tutorial.file }}
         continue-on-error: true
 
-      - name: Upload logs
+      - name: Upload ${{ matrix.tutorial.name }} logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qos-tutorial-logs
-          path: /tmp/phine.af/qos-enforcement-tutorial/logs
-          retention-days: 14
-
-      - name: Run Demo Adapter tutorial
-        run: runme run --all --skip-prompts --filename docs/getting-started/adapter-qod-tutorial.md
-
-      - name: Run Demo Adapter tutorial — cleanup
-        if: always()
-        run: runme run cleanup --filename docs/getting-started/adapter-qod-tutorial.md
-        continue-on-error: true
-
-      - name: Upload Demo Adapter tutorial logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: demo-adapter-tutorial-logs
-          path: /tmp/phine.af/adapter-qod-tutorial/logs
+          name: ${{ matrix.tutorial.artifact-name }}
+          path: ${{ matrix.tutorial.log-path }}
           retention-days: 14
