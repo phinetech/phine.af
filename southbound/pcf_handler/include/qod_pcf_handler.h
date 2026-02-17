@@ -238,14 +238,17 @@ private:
     nlohmann::json build_af_request_data(const af::common::qod::QodSession& qod_session);
 
     /**
-     * @brief Map QoD ports to PCF media sub-components
-     * @param device_ports Device port specification
-     * @param server_ports Server port specification
-     * @return JSON array of media sub-components
+     * @brief Map QoD session to PCF media sub-components
+     *
+     * Creates one MediaSubComponent per port combination, each containing
+     * bidirectional IPFilterRule flow descriptions with actual IP addresses
+     * and port specifications.  Protocol is always "ip" (any) per CAMARA.
+     *
+     * @param qod_session Complete QoD session (provides IPs and port specs)
+     * @return JSON object of media sub-components keyed by flow number
      */
     nlohmann::json map_ports_to_media_subcomponents(
-        const std::optional<af::common::qod::PortsSpec>& device_ports,
-        const std::optional<af::common::qod::PortsSpec>& server_ports);
+        const af::common::qod::QodSession& qod_session);
 
     /**
      * @brief Store PCF session mapping

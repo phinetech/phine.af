@@ -1,6 +1,6 @@
 /**
  * @brief Implementation of helper functions for PCF interactions
- * 
+ *
  * Provides implementation of utility functions for validating and transforming data
  * related to the Policy Control Function (PCF) interactions.
  */
@@ -19,6 +19,20 @@ bool is_valid_url(const std::string& url) {
         R"(^(https?|ftp)://[^\s/$.?#].[^\s]*$)",
         std::regex::icase);
     return std::regex_match(url, url_regex);
+}
+
+bool is_valid_bitrate(const std::string& bitrate) {
+    // TS 29.571 BitRate: "^\d+(\.\d+)? (bps|Kbps|Mbps|Gbps|Tbps)$"
+    static const std::regex bitrate_regex(
+        R"(^\d+(\.\d+)? (bps|Kbps|Mbps|Gbps|Tbps)$)");
+    return std::regex_match(bitrate, bitrate_regex);
+}
+
+bool is_valid_datetime(const std::string& datetime) {
+    // ISO 8601 / RFC 3339 date-time: "YYYY-MM-DDTHH:MM:SSZ" or with offset
+    static const std::regex datetime_regex(
+        R"(^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$)");
+    return std::regex_match(datetime, datetime_regex);
 }
 
 bool is_valid_uuid(const std::string& uuid) {
@@ -48,127 +62,148 @@ bool is_valid_mac_addr48(const std::string& mac) {
 
 // Enumeration validation functions
 bool is_valid_media_type(const std::string& media_type) {
+    // TS 29.514 V19.5.0 MediaType enumeration
     static const std::set<std::string> valid_types = {
         "AUDIO", "VIDEO", "DATA", "APPLICATION", "CONTROL", "TEXT", "MESSAGE", "OTHER"
     };
-    return valid_types.find(media_type) != valid_types.end();
+    return valid_types.count(media_type) > 0;
 }
 
 bool is_valid_af_event(const std::string& af_event) {
+    // TS 29.514 V19.5.0 AfEvent enumeration
     static const std::set<std::string> valid_events = {
-        "ACCESS_TYPE_CHANGE", "EXTRA_UE_ADDR", "ANI_REPORT", "APP_DETECTION",
-        "CHARGING_CORRELATION", "EPS_FALLBACK", "FAILED_QOS_UPDATE", "FAILED_RESOURCES_ALLOCATION",
-        "OUT_OF_CREDIT", "PDU_SESSION_STATUS", "PLMN_CHG", "QOS_MONITORING", "QOS_NOTIF",
-        "RAN_NAS_CAUSE", "REALLOCATION_OF_CREDIT", "SAT_CATEGORY_CHG", "SUCCESSFUL_QOS_UPDATE",
-        "SUCCESSFUL_RESOURCES_ALLOCATION", "TSN_BRIDGE_INFO", "UP_PATH_CHG_FAILURE",
-        "USAGE_REPORT", "UE_TEMPORARILY_UNAVAILABLE"
+        "ACCESS_TYPE_CHANGE", "ANI_REPORT", "APP_DETECTION",
+        "BAT_OFFSET_INFO", "CHARGING_CORRELATION", "CN_HEALTH_MONITOR",
+        "EPS_FALLBACK", "EXTRA_UE_ADDR",
+        "FAILED_QOS_UPDATE", "FAILED_RESOURCES_ALLOCATION",
+        "L4S_SUPP",
+        "OUT_OF_CREDIT",
+        "PACK_DEL_VAR", "PDU_SESSION_STATUS", "PLMN_CHG",
+        "QOS_MON_CAP_REPO", "QOS_MONITORING", "QOS_NOTIF",
+        "RAN_NAS_CAUSE", "RATE_LIMIT_INFO_REPO", "REALLOCATION_OF_CREDIT",
+        "RT_DELAY_TWO_QOS_FLOWS",
+        "SAT_CATEGORY_CHG", "SUCCESSFUL_QOS_UPDATE", "SUCCESSFUL_RESOURCES_ALLOCATION",
+        "TSN_BRIDGE_INFO",
+        "UE_REACH_STATUS_CH", "UP_PATH_CHG_FAILURE", "UP_PATH_CHANGE",
+        "URSP_ENF_INFO", "USAGE_REPORT"
     };
-    return valid_events.find(af_event) != valid_events.end();
+    return valid_events.count(af_event) > 0;
 }
 
 bool is_valid_af_notif_method(const std::string& notif_method) {
+    // TS 29.514 V19.5.0 AfNotifMethod enumeration
     static const std::set<std::string> valid_methods = {
         "EVENT_DETECTION", "ONE_TIME", "PERIODIC", "PDU_SESSION_RELEASE"
     };
-    return valid_methods.find(notif_method) != valid_methods.end();
+    return valid_methods.count(notif_method) > 0;
 }
 
 bool is_valid_flow_status(const std::string& flow_status) {
+    // TS 29.514 V19.5.0 FlowStatus enumeration
     static const std::set<std::string> valid_statuses = {
         "ENABLED-UPLINK", "ENABLED-DOWNLINK", "ENABLED", "DISABLED", "REMOVED"
     };
-    return valid_statuses.find(flow_status) != valid_statuses.end();
+    return valid_statuses.count(flow_status) > 0;
 }
 
 bool is_valid_flow_usage(const std::string& flow_usage) {
+    // TS 29.514 V19.5.0 FlowUsage enumeration
     static const std::set<std::string> valid_usages = {
         "NO_INFO", "RTCP", "AF_SIGNALLING"
     };
-    return valid_usages.find(flow_usage) != valid_usages.end();
+    return valid_usages.count(flow_usage) > 0;
 }
 
 bool is_valid_reservation_priority(const std::string& res_prio) {
+    // TS 29.514 V19.5.0 ReservPriority enumeration
     static const std::set<std::string> valid_priorities = {
         "PRIO_1", "PRIO_2", "PRIO_3", "PRIO_4", "PRIO_5", "PRIO_6", "PRIO_7", "PRIO_8",
         "PRIO_9", "PRIO_10", "PRIO_11", "PRIO_12", "PRIO_13", "PRIO_14", "PRIO_15", "PRIO_16"
     };
-    return valid_priorities.find(res_prio) != valid_priorities.end();
+    return valid_priorities.count(res_prio) > 0;
 }
 
 bool is_valid_sponsoring_status(const std::string& spon_status) {
+    // TS 29.514 V19.5.0 SponsoringStatus enumeration
     static const std::set<std::string> valid_statuses = {
         "SPONSOR_DISABLED", "SPONSOR_ENABLED"
     };
-    return valid_statuses.find(spon_status) != valid_statuses.end();
+    return valid_statuses.count(spon_status) > 0;
 }
 
 bool is_valid_service_info_status(const std::string& serv_status) {
+    // TS 29.514 V19.5.0 ServiceInfoStatus enumeration
     static const std::set<std::string> valid_statuses = {
         "FINAL", "PRELIMINARY"
     };
-    return valid_statuses.find(serv_status) != valid_statuses.end();
+    return valid_statuses.count(serv_status) > 0;
 }
 
 bool is_valid_termination_cause(const std::string& term_cause) {
+    // TS 29.514 V19.5.0 TerminationCause enumeration
     static const std::set<std::string> valid_causes = {
-        "ALL_SDF_DEACTIVATION", "PDU_SESSION_TERMINATION", "PS_TO_CS_HO",
-        "INSUFFICIENT_SERVER_RESOURCES", "INSUFFICIENT_QOS_FLOW_RESOURCES",
-        "SPONSORED_DATA_CONNECTIVITY_DISALLOWED"
+        "ALL_SDF_DEACTIVATION", "INSUFFICIENT_QOS_FLOW_RESOURCES",
+        "INSUFFICIENT_SERVER_RESOURCES", "PDU_SESSION_TERMINATION",
+        "PS_TO_CS_HO", "REFLECTIVE_QOS_NOT_SUPPORTED_IN_UE",
+        "REQUEST_QOS_NOT_SUPPORTED_IN_PLMN", "SMF_FAILURE",
+        "SPONSORED_DATA_CONNECTIVITY_DISALLOWED", "UE_ADDR_RELEASE"
     };
-    return valid_causes.find(term_cause) != valid_causes.end();
+    return valid_causes.count(term_cause) > 0;
 }
 
 bool is_valid_qos_notif_type(const std::string& qos_notif_type) {
+    // TS 29.514 V19.5.0 QosNotifType enumeration
     static const std::set<std::string> valid_types = {
-        "GUARANTEED", "NOT_GUARANTEED"
+        "GUARANTEED", "NOT_GUARANTEED", "NOT_GUARANTEED_DL", "NOT_GUARANTEED_UL"
     };
-    return valid_types.find(qos_notif_type) != valid_types.end();
+    return valid_types.count(qos_notif_type) > 0;
 }
 
 bool is_valid_required_access_info(const std::string& req_access_info) {
+    // TS 29.514 V19.5.0 RequiredAccessInfo enumeration
     static const std::set<std::string> valid_info = {
         "USER_LOCATION", "UE_TIME_ZONE"
     };
-    return valid_info.find(req_access_info) != valid_info.end();
+    return valid_info.count(req_access_info) > 0;
 }
 
 // Helper validation functions
 ValidationResult validate_required_fields(const nlohmann::json& json, const std::vector<std::string>& required_fields) {
     ValidationResult result;
-    
+
     for (const auto& field : required_fields) {
         if (!json.contains(field)) {
             result.add_error("Missing required field: " + field);
         }
     }
-    
+
     return result;
 }
 
 ValidationResult validate_one_of_required(const nlohmann::json& json, const std::vector<std::string>& one_of_fields) {
     ValidationResult result;
-    
+
     int found_count = 0;
     for (const auto& field : one_of_fields) {
         if (json.contains(field)) {
             found_count++;
         }
     }
-    
+
     if (found_count != 1) {
-        result.add_error("Exactly one of the following fields must be present: " + 
+        result.add_error("Exactly one of the following fields must be present: " +
                         std::accumulate(one_of_fields.begin(), one_of_fields.end(), std::string(),
                                       [](const std::string& a, const std::string& b) {
                                           return a.empty() ? b : a + ", " + b;
                                       }));
     }
-    
+
     return result;
 }
 
 ValidationResult validate_any_of_required(const nlohmann::json& json, const std::vector<std::string>& any_of_fields) {
     ValidationResult result;
-    
+
     bool found = false;
     for (const auto& field : any_of_fields) {
         if (json.contains(field)) {
@@ -176,21 +211,21 @@ ValidationResult validate_any_of_required(const nlohmann::json& json, const std:
             break;
         }
     }
-    
+
     if (!found) {
-        result.add_error("At least one of the following fields must be present: " + 
+        result.add_error("At least one of the following fields must be present: " +
                         std::accumulate(any_of_fields.begin(), any_of_fields.end(), std::string(),
                                       [](const std::string& a, const std::string& b) {
                                           return a.empty() ? b : a + ", " + b;
                                       }));
     }
-    
+
     return result;
 }
 
 ValidationResult validate_array_min_items(const nlohmann::json& json, const std::string& field_name, size_t min_items) {
     ValidationResult result;
-    
+
     if (json.contains(field_name)) {
         if (!json[field_name].is_array()) {
             result.add_error("Field " + field_name + " must be an array");
@@ -198,13 +233,13 @@ ValidationResult validate_array_min_items(const nlohmann::json& json, const std:
             result.add_error("Field " + field_name + " must have at least " + std::to_string(min_items) + " items");
         }
     }
-    
+
     return result;
 }
 
 ValidationResult validate_array_max_items(const nlohmann::json& json, const std::string& field_name, size_t max_items) {
     ValidationResult result;
-    
+
     if (json.contains(field_name)) {
         if (!json[field_name].is_array()) {
             result.add_error("Field " + field_name + " must be an array");
@@ -212,31 +247,31 @@ ValidationResult validate_array_max_items(const nlohmann::json& json, const std:
             result.add_error("Field " + field_name + " must have at most " + std::to_string(max_items) + " items");
         }
     }
-    
+
     return result;
 }
 
 ValidationResult validate_integer_range(const nlohmann::json& json, const std::string& field_name, int min_val, int max_val) {
     ValidationResult result;
-    
+
     if (json.contains(field_name)) {
         if (!json[field_name].is_number_integer()) {
             result.add_error("Field " + field_name + " must be an integer");
         } else {
             int value = json[field_name];
             if (value < min_val || value > max_val) {
-                result.add_error("Field " + field_name + " must be between " + std::to_string(min_val) + 
+                result.add_error("Field " + field_name + " must be between " + std::to_string(min_val) +
                                " and " + std::to_string(max_val));
             }
         }
     }
-    
+
     return result;
 }
 
 ValidationResult validate_string_pattern(const nlohmann::json& json, const std::string& field_name, const std::regex& pattern) {
     ValidationResult result;
-    
+
     if (json.contains(field_name)) {
         if (!json[field_name].is_string()) {
             result.add_error("Field " + field_name + " must be a string");
@@ -247,7 +282,7 @@ ValidationResult validate_string_pattern(const nlohmann::json& json, const std::
             }
         }
     }
-    
+
     return result;
 }
 
@@ -255,42 +290,42 @@ ValidationResult validate_string_pattern(const nlohmann::json& json, const std::
 
 ValidationResult validate_app_session_context(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("AppSessionContext must be an object");
         return result;
     }
-    
+
     // Validate optional fields if present
     if (json.contains("ascReqData")) {
         result.merge(validate_app_session_context_req_data(json["ascReqData"]));
     }
-    
+
     if (json.contains("ascRespData")) {
         result.merge(validate_app_session_context_resp_data(json["ascRespData"]));
     }
-    
+
     if (json.contains("evsNotif")) {
         result.merge(validate_events_notification(json["evsNotif"]));
     }
-    
+
     return result;
 }
 
 ValidationResult validate_app_session_context_req_data(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("AppSessionContextReqData must be an object");
         return result;
     }
-    
+
     // Check required fields
     result.merge(validate_required_fields(json, {"notifUri", "suppFeat"}));
-    
+
     // Check oneOf requirement for UE identification
     result.merge(validate_one_of_required(json, {"ueIpv4", "ueIpv6", "ueMac"}));
-    
+
     // Validate URI format
     if (json.contains("notifUri") && json["notifUri"].is_string()) {
         std::string uri = json["notifUri"];
@@ -298,7 +333,7 @@ ValidationResult validate_app_session_context_req_data(const nlohmann::json& jso
             result.add_error("notifUri must be a valid URI");
         }
     }
-    
+
     // Validate IP addresses if present
     if (json.contains("ueIpv4") && json["ueIpv4"].is_string()) {
         std::string ipv4 = json["ueIpv4"];
@@ -306,45 +341,45 @@ ValidationResult validate_app_session_context_req_data(const nlohmann::json& jso
             result.add_error("ueIpv4 must be a valid IPv4 address");
         }
     }
-    
+
     if (json.contains("ueIpv6") && json["ueIpv6"].is_string()) {
         std::string ipv6 = json["ueIpv6"];
         if (!is_valid_ipv6(ipv6)) {
             result.add_error("ueIpv6 must be a valid IPv6 address");
         }
     }
-    
+
     if (json.contains("ueMac") && json["ueMac"].is_string()) {
         std::string mac = json["ueMac"];
         if (!is_valid_mac_addr48(mac)) {
             result.add_error("ueMac must be a valid MAC address");
         }
     }
-    
+
     // Validate enumeration fields
     if (json.contains("resPrio") && json["resPrio"].is_string()) {
         if (!is_valid_reservation_priority(json["resPrio"])) {
             result.add_error("resPrio contains invalid reservation priority value");
         }
     }
-    
+
     if (json.contains("sponStatus") && json["sponStatus"].is_string()) {
         if (!is_valid_sponsoring_status(json["sponStatus"])) {
             result.add_error("sponStatus contains invalid sponsoring status value");
         }
     }
-    
+
     if (json.contains("servInfStatus") && json["servInfStatus"].is_string()) {
         if (!is_valid_service_info_status(json["servInfStatus"])) {
             result.add_error("servInfStatus contains invalid service info status value");
         }
     }
-    
+
     // Validate nested objects
     if (json.contains("evSubsc")) {
         result.merge(validate_events_subscription_req_data(json["evSubsc"]));
     }
-    
+
     if (json.contains("medComponents")) {
         if(!json["medComponents"].is_object()) {
             result.add_error("medComponents must be an object");
@@ -355,61 +390,61 @@ ValidationResult validate_app_session_context_req_data(const nlohmann::json& jso
             }
         }
     }
-    
+
     if (json.contains("afRoutReq")) {
         result.merge(validate_af_routing_requirement(json["afRoutReq"]));
     }
-    
+
     // Validate array constraints
     if (json.contains("tsnPortManContNwtts")) {
         result.merge(validate_array_min_items(json, "tsnPortManContNwtts", 1));
     }
-    
+
     return result;
 }
 
 ValidationResult validate_app_session_context_resp_data(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("AppSessionContextRespData must be an object");
         return result;
     }
-    
+
     // Validate UE identities array if present
     if (json.contains("ueIds")) {
         result.merge(validate_array_min_items(json, "ueIds", 1));
-        
+
         if (json["ueIds"].is_array()) {
             for (const auto& ue_id : json["ueIds"]) {
                 result.merge(validate_ue_identity_info(ue_id));
             }
         }
     }
-    
+
     return result;
 }
 
 ValidationResult validate_events_subscription_req_data(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("EventsSubscReqData must be an object");
         return result;
     }
-    
+
     // Check required fields
     result.merge(validate_required_fields(json, {"events"}));
-    
+
     // Validate events array
     result.merge(validate_array_min_items(json, "events", 1));
-    
+
     if (json.contains("events") && json["events"].is_array()) {
         for (const auto& event : json["events"]) {
             result.merge(validate_af_event_subscription(event));
         }
     }
-    
+
     // Validate optional fields
     if (json.contains("notifUri") && json["notifUri"].is_string()) {
         std::string uri = json["notifUri"];
@@ -417,15 +452,15 @@ ValidationResult validate_events_subscription_req_data(const nlohmann::json& jso
             result.add_error("notifUri must be a valid URI");
         }
     }
-    
+
     // Validate array constraints
     if (json.contains("reqQosMonParams")) {
         result.merge(validate_array_min_items(json, "reqQosMonParams", 1));
     }
-    
+
     if (json.contains("reqAnis")) {
         result.merge(validate_array_min_items(json, "reqAnis", 1));
-        
+
         if (json["reqAnis"].is_array()) {
             for (const auto& ani : json["reqAnis"]) {
                 if (ani.is_string() && !is_valid_required_access_info(ani)) {
@@ -434,73 +469,73 @@ ValidationResult validate_events_subscription_req_data(const nlohmann::json& jso
             }
         }
     }
-    
+
     if (json.contains("afAppIds")) {
         result.merge(validate_array_min_items(json, "afAppIds", 1));
     }
-    
+
     if (json.contains("qosMon")) {
         result.merge(validate_qos_monitoring_information(json["qosMon"]));
     }
-    
+
     return result;
 }
 
 ValidationResult validate_media_component(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("MediaComponent must be an object");
         return result;
     }
-    
+
     // Check required fields
     result.merge(validate_required_fields(json, {"medCompN"}));
-    
+
     // Validate medCompN is integer
     if (json.contains("medCompN") && !json["medCompN"].is_number_integer()) {
         result.add_error("medCompN must be an integer");
     }
-    
+
     // Validate enumeration fields
     if (json.contains("medType") && json["medType"].is_string()) {
         if (!is_valid_media_type(json["medType"])) {
             result.add_error("medType contains invalid media type value");
         }
     }
-    
+
     if (json.contains("fStatus") && json["fStatus"].is_string()) {
         if (!is_valid_flow_status(json["fStatus"])) {
             result.add_error("fStatus contains invalid flow status value");
         }
     }
-    
+
     if (json.contains("resPrio") && json["resPrio"].is_string()) {
         if (!is_valid_reservation_priority(json["resPrio"])) {
             result.add_error("resPrio contains invalid reservation priority value");
         }
     }
-    
+
     // Validate array constraints
     if (json.contains("codecs")) {
         result.merge(validate_array_min_items(json, "codecs", 1));
         result.merge(validate_array_max_items(json, "codecs", 2));
     }
-    
+
     if (json.contains("altSerReqs")) {
         result.merge(validate_array_min_items(json, "altSerReqs", 1));
     }
-    
+
     if (json.contains("altSerReqsData")) {
         result.merge(validate_array_min_items(json, "altSerReqsData", 1));
-        
+
         if (json["altSerReqsData"].is_array()) {
             for (const auto& req_data : json["altSerReqsData"]) {
                 result.merge(validate_alternative_service_requirements_data(req_data));
             }
         }
     }
-    
+
     // Validate nested media subcomponents
     if (json.contains("medSubComps")) {
         if (!json["medSubComps"].is_object()) {
@@ -510,113 +545,137 @@ ValidationResult validate_media_component(const nlohmann::json& json) {
         if (json["medSubComps"].empty()) {
             result.add_error("medSubComps must have at least one property");
         }
-        
+
         for (const auto& [key, subcomp] : json["medSubComps"].items()) {
             result.merge(validate_media_sub_component(subcomp));
         }
     }
-    
+
     // Validate constraints - cannot have both altSerReqs and altSerReqsData
     if (json.contains("altSerReqs") && json.contains("altSerReqsData")) {
         result.add_error("Cannot have both altSerReqs and altSerReqsData");
     }
-    
+
     // Validate constraints - cannot have both qosReference and altSerReqsData
     if (json.contains("qosReference") && json.contains("altSerReqsData")) {
         result.add_error("Cannot have both qosReference and altSerReqsData");
     }
-    
+
+    // Validate BitRate fields per TS 29.571: "^\d+(\.\d+)? (bps|Kbps|Mbps|Gbps|Tbps)$"
+    static const std::vector<std::string> bitrate_fields = {
+        "marBwDl", "marBwUl", "mirBwDl", "mirBwUl",
+        "minDesBwDl", "minDesBwUl", "maxSuppBwDl", "maxSuppBwUl",
+        "rrBw", "rsBw"
+    };
+    for (const auto& field : bitrate_fields) {
+        if (json.contains(field) && json[field].is_string()) {
+            if (!is_valid_bitrate(json[field].get<std::string>())) {
+                result.add_error(field + " must match TS 29.571 BitRate format: '<value> <unit>' "
+                               "(e.g., \"100 Mbps\", \"1.5 Gbps\")");
+            }
+        }
+    }
+
     return result;
 }
 
 ValidationResult validate_media_sub_component(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("MediaSubComponent must be an object");
         return result;
     }
-    
+
     // Check required fields
     result.merge(validate_required_fields(json, {"fNum"}));
-    
+
     // Validate fNum is integer
     if (json.contains("fNum") && !json["fNum"].is_number_integer()) {
         result.add_error("fNum must be an integer");
     }
-    
+
     // Validate array constraints
     if (json.contains("ethfDescs")) {
         result.merge(validate_array_min_items(json, "ethfDescs", 1));
         result.merge(validate_array_max_items(json, "ethfDescs", 2));
-        
+
         if (json["ethfDescs"].is_array()) {
             for (const auto& eth_desc : json["ethfDescs"]) {
                 result.merge(validate_eth_flow_description(eth_desc));
             }
         }
     }
-    
+
     if (json.contains("fDescs")) {
         result.merge(validate_array_min_items(json, "fDescs", 1));
         result.merge(validate_array_max_items(json, "fDescs", 2));
     }
-    
+
     // Validate enumeration fields
     if (json.contains("fStatus") && json["fStatus"].is_string()) {
         if (!is_valid_flow_status(json["fStatus"])) {
             result.add_error("fStatus contains invalid flow status value");
         }
     }
-    
+
     if (json.contains("flowUsage") && json["flowUsage"].is_string()) {
         if (!is_valid_flow_usage(json["flowUsage"])) {
             result.add_error("flowUsage contains invalid flow usage value");
         }
     }
-    
+
+    // Validate BitRate fields per TS 29.571
+    for (const auto& field : {"marBwDl", "marBwUl"}) {
+        if (json.contains(field) && json[field].is_string()) {
+            if (!is_valid_bitrate(json[field].get<std::string>())) {
+                result.add_error(std::string(field) + " must match TS 29.571 BitRate format");
+            }
+        }
+    }
+
     return result;
 }
 
 ValidationResult validate_af_event_subscription(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("AfEventSubscription must be an object");
         return result;
     }
-    
+
     // Check required fields
     result.merge(validate_required_fields(json, {"event"}));
-    
+
     // Validate event enumeration
     if (json.contains("event") && json["event"].is_string()) {
         if (!is_valid_af_event(json["event"])) {
             result.add_error("event contains invalid AF event value");
         }
     }
-    
+
     // Validate notification method enumeration
     if (json.contains("notifMethod") && json["notifMethod"].is_string()) {
         if (!is_valid_af_notif_method(json["notifMethod"])) {
             result.add_error("notifMethod contains invalid notification method value");
         }
     }
-    
+
     return result;
 }
 
 ValidationResult validate_events_notification(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("EventsNotification must be an object");
         return result;
     }
-    
+
     // Check required fields
     result.merge(validate_required_fields(json, {"evSubsUri", "evNotifs"}));
-    
+
     // Validate URI format
     if (json.contains("evSubsUri") && json["evSubsUri"].is_string()) {
         std::string uri = json["evSubsUri"];
@@ -624,102 +683,102 @@ ValidationResult validate_events_notification(const nlohmann::json& json) {
             result.add_error("evSubsUri must be a valid URI");
         }
     }
-    
+
     // Validate evNotifs array
     result.merge(validate_array_min_items(json, "evNotifs", 1));
-    
+
     if (json.contains("evNotifs") && json["evNotifs"].is_array()) {
         for (const auto& notif : json["evNotifs"]) {
             result.merge(validate_af_event_notification(notif));
         }
     }
-    
+
     // Validate other arrays with minimum items
     if (json.contains("adReports")) {
         result.merge(validate_array_min_items(json, "adReports", 1));
     }
-    
+
     if (json.contains("anChargIds")) {
         result.merge(validate_array_min_items(json, "anChargIds", 1));
-        
+
         if (json["anChargIds"].is_array()) {
             for (const auto& charging_id : json["anChargIds"]) {
                 result.merge(validate_access_net_charging_identifier(charging_id));
             }
         }
     }
-    
+
     if (json.contains("failedResourcAllocReports")) {
         result.merge(validate_array_min_items(json, "failedResourcAllocReports", 1));
     }
-    
+
     if (json.contains("succResourcAllocReports")) {
         result.merge(validate_array_min_items(json, "succResourcAllocReports", 1));
     }
-    
+
     if (json.contains("qosMonReports")) {
         result.merge(validate_array_min_items(json, "qosMonReports", 1));
-        
+
         if (json["qosMonReports"].is_array()) {
             for (const auto& report : json["qosMonReports"]) {
                 result.merge(validate_qos_monitoring_report(report));
             }
         }
     }
-    
+
     return result;
 }
 
 ValidationResult validate_af_event_notification(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("AfEventNotification must be an object");
         return result;
     }
-    
+
     // Check required fields
     result.merge(validate_required_fields(json, {"event"}));
-    
+
     // Validate event enumeration
     if (json.contains("event") && json["event"].is_string()) {
         if (!is_valid_af_event(json["event"])) {
             result.add_error("event contains invalid AF event value");
         }
     }
-    
+
     // Validate flows array
     if (json.contains("flows")) {
         result.merge(validate_array_min_items(json, "flows", 1));
-        
+
         if (json["flows"].is_array()) {
             for (const auto& flow : json["flows"]) {
                 result.merge(validate_flows(flow));
             }
         }
     }
-    
+
     return result;
 }
 
 ValidationResult validate_termination_info(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("TerminationInfo must be an object");
         return result;
     }
-    
+
     // Check required fields
     result.merge(validate_required_fields(json, {"termCause", "resUri"}));
-    
+
     // Validate termination cause enumeration
     if (json.contains("termCause") && json["termCause"].is_string()) {
         if (!is_valid_termination_cause(json["termCause"])) {
             result.add_error("termCause contains invalid termination cause value");
         }
     }
-    
+
     // Validate URI format
     if (json.contains("resUri") && json["resUri"].is_string()) {
         std::string uri = json["resUri"];
@@ -727,34 +786,34 @@ ValidationResult validate_termination_info(const nlohmann::json& json) {
             result.add_error("resUri must be a valid URI");
         }
     }
-    
+
     return result;
 }
 
 ValidationResult validate_flows(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("Flows must be an object");
         return result;
     }
-    
+
     // Check required fields
     result.merge(validate_required_fields(json, {"medCompN"}));
-    
+
     // Validate medCompN is integer
     if (json.contains("medCompN") && !json["medCompN"].is_number_integer()) {
         result.add_error("medCompN must be an integer");
     }
-    
+
     // Validate arrays with minimum items
     if (json.contains("contVers")) {
         result.merge(validate_array_min_items(json, "contVers", 1));
     }
-    
+
     if (json.contains("fNums")) {
         result.merge(validate_array_min_items(json, "fNums", 1));
-        
+
         // Validate that all fNums are integers
         if (json["fNums"].is_array()) {
             for (const auto& fnum : json["fNums"]) {
@@ -765,129 +824,129 @@ ValidationResult validate_flows(const nlohmann::json& json) {
             }
         }
     }
-    
+
     return result;
 }
 
 ValidationResult validate_eth_flow_description(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("EthFlowDescription must be an object");
         return result;
     }
-    
+
     // Check required fields
     result.merge(validate_required_fields(json, {"ethType"}));
-    
+
     // Validate MAC addresses if present
     if (json.contains("destMacAddr") && json["destMacAddr"].is_string()) {
         if (!is_valid_mac_addr48(json["destMacAddr"])) {
             result.add_error("destMacAddr must be a valid MAC address");
         }
     }
-    
+
     if (json.contains("sourceMacAddr") && json["sourceMacAddr"].is_string()) {
         if (!is_valid_mac_addr48(json["sourceMacAddr"])) {
             result.add_error("sourceMacAddr must be a valid MAC address");
         }
     }
-    
+
     if (json.contains("srcMacAddrEnd") && json["srcMacAddrEnd"].is_string()) {
         if (!is_valid_mac_addr48(json["srcMacAddrEnd"])) {
             result.add_error("srcMacAddrEnd must be a valid MAC address");
         }
     }
-    
+
     if (json.contains("destMacAddrEnd") && json["destMacAddrEnd"].is_string()) {
         if (!is_valid_mac_addr48(json["destMacAddrEnd"])) {
             result.add_error("destMacAddrEnd must be a valid MAC address");
         }
     }
-    
+
     // Validate VLAN tags array constraints
     if (json.contains("vlanTags")) {
         result.merge(validate_array_min_items(json, "vlanTags", 1));
         result.merge(validate_array_max_items(json, "vlanTags", 2));
     }
-    
+
     return result;
 }
 
 ValidationResult validate_pcscf_restoration_request_data(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("PcscfRestorationRequestData must be an object");
         return result;
     }
-    
+
     // Check oneOf requirement for UE IP
     result.merge(validate_one_of_required(json, {"ueIpv4", "ueIpv6"}));
-    
+
     // Validate IP addresses
     if (json.contains("ueIpv4") && json["ueIpv4"].is_string()) {
         if (!is_valid_ipv4(json["ueIpv4"])) {
             result.add_error("ueIpv4 must be a valid IPv4 address");
         }
     }
-    
+
     if (json.contains("ueIpv6") && json["ueIpv6"].is_string()) {
         if (!is_valid_ipv6(json["ueIpv6"])) {
             result.add_error("ueIpv6 must be a valid IPv6 address");
         }
     }
-    
+
     return result;
 }
 
 ValidationResult validate_qos_monitoring_information(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("QosMonitoringInformation must be an object");
         return result;
     }
-    
+
     // Validate integer fields
     if (json.contains("repThreshDl") && !json["repThreshDl"].is_number_integer()) {
         result.add_error("repThreshDl must be an integer");
     }
-    
+
     if (json.contains("repThreshUl") && !json["repThreshUl"].is_number_integer()) {
         result.add_error("repThreshUl must be an integer");
     }
-    
+
     if (json.contains("repThreshRp") && !json["repThreshRp"].is_number_integer()) {
         result.add_error("repThreshRp must be an integer");
     }
-    
+
     return result;
 }
 
 ValidationResult validate_qos_monitoring_report(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("QosMonitoringReport must be an object");
         return result;
     }
-    
+
     // Validate flows array
     if (json.contains("flows")) {
         result.merge(validate_array_min_items(json, "flows", 1));
-        
+
         if (json["flows"].is_array()) {
             for (const auto& flow : json["flows"]) {
                 result.merge(validate_flows(flow));
             }
         }
     }
-    
+
     // Validate delay arrays
     if (json.contains("ulDelays")) {
         result.merge(validate_array_min_items(json, "ulDelays", 1));
-        
+
         if (json["ulDelays"].is_array()) {
             for (const auto& delay : json["ulDelays"]) {
                 if (!delay.is_number_integer()) {
@@ -897,10 +956,10 @@ ValidationResult validate_qos_monitoring_report(const nlohmann::json& json) {
             }
         }
     }
-    
+
     if (json.contains("dlDelays")) {
         result.merge(validate_array_min_items(json, "dlDelays", 1));
-        
+
         if (json["dlDelays"].is_array()) {
             for (const auto& delay : json["dlDelays"]) {
                 if (!delay.is_number_integer()) {
@@ -910,10 +969,10 @@ ValidationResult validate_qos_monitoring_report(const nlohmann::json& json) {
             }
         }
     }
-    
+
     if (json.contains("rtDelays")) {
         result.merge(validate_array_min_items(json, "rtDelays", 1));
-        
+
         if (json["rtDelays"].is_array()) {
             for (const auto& delay : json["rtDelays"]) {
                 if (!delay.is_number_integer()) {
@@ -923,109 +982,109 @@ ValidationResult validate_qos_monitoring_report(const nlohmann::json& json) {
             }
         }
     }
-    
+
     return result;
 }
 
 ValidationResult validate_ue_identity_info(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("UeIdentityInfo must be an object");
         return result;
     }
-    
+
     // Check anyOf requirement
     result.merge(validate_any_of_required(json, {"gpsi", "pei", "supi"}));
-    
+
     return result;
 }
 
 ValidationResult validate_access_net_charging_identifier(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("AccessNetChargingIdentifier must be an object");
         return result;
     }
-    
+
     // Check oneOf requirement
     result.merge(validate_one_of_required(json, {"accNetChaIdValue", "accNetChargIdString"}));
-    
+
     // Validate flows array
     if (json.contains("flows")) {
         result.merge(validate_array_min_items(json, "flows", 1));
-        
+
         if (json["flows"].is_array()) {
             for (const auto& flow : json["flows"]) {
                 result.merge(validate_flows(flow));
             }
         }
     }
-    
+
     return result;
 }
 
 ValidationResult validate_alternative_service_requirements_data(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("AlternativeServiceRequirementsData must be an object");
         return result;
     }
-    
+
     // Check required fields
     result.merge(validate_required_fields(json, {"altQosParamSetRef"}));
-    
+
     return result;
 }
 
 ValidationResult validate_af_routing_requirement(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("AfRoutingRequirement must be an object");
         return result;
     }
-    
+
     // Validate arrays with minimum items
     if (json.contains("routeToLocs")) {
         result.merge(validate_array_min_items(json, "routeToLocs", 1));
     }
-    
+
     if (json.contains("tempVals")) {
         result.merge(validate_array_min_items(json, "tempVals", 1));
-        
+
         if (json["tempVals"].is_array()) {
             for (const auto& temp_val : json["tempVals"]) {
                 result.merge(validate_temporal_validity(temp_val));
             }
         }
     }
-    
+
     if (json.contains("easIpReplaceInfos")) {
         result.merge(validate_array_min_items(json, "easIpReplaceInfos", 1));
     }
-    
+
     // Validate spatial validity
     if (json.contains("spVal")) {
         result.merge(validate_spatial_validity(json["spVal"]));
     }
-    
+
     return result;
 }
 
 ValidationResult validate_spatial_validity(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("SpatialValidity must be an object");
         return result;
     }
-    
+
     // Check required fields
     result.merge(validate_required_fields(json, {"presenceInfoList"}));
-    
+
     // Validate presenceInfoList is an object with at least one property
     if (json.contains("presenceInfoList")) {
         if (!json["presenceInfoList"].is_object()) {
@@ -1034,39 +1093,42 @@ ValidationResult validate_spatial_validity(const nlohmann::json& json) {
             result.add_error("presenceInfoList must have at least one property");
         }
     }
-    
+
     return result;
 }
 
 ValidationResult validate_temporal_validity(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("TemporalValidity must be an object");
         return result;
     }
-    
-    // DateTime validation could be added here if needed
-    // Currently just checking if the fields are strings
-    if (json.contains("startTime") && !json["startTime"].is_string()) {
-        result.add_error("startTime must be a string");
+
+    // DateTime validation per TS 29.571 (ISO 8601 / RFC 3339)
+    if (json.contains("startTime") && json["startTime"].is_string()) {
+        if (!is_valid_datetime(json["startTime"].get<std::string>())) {
+            result.add_error("startTime must be a valid RFC 3339 date-time");
+        }
     }
-    
-    if (json.contains("stopTime") && !json["stopTime"].is_string()) {
-        result.add_error("stopTime must be a string");
+
+    if (json.contains("stopTime") && json["stopTime"].is_string()) {
+        if (!is_valid_datetime(json["stopTime"].get<std::string>())) {
+            result.add_error("stopTime must be a valid RFC 3339 date-time");
+        }
     }
-    
+
     return result;
 }
 
 ValidationResult validate_app_session_context_update_data_patch(const nlohmann::json& json) {
     ValidationResult result;
-    
+
     if (!json.is_object()) {
         result.add_error("AppSessionContextUpdateDataPatch must be an object");
         return result;
     }
-    
+
     // Validate ascReqData if present (it should contain AppSessionContextUpdateData)
     if (json.contains("ascReqData")) {
         // This would validate the update data structure which is similar to req data
@@ -1076,7 +1138,7 @@ ValidationResult validate_app_session_context_update_data_patch(const nlohmann::
         }
         // Additional validation for update-specific rules could be added here
     }
-    
+
     return result;
 }
 

@@ -4,6 +4,7 @@
  */
 
 #include "qod_pcf_handler.h"
+#include "flow_description_utils.h"
 #include <yaml-cpp/yaml.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
@@ -13,6 +14,7 @@
 
 #include "helpers.h"
 #include "handlers/service_handler_helpers.h"
+#include "models/qod/qos_profile_mapper.h"
 
 namespace af {
 namespace southbound {
@@ -210,6 +212,38 @@ af::communication::MessagePtr QodPcfHandler::handle_qod_create_pcf_session(
             qod_session.ue_supi = Supi{json.at("ue_supi").get<std::string>()};
         }
 
+        // CRITICAL: Parse QoS profile mapping (bandwidth values, 5QI, etc.)
+        if (json.contains("qos_profile_mapping") && !json["qos_profile_mapping"].is_null()) {
+            af::common::qod::QosProfileMapping mapping;
+            auto parse_result = af::common::qod::QosProfileMapper::try_deserialize_qos_mapping(
+                json["qos_profile_mapping"],
+                mapping);
+            auto validation_result = af::common::qod::QosProfileMapper::validate_qos_mapping(mapping);
+
+            if (!parse_result.is_valid || !validation_result.is_valid) {
+                // Combine validation errors using helper
+                std::ostringstream error_stream;
+                error_stream << "Invalid qos_profile_mapping";
+                af::utils::append_validation_errors(error_stream, parse_result);
+                af::utils::append_validation_errors(error_stream, validation_result);
+
+                return af::common::handlers::ServiceHandlerHelpers::create_error_response(
+                    400,
+                    "bad_request",
+                    error_stream.str(),
+                    message->correlation_id,
+                    logger_);
+            }
+
+            qod_session.qos_profile_mapping = mapping;
+            logger_->debug("Parsed QoS profile mapping - 5QI: {}, GBR: {}, GBR_DL: {}, MBR_DL: {}",
+                          mapping.fiveqi, mapping.is_gbr,
+                          mapping.guaranteed_downlink_rate.value_or("N/A"),
+                          mapping.max_downlink_rate.value_or("N/A"));
+        } else {
+            logger_->warn("QoS profile mapping not found in message for session: {}", qod_session.session_id);
+        }
+
         logger_->debug("Parsed QoD session: {}", json.dump());
         // Create PCF session
         auto pcf_msg_opt = create_pcf_session(qod_session);
@@ -263,6 +297,38 @@ af::communication::MessagePtr QodPcfHandler::handle_qod_update_pcf_session(
         // Optional fields
         if (json.contains("ue_supi")) {
             qod_session.ue_supi = Supi{json.at("ue_supi").get<std::string>()};
+        }
+
+        // CRITICAL: Parse QoS profile mapping (bandwidth values, 5QI, etc.)
+        if (json.contains("qos_profile_mapping") && !json["qos_profile_mapping"].is_null()) {
+            af::common::qod::QosProfileMapping mapping;
+            auto parse_result = af::common::qod::QosProfileMapper::try_deserialize_qos_mapping(
+                json["qos_profile_mapping"],
+                mapping);
+            auto validation_result = af::common::qod::QosProfileMapper::validate_qos_mapping(mapping);
+
+            if (!parse_result.is_valid || !validation_result.is_valid) {
+                // Combine validation errors using helper
+                std::ostringstream error_stream;
+                error_stream << "Invalid qos_profile_mapping";
+                af::utils::append_validation_errors(error_stream, parse_result);
+                af::utils::append_validation_errors(error_stream, validation_result);
+
+                return af::common::handlers::ServiceHandlerHelpers::create_error_response(
+                    400,
+                    "bad_request",
+                    error_stream.str(),
+                    message->correlation_id,
+                    logger_);
+            }
+
+            qod_session.qos_profile_mapping = mapping;
+            logger_->debug("Parsed QoS profile mapping for update - 5QI: {}, GBR: {}, GBR_DL: {}, MBR_DL: {}",
+                          mapping.fiveqi, mapping.is_gbr,
+                          mapping.guaranteed_downlink_rate.value_or("N/A"),
+                          mapping.max_downlink_rate.value_or("N/A"));
+        } else {
+            logger_->warn("QoS profile mapping not found in update message for session: {}", qod_session.session_id);
         }
 
         logger_->debug("Parsed QoD session for update: {}", json.dump());
@@ -834,8 +900,9 @@ nlohmann::json QodPcfHandler::build_app_session_context(const af::common::qod::Q
     //         }
     //     }
     // }
-    // AF request data
-    context["afReqData"] = build_af_request_data(qod_session);
+
+    // Only set when specific data is needed from PCF; omit when not required
+    // context["afReqData"] = "UE_IDENTITY";
 
     // Media components
     context["medComponents"] = build_media_components(qod_session);
@@ -917,16 +984,13 @@ nlohmann::json QodPcfHandler::build_media_components(
         med_comp["medType"] = "APPLICATION";
     }
 
-    // Media sub-components (flow descriptions)
-    med_comp["medSubComps"] = map_ports_to_media_subcomponents(
-        qod_session.device_ports,
-        qod_session.application_server_ports);
+    // Media sub-components with complete flow descriptions (IPs + ports).
+    // Each sub-component represents a specific port combination with
+    // bidirectional (uplink + downlink) IPFilterRule flow descriptions.
+    nlohmann::json med_sub_comps = map_ports_to_media_subcomponents(qod_session);
 
-    // Add flow descriptions
-    auto flow_descs = build_flow_descriptions(qod_session);
-    if (!flow_descs.empty()) {
-        med_comp["fDescs"] = flow_descs;
-    }
+    // Assign the completed media sub-components to the media component
+    med_comp["medSubComps"] = med_sub_comps;
 
     // Get QoS profile mapping from qod_session
     auto mapping_opt = qod_session.qos_profile_mapping;
@@ -946,58 +1010,62 @@ nlohmann::json QodPcfHandler::build_media_components(
         med_comp["qosReference"] = std::to_string(mapping.fiveqi);
     }
 
-    // Priority level
+    // Priority level (must be string format per TS 29.514: "PRIO_1", "PRIO_2", etc.)
     if (mapping.priority_level) {
-        med_comp["resPrio"] = *mapping.priority_level;
+        med_comp["resPrio"] = "PRIO_" + std::to_string(*mapping.priority_level);
     }
 
-    // Bandwidth requirements
+    // Bandwidth requirements per 3GPP TS 29.514
+    // marBw = Maximum Requested Bandwidth (becomes MBR in 5G)
+    // mirBw = Minimum Requested Bandwidth (becomes GBR in 5G for GBR QoS)
+    // Values are already in TS 29.571 BitRate format: "<value> <unit>" (e.g., "128 Kbps")
     if (mapping.is_gbr) {
-        // Guaranteed Bit Rate (GBR) - both MAR and MIR should be set for GBR
-        if (mapping.guaranteed_downlink_rate) {
-            // Convert from Kbps to bps for API compliance
-            uint64_t bps_dl = static_cast<uint64_t>(*mapping.guaranteed_downlink_rate) * 1000;
-            med_comp["marBwDl"] = std::to_string(bps_dl);
-            med_comp["mirBwDl"] = std::to_string(bps_dl);
+        // GBR QoS: Set both maximum (MBR) and guaranteed (GBR) rates
+
+        // Maximum Requested Bandwidth (MBR) - Downlink
+        if (mapping.max_downlink_rate) {
+            med_comp["marBwDl"] = *mapping.max_downlink_rate;
         }
+
+        // Maximum Requested Bandwidth (MBR) - Uplink
+        if (mapping.max_uplink_rate) {
+            med_comp["marBwUl"] = *mapping.max_uplink_rate;
+        }
+
+        // Minimum Requested Bandwidth (GBR) - Downlink
+        if (mapping.guaranteed_downlink_rate) {
+            med_comp["mirBwDl"] = *mapping.guaranteed_downlink_rate;
+        }
+
+        // Minimum Requested Bandwidth (GBR) - Uplink
         if (mapping.guaranteed_uplink_rate) {
-            // Convert from Kbps to bps for API compliance
-            uint64_t bps_ul = static_cast<uint64_t>(*mapping.guaranteed_uplink_rate) * 1000;
-            med_comp["marBwUl"] = std::to_string(bps_ul);
-            med_comp["mirBwUl"] = std::to_string(bps_ul);
+            med_comp["mirBwUl"] = *mapping.guaranteed_uplink_rate;
         }
     } else {
-        // Non-GBR - only set maximum rates if no guaranteed rates
+        // Non-GBR QoS: Only set maximum rates (no guaranteed rates)
         if (mapping.max_downlink_rate) {
-            uint64_t bps_dl = static_cast<uint64_t>(*mapping.max_downlink_rate) * 1000;
-            med_comp["marBwDl"] = std::to_string(bps_dl);
+            med_comp["marBwDl"] = *mapping.max_downlink_rate;
         }
         if (mapping.max_uplink_rate) {
-            uint64_t bps_ul = static_cast<uint64_t>(*mapping.max_uplink_rate) * 1000;
-            med_comp["marBwUl"] = std::to_string(bps_ul);
+            med_comp["marBwUl"] = *mapping.max_uplink_rate;
         }
     }
 
     // Additional QoS parameters if available from mapping
-    // Minimum desired bandwidth - typically lower than guaranteed for GBR
+    // Minimum desired bandwidth - use guaranteed rate for GBR
     if (mapping.is_gbr && mapping.guaranteed_downlink_rate) {
-        // Set minimum desired as 80% of guaranteed rate
-        uint64_t min_bps_dl = static_cast<uint64_t>(*mapping.guaranteed_downlink_rate * 0.8) * 1000;
-        med_comp["minDesBwDl"] = std::to_string(min_bps_dl);
+        med_comp["minDesBwDl"] = *mapping.guaranteed_downlink_rate;
     }
     if (mapping.is_gbr && mapping.guaranteed_uplink_rate) {
-        uint64_t min_bps_ul = static_cast<uint64_t>(*mapping.guaranteed_uplink_rate * 0.8) * 1000;
-        med_comp["minDesBwUl"] = std::to_string(min_bps_ul);
+        med_comp["minDesBwUl"] = *mapping.guaranteed_uplink_rate;
     }
 
-    // Maximum supported bandwidth - typically higher than requested
+    // Maximum supported bandwidth - use max rate
     if (mapping.max_downlink_rate) {
-        uint64_t max_supp_dl = static_cast<uint64_t>(*mapping.max_downlink_rate) * 1000;
-        med_comp["maxSuppBwDl"] = std::to_string(max_supp_dl);
+        med_comp["maxSuppBwDl"] = *mapping.max_downlink_rate;
     }
     if (mapping.max_uplink_rate) {
-        uint64_t max_supp_ul = static_cast<uint64_t>(*mapping.max_uplink_rate) * 1000;
-        med_comp["maxSuppBwUl"] = std::to_string(max_supp_ul);
+        med_comp["maxSuppBwUl"] = *mapping.max_uplink_rate;
     }
 
     // Latency requirements - typical values based on 5QI
@@ -1041,22 +1109,27 @@ nlohmann::json QodPcfHandler::build_media_components(
     return med_comps;
 }
 
+// Import shared flow description utilities into this translation unit
+using af::southbound::flow_utils::collect_port_specs;
+using af::southbound::flow_utils::format_flow_description;
+
 nlohmann::json QodPcfHandler::build_flow_descriptions(const af::common::qod::QodSession& qod_session) {
     nlohmann::json flows = nlohmann::json::array();
 
-    // Build flow description strings based on IP addresses and ports
-    // Format: "permit out <protocol> from <src_ip> <src_port> to <dst_ip> <dst_port>"
-
-    std::string protocol = "17"; // UDP by default, could be made configurable
+    // Protocol is always "ip" (any protocol) per CAMARA specification.
+    // The CAMARA QoD API does not expose protocol selection to API consumers.
+    // Format: "permit {in|out} ip from <src> [<port>] to <dst> [<port>]"
 
     // Source IP (device)
     std::string src_ip = "any";
     if (qod_session.device && qod_session.device->ipv4_address) {
         src_ip = qod_session.device->ipv4_address->public_address.value;
         if (qod_session.device->ipv4_address->private_address) {
-            // Include private address for NAT scenarios
+            // Prefer private address for NAT scenarios
             src_ip = qod_session.device->ipv4_address->private_address->value;
         }
+    } else if (qod_session.device && qod_session.device->ipv6_address) {
+        src_ip = qod_session.device->ipv6_address->value;
     }
 
     // Destination IP (application server)
@@ -1067,33 +1140,43 @@ nlohmann::json QodPcfHandler::build_flow_descriptions(const af::common::qod::Qod
         dst_ip = *qod_session.application_server.ipv6_address;
     }
 
-    // Build flow descriptions for different port combinations
-    if (qod_session.device_ports && qod_session.application_server_ports) {
-        // Specific ports on both sides
-        for (const auto& src_port : qod_session.device_ports->ports) {
-            for (const auto& dst_port : qod_session.application_server_ports->ports) {
-                std::stringstream flow;
-                flow << "permit out " << protocol << " from " << src_ip
-                     << " " << src_port << " to " << dst_ip << " " << dst_port;
-                flows.push_back(flow.str());
+    // Collect port specs (individual ports and ranges) from both sides
+    std::vector<std::string> src_port_specs;
+    std::vector<std::string> dst_port_specs;
 
-                // Bidirectional - reverse flow
-                std::stringstream reverse_flow;
-                reverse_flow << "permit in " << protocol << " from " << dst_ip
-                            << " " << dst_port << " to " << src_ip << " " << src_port;
-                flows.push_back(reverse_flow.str());
+    if (qod_session.device_ports && !qod_session.device_ports->is_empty()) {
+        src_port_specs = collect_port_specs(*qod_session.device_ports);
+    }
+    if (qod_session.application_server_ports && !qod_session.application_server_ports->is_empty()) {
+        dst_port_specs = collect_port_specs(*qod_session.application_server_ports);
+    }
+
+    // Generate bidirectional flow descriptions for all port combinations.
+    // Each combination produces an uplink (out) and downlink (in) flow.
+    if (!src_port_specs.empty() && !dst_port_specs.empty()) {
+        // Both device and server ports specified
+        for (const auto& sp : src_port_specs) {
+            for (const auto& dp : dst_port_specs) {
+                flows.push_back(format_flow_description("out", src_ip, sp, dst_ip, dp));
+                flows.push_back(format_flow_description("in", dst_ip, dp, src_ip, sp));
             }
         }
+    } else if (!src_port_specs.empty()) {
+        // Only device ports specified
+        for (const auto& sp : src_port_specs) {
+            flows.push_back(format_flow_description("out", src_ip, sp, dst_ip, ""));
+            flows.push_back(format_flow_description("in", dst_ip, "", src_ip, sp));
+        }
+    } else if (!dst_port_specs.empty()) {
+        // Only server ports specified
+        for (const auto& dp : dst_port_specs) {
+            flows.push_back(format_flow_description("out", src_ip, "", dst_ip, dp));
+            flows.push_back(format_flow_description("in", dst_ip, dp, src_ip, ""));
+        }
     } else {
-        // Generic flow between device and server
-        std::stringstream flow;
-        flow << "permit out " << protocol << " from " << src_ip << " to " << dst_ip;
-        flows.push_back(flow.str());
-
-        // Bidirectional - reverse flow
-        std::stringstream reverse_flow;
-        reverse_flow << "permit in " << protocol << " from " << dst_ip << " to " << src_ip;
-        flows.push_back(reverse_flow.str());
+        // No ports specified — generic bidirectional flow
+        flows.push_back(format_flow_description("out", src_ip, "", dst_ip, ""));
+        flows.push_back(format_flow_description("in", dst_ip, "", src_ip, ""));
     }
 
     return flows;
@@ -1152,131 +1235,93 @@ nlohmann::json QodPcfHandler::build_af_request_data(const af::common::qod::QodSe
 }
 
 nlohmann::json QodPcfHandler::map_ports_to_media_subcomponents(
-    const std::optional<af::common::qod::PortsSpec>& device_ports,
-    const std::optional<af::common::qod::PortsSpec>& server_ports) {
+    const af::common::qod::QodSession& qod_session) {
 
     nlohmann::json med_sub_comps = nlohmann::json::object();
-
     int flow_number = 1;
 
-    // Create sub-component for each port combination
-    auto add_subcomp = [&](uint16_t src_port, uint16_t dst_port, const std::string& direction) {
-        nlohmann::json sub_comp;
-
-        // Required field: fNum (flow number) - must be integer
-        sub_comp["fNum"] = flow_number;
-
-        // Flow descriptions - array of flow description strings
-        nlohmann::json flow_descs = nlohmann::json::array();
-        std::string protocol = "any"; // any by default
-
-        // TODO: use the build_flow_descriptions function to generate descriptions
-        // Build flow description strings based on ports
-        if (src_port != 0 && dst_port != 0) {
-            // Specific port flow descriptions
-            std::string uplink_flow = "permit out " + protocol + " from any " +
-                                    std::to_string(src_port) + " to any " + std::to_string(dst_port);
-            std::string downlink_flow = "permit in " + protocol + " from any " +
-                                      std::to_string(dst_port) + " to any " + std::to_string(src_port);
-
-            flow_descs.push_back(uplink_flow);
-            if (direction == "BIDIRECTIONAL") {
-                flow_descs.push_back(downlink_flow);
-            }
-        } else {
-            // Generic flow descriptions (any port)
-            std::string uplink_flow = "permit out " + protocol + " from any to any";
-            std::string downlink_flow = "permit in " + protocol + " from any to any";
-
-            flow_descs.push_back(uplink_flow);
-            if (direction == "BIDIRECTIONAL") {
-                flow_descs.push_back(downlink_flow);
-            }
+    // Resolve source IP (device)
+    std::string src_ip = "any";
+    if (qod_session.device && qod_session.device->ipv4_address) {
+        src_ip = qod_session.device->ipv4_address->public_address.value;
+        if (qod_session.device->ipv4_address->private_address) {
+            src_ip = qod_session.device->ipv4_address->private_address->value;
         }
+    } else if (qod_session.device && qod_session.device->ipv6_address) {
+        src_ip = qod_session.device->ipv6_address->value;
+    }
 
-        // Only add flow descriptions if we have them
-        if (!flow_descs.empty()) {
-            sub_comp["fDescs"] = flow_descs;
-        }
+    // Resolve destination IP (application server)
+    std::string dst_ip = "any";
+    if (qod_session.application_server.ipv4_address) {
+        dst_ip = *qod_session.application_server.ipv4_address;
+    } else if (qod_session.application_server.ipv6_address) {
+        dst_ip = *qod_session.application_server.ipv6_address;
+    }
 
-        // Flow status - optional
-        sub_comp["fStatus"] = "ENABLED";
+    // Helper: create separate MediaSubComponents for uplink and downlink
+    /*
+     * Seperate the flow descriptions into distinct MediaSubComponents for uplink and downlink traffic.
+     * This is because the SMF doesn't seem to handle bidirectional flow descriptions within a single MediaSubComponent correctly.
+     * It appears to only create PDR with first flow description (uplink) and ignore the second (downlink) when both are in the same sub-component.
+     */
+    auto add_subcomp_pair = [&](const std::string& src_port_spec,
+                                const std::string& dst_port_spec) {
+        // Uplink MediaSubComponent (UE -> network)
+        nlohmann::json uplink_sub_comp;
+        uplink_sub_comp["fNum"] = flow_number;
+        nlohmann::json uplink_flow_descs = nlohmann::json::array();
+        uplink_flow_descs.push_back(
+            format_flow_description("out", src_ip, src_port_spec, dst_ip, dst_port_spec));
+        uplink_sub_comp["fDescs"] = uplink_flow_descs;
+        uplink_sub_comp["fStatus"] = "ENABLED";
+        uplink_sub_comp["flowUsage"] = "NO_INFO";
+        med_sub_comps[std::to_string(flow_number)] = uplink_sub_comp;
+        flow_number++;
 
-        // Flow usage - optional (describes the type of flow)
-        if (src_port == 0 && dst_port == 0) {
-            sub_comp["flowUsage"] = "NO_INFO"; // Generic flow
-        } else {
-            // Check for known service ports
-            if (src_port == 5060 || dst_port == 5060 ||
-                src_port == 5061 || dst_port == 5061) {
-                sub_comp["flowUsage"] = "AF_SIGNALLING"; // SIP signaling
-            } else if (src_port >= 16384 && src_port <= 32767) {
-                sub_comp["flowUsage"] = "RTCP"; // Typical RTCP port range
-            } else {
-                sub_comp["flowUsage"] = "NO_INFO"; // General application data
-            }
-        }
-
-        // TODO: Add optional fields as needed
-        // Maximum bandwidth (optional) - can be set based on QoS requirements
-        // These would typically come from QoS profile mapping
-        // sub_comp["marBwDl"] = "1000000"; // 1 Mbps downlink
-        // sub_comp["marBwUl"] = "1000000"; // 1 Mbps uplink
-
-        // TOS/Traffic Class (optional) - for packet marking
-        // Format: "XX YY" where XX is ToS/Traffic Class, YY is mask
-        // sub_comp["tosTrCl"] = "46 FC"; // EF (Expedited Forwarding) marking
-
-        // AF signaling protocol (optional) - for specific protocols
-        // sub_comp["afSigProtocol"] = "SIP"; // If this is SIP signaling
-
-        med_sub_comps[std::to_string(flow_number)] = sub_comp;
+        // Downlink MediaSubComponent (network -> UE)
+        nlohmann::json downlink_sub_comp;
+        downlink_sub_comp["fNum"] = flow_number;
+        nlohmann::json downlink_flow_descs = nlohmann::json::array();
+        downlink_flow_descs.push_back(
+            format_flow_description("out", dst_ip, dst_port_spec, src_ip, src_port_spec));
+        downlink_sub_comp["fDescs"] = downlink_flow_descs;
+        downlink_sub_comp["fStatus"] = "ENABLED";
+        downlink_sub_comp["flowUsage"] = "NO_INFO";
+        med_sub_comps[std::to_string(flow_number)] = downlink_sub_comp;
         flow_number++;
     };
 
-    if (device_ports && server_ports) {
-        // Specific port mappings
-        for (const auto& dev_port : device_ports->ports) {
-            for (const auto& srv_port : server_ports->ports) {
-                add_subcomp(dev_port, srv_port, "BIDIRECTIONAL");
+    // Collect all port spec strings (individual ports + ranges)
+    std::vector<std::string> src_port_specs;
+    std::vector<std::string> dst_port_specs;
+
+    if (qod_session.device_ports && !qod_session.device_ports->is_empty()) {
+        src_port_specs = collect_port_specs(*qod_session.device_ports);
+    }
+    if (qod_session.application_server_ports &&
+        !qod_session.application_server_ports->is_empty()) {
+        dst_port_specs = collect_port_specs(*qod_session.application_server_ports);
+    }
+
+    // Create separate uplink and downlink sub-components per port combination
+    if (!src_port_specs.empty() && !dst_port_specs.empty()) {
+        for (const auto& sp : src_port_specs) {
+            for (const auto& dp : dst_port_specs) {
+                add_subcomp_pair(sp, dp);
             }
         }
-
-        // Port ranges - create representative flows for ranges
-        for (const auto& dev_range : device_ports->ranges) {
-            for (const auto& srv_range : server_ports->ranges) {
-                // Add flow for start of range
-                add_subcomp(dev_range.from, srv_range.from, "BIDIRECTIONAL");
-
-                // Optionally add flow for end of range if range is large
-                if ((dev_range.to - dev_range.from) > 10 ||
-                    (srv_range.to - srv_range.from) > 10) {
-                    add_subcomp(dev_range.to, srv_range.to, "BIDIRECTIONAL");
-                }
-            }
+    } else if (!src_port_specs.empty()) {
+        for (const auto& sp : src_port_specs) {
+            add_subcomp_pair(sp, "");
         }
-    }
-    else if (device_ports) {
-        // Only device ports specified
-        for (const auto& dev_port : device_ports->ports) {
-            add_subcomp(dev_port, 0, "BIDIRECTIONAL");
+    } else if (!dst_port_specs.empty()) {
+        for (const auto& dp : dst_port_specs) {
+            add_subcomp_pair("", dp);
         }
-        for (const auto& dev_range : device_ports->ranges) {
-            add_subcomp(dev_range.from, 0, "BIDIRECTIONAL");
-        }
-    }
-    else if (server_ports) {
-        // Only server ports specified
-        for (const auto& srv_port : server_ports->ports) {
-            add_subcomp(0, srv_port, "BIDIRECTIONAL");
-        }
-        for (const auto& srv_range : server_ports->ranges) {
-            add_subcomp(0, srv_range.from, "BIDIRECTIONAL");
-        }
-    }
-    else {
-        // No specific ports - create default bidirectional flow
-        add_subcomp(0, 0, "BIDIRECTIONAL");
+    } else {
+        // No ports specified — separate default uplink and downlink flows
+        add_subcomp_pair("", "");
     }
 
     return med_sub_comps;
