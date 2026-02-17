@@ -92,8 +92,14 @@ Set up environment variables for this tutorial:
 
 ```bash {"name":"setup-variables","interactive":"false"}
 export COMPOSE_FILE="docker-compose/docker-compose-test.yaml"
+export LOGS_DIR="/tmp/phine.af/adapter-qod-tutorial/logs"
+mkdir -p "$LOGS_DIR"
+sudo mkdir -p "$LOGS_DIR"
+sudo chmod 777 "$LOGS_DIR"
+
 echo "Configuration set:"
 echo "  COMPOSE_FILE: $COMPOSE_FILE"
+echo "  CAPTURE_DIR: $LOGS_DIR"
 ```
 
 ## Step 1: Deploy the 5G Core and AF Stack
@@ -103,6 +109,11 @@ Install required dependencies and build the gtp5g kernel module:
 ```bash {"name":"install-deps","interactive":"false"}
 ./build/scripts/ci_helper.sh install_dependencies
 ./build/scripts/ci_helper.sh install_gtp5g
+```
+
+Ensure submodules are up to date
+```bash {"name":"check-submodules","interactive":"false"}
+./build/scripts/ci_helper.sh check_submodules
 ```
 
 Build the adapter and AF images:
@@ -123,19 +134,8 @@ docker compose -f $COMPOSE_FILE up -d \
 Wait for the NRF to become ready:
 
 ```bash {"name":"wait-for-nrf","interactive":"false"}
-retries=30
-for i in $(seq 1 $retries); do
-  NRF_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' nrf 2>/dev/null || true)
-  if [ -n "$NRF_IP" ]; then
-    if curl -s "http://${NRF_IP}:8000/nnrf-nfm/v1/nf-instances" > /dev/null 2>&1; then
-      echo "NRF is ready!"
-      break
-    fi
-  fi
-  echo "Waiting for NRF... ($i/$retries)"
-  sleep 2
-done
-curl -s "http://${NRF_IP}:8000/nnrf-nfm/v1/nf-instances" > /dev/null
+# Wait for NRF to be ready
+sleep 30
 ```
 
 Start the RAN simulator (gNB and UE):
@@ -161,36 +161,21 @@ docker compose -f $COMPOSE_FILE up -d af_core pcf_handler
 Wait for the AF Core gRPC server to become ready:
 
 ```bash {"name":"wait-for-af","interactive":"false"}
-retries=30
-for i in $(seq 1 $retries); do
-  AF_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' af-core 2>/dev/null || true)
-  if [ -n "$AF_IP" ]; then
-    if grpcurl -plaintext "${AF_IP}:50051" list > /dev/null 2>&1; then
-      echo "AF Core is ready!"
-      break
-    fi
-  fi
-  echo "Waiting for AF Core... ($i/$retries)"
-  sleep 2
-done
-grpcurl -plaintext "${AF_IP}:50051" list > /dev/null
+# Wait for af-core to be ready
+sleep 15
 ```
 
 At this point the full stack is running and ready for the adapter.
 
 ## Step 2: Start Traffic Capture
 
-Start capturing control-plane traffic to observe the QoD signalling flow. The capture will be saved to `docker-compose/logs/adapter_capture.pcapng`:
+Start capturing control-plane traffic to observe the QoD signalling flow:
 
 ```bash {"name":"start-capture","interactive":"false"}
-CAPTURE_DIR="/tmp/phine.af/docker-compose/logs"
-PCAP_FILE="$CAPTURE_DIR/adapter_capture.pcapng"
-PID_FILE="$CAPTURE_DIR/adapter_capture.pid"
-LOG_FILE="$CAPTURE_DIR/adapter_capture.tshark.log"
+PCAP_FILE="$LOGS_DIR/adapter_capture.pcapng"
+PID_FILE="$LOGS_DIR/adapter_capture.pid"
+LOG_FILE="$LOGS_DIR/adapter_capture.tshark.log"
 
-mkdir -p "$CAPTURE_DIR"
-sudo mkdir -p "$CAPTURE_DIR"
-sudo chmod 777 "$CAPTURE_DIR"
 sudo nohup tshark -i demo-oai \
   -f "host 192.168.70.143 or host 192.168.70.141 or host 192.168.70.140 or host 192.168.70.139 or host 192.168.70.133" \
   -w "$PCAP_FILE" \
@@ -199,12 +184,6 @@ echo $! > "$PID_FILE"
 
 echo "Traffic capture started in background (PID: $(cat "$PID_FILE" 2>/dev/null || echo unknown))"
 sleep 2
-
-if [ ! -f "$PCAP_FILE" ]; then
-  echo "Warning: capture file not created yet: $PCAP_FILE"
-  echo "tshark log (tail):"
-  tail -50 "$LOG_FILE" 2>/dev/null || true
-fi
 ```
 
 This captures:
@@ -304,9 +283,8 @@ The adapter exits with code **0** on success. A non-zero exit code indicates a f
 Stop the traffic capture:
 
 ```bash {"name":"stop-capture","interactive":"false"}
-CAPTURE_DIR="/tmp/phine.af/docker-compose/logs"
-PCAP_FILE="$CAPTURE_DIR/adapter_capture.pcapng"
-PID_FILE="$CAPTURE_DIR/adapter_capture.pid"
+PCAP_FILE="$LOGS_DIR/adapter_capture.pcapng"
+PID_FILE="$LOGS_DIR/adapter_capture.pid"
 
 if [ -f "$PID_FILE" ]; then
   PID="$(cat "$PID_FILE" 2>/dev/null || true)"
@@ -325,22 +303,10 @@ echo "Capture stopped"
 
 Review the captured traffic to trace the QoD signalling flow:
 
-```bash {"name":"view-capture","interactive":"false"}
-CAPTURE_DIR="/tmp/phine.af/docker-compose/logs"
-PCAP_FILE="$CAPTURE_DIR/adapter_capture.pcapng"
-LOG_FILE="$CAPTURE_DIR/adapter_capture.tshark.log"
-
-if [ ! -f "$PCAP_FILE" ]; then
-  echo "No capture file found: $PCAP_FILE"
-  echo "tshark log (tail):"
-  tail -50 "$LOG_FILE" 2>/dev/null || true
-  exit 0
-fi
-
-tshark -r "$PCAP_FILE" \
-  -Y "http || http2 || pfcp" \
-  -T fields -e frame.time -e ip.src -e ip.dst -e _ws.col.Protocol -e _ws.col.Info \
-  | tail -100
+```bash {"name":"view-capture","interactive":"false","excludeFromRunAll":"true"}
+PCAP_FILE="$LOGS_DIR/adapter_capture.pcapng"
+# Open file with wireshark
+wireshark $PCAP_FILE
 ```
 
 ### Expected Signalling Sequence
@@ -382,27 +348,10 @@ This sequence repeats for each stream defined in the configuration. When the ada
 
 ### What to Look For in the Capture
 
-Search the capture file for specific message types:
-
-```bash {"name":"grep-create-session","excludeFromRunAll":"true","interactive":"false"}
-CAPTURE_DIR="/tmp/phine.af/docker-compose/logs"
-PCAP_FILE="$CAPTURE_DIR/adapter_capture.pcapng"
-
-if [ ! -f "$PCAP_FILE" ]; then
-  echo "No capture file found: $PCAP_FILE"
-  exit 0
-fi
-
-tshark -r "$PCAP_FILE" \
-  -Y "http || http2 || pfcp" \
-  -V 2>/dev/null \
-  | grep -i "qod_create_session\|PolicyAuthorization\|PFCP" \
-  | head -20
-```
-
 Key indicators:
 - **gRPC messages** with `qod_create_session` / `qod_get_session` / `qod_delete_session`
 - **HTTP POST** to `/npcf-policyauthorization/v1/app-sessions`
+- **HTTP POST** to SM Policy Update Notification Callback `/<callback_url>/update` i.e., for free5gc `/nsmf-callback/sm-policies/<xxxx>/update`
 - **PFCP Session Modification** requests/responses
 
 ## Step 6: Collect Logs
@@ -410,21 +359,21 @@ Key indicators:
 After the adapter run, collect logs from all containers for analysis:
 
 ```bash {"name":"collect-logs","interactive":"false"}
-./build/scripts/ci_helper.sh collect_logs docker-compose/logs
-echo "Logs collected to docker-compose/logs/"
-ls -la docker-compose/logs/
+./build/scripts/ci_helper.sh collect_logs $LOGS_DIR
+echo "Logs collected to $LOGS_DIR"
+ls -la $LOGS_DIR
 ```
 
 View the adapter log:
 
 ```bash {"name":"view-adapter-log","interactive":"false"}
-cat docker-compose/logs/demo_qod_adapter.log
+cat $LOGS_DIR/demo_qod_adapter.log
 ```
 
 View the AF Core log to see how it processed the adapter's requests:
 
 ```bash {"name":"view-afcore-log","excludeFromRunAll":"true","interactive":"false"}
-cat docker-compose/logs/af_core.log | tail -50
+cat $LOGS_DIR/af_core.log | tail -50
 ```
 
 ## Step 7: Run with Indefinite Monitoring
@@ -495,9 +444,8 @@ When stopped, the adapter catches SIGTERM, cleans up all sessions, and exits gra
 Ensure traffic capture is stopped:
 
 ```bash {"name":"ensure-capture-stopped","interactive":"false"}
-CAPTURE_DIR="/tmp/phine.af/docker-compose/logs"
-PCAP_FILE="$CAPTURE_DIR/adapter_capture.pcapng"
-PID_FILE="$CAPTURE_DIR/adapter_capture.pid"
+PCAP_FILE="$LOGS_DIR/adapter_capture.pcapng"
+PID_FILE="$LOGS_DIR/adapter_capture.pid"
 
 if [ -f "$PID_FILE" ]; then
   PID="$(cat "$PID_FILE" 2>/dev/null || true)"

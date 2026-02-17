@@ -68,10 +68,7 @@ jobs:
           sudo dpkg -i runme_linux_x86_64.deb
           runme --version
 
-      - name: Create folder for tutorial logs
-        run: mkdir -p tutorial-logs
-
-      - name: Run tutorial
+      - name: Run QoS Enforcement Tutorial
         run: runme run --all --skip-prompts --filename docs/getting-started/qos-enforcement-tutorial.md
 
       - name: Run tutorial — cleanup
@@ -79,17 +76,26 @@ jobs:
         run: runme run cleanup --filename docs/getting-started/qos-enforcement-tutorial.md
         continue-on-error: true
 
-      - name: Collect container logs
-        if: always()
-        run: |
-          chmod +x build/scripts/ci_helper.sh
-          ./build/scripts/ci_helper.sh collect_logs tutorial-logs
-        continue-on-error: true
-
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: qos-tutorial-logs
-          path: tutorial-logs/
+          path: /tmp/phine.af/qos-enforcement-tutorial/logs
+          retention-days: 14
+
+      - name: Run Demo Adapter tutorial
+        run: runme run --all --skip-prompts --filename docs/getting-started/adapter-qod-tutorial.md
+
+      - name: Run Demo Adapter tutorial — cleanup
+        if: always()
+        run: runme run cleanup --filename docs/getting-started/adapter-qod-tutorial.md
+        continue-on-error: true
+
+      - name: Upload Demo Adapter tutorial logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-adapter-tutorial-logs
+          path: /tmp/phine.af/adapter-qod-tutorial/logs
           retention-days: 14
