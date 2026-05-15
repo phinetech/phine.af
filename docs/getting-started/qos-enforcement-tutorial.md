@@ -68,18 +68,36 @@ Set up environment variables for this tutorial. Modify these values if you need 
 
 ```bash {"name":"setup-variables","interactive":"false"}
 export COMPOSE_FILE="docker-compose/docker-compose-free5gc-build.yaml"
+export LOGS_DIR="/tmp/phine.af/qos-enforcement-tutorial/logs"
+mkdir -p "$LOGS_DIR"
+sudo mkdir -p "$LOGS_DIR"
+sudo chmod 777 "$LOGS_DIR"
+
 export UE_IP="10.60.0.1"
 export EXT_DN_IP="192.168.72.135"
 export MIN_MBPS=3
 export MAX_MBPS=12
 echo "Configuration set:"
 echo "  COMPOSE_FILE: $COMPOSE_FILE"
+echo "  CAPTURE_DIR: $LOGS_DIR"
 echo "  UE_IP: $UE_IP"
 echo "  EXT_DN_IP: $EXT_DN_IP"
 echo "  Bandwidth validation range: ${MIN_MBPS}-${MAX_MBPS} Mbps"
 ```
 
 ## Step 1: Deploy the Setup
+
+Install required dependencies and build the gtp5g kernel module:
+
+```bash {"name":"install-deps","interactive":"false"}
+./build/scripts/ci_helper.sh install_dependencies
+./build/scripts/ci_helper.sh install_gtp5g
+```
+
+Ensure submodules are up to date
+```bash {"name":"check-submodules","interactive":"false"}
+./build/scripts/ci_helper.sh check_submodules
+```
 
 Build and start all containers:
 
@@ -109,21 +127,21 @@ docker exec ue ping -I uesimtun0 192.168.72.135 -c 3
 
 ## Step 2: Start Traffic Capture
 
-Open Wireshark (or `tshark`) and capture on the **`demo-oai`** bridge interface. Use the following display filter to observe control-plane signalling:
+Start capturing the control-plane signalling:
 
-### Wireshark (GUI)
+```bash {"name":"start-capture","interactive":"false"}
+PCAP_FILE="$LOGS_DIR/capture.pcapng"
+PID_FILE="$LOGS_DIR/capture.pid"
+LOG_FILE="$LOGS_DIR/capture.tshark.log"
 
-1. Open Wireshark
-2. Select the **`demo-oai`** interface
-3. Apply display filter:
-   ```text
-   pfcp || http || (ip.src == 192.168.70.140 || ip.dst == 192.168.70.140)
-   ```
+sudo nohup tshark -i demo-oai \
+  -f "host 192.168.70.143 or host 192.168.70.141 or host 192.168.70.140 or host 192.168.70.139 or host 192.168.70.133" \
+  -w "$PCAP_FILE" \
+  >"$LOG_FILE" 2>&1 &
+echo $! > "$PID_FILE"
 
-### tshark (CLI alternative)
-
-```bash {"name":"start-tshark","background":"true","excludeFromRunAll":"true","interactive":"true"}
-sudo tshark -i demo-oai -f "host 192.168.70.140 or host 192.168.70.139 or host 192.168.70.133" -Y "pfcp || http"
+echo "Traffic capture started in background (PID: $(cat "$PID_FILE" 2>/dev/null || echo unknown))"
+sleep 2
 ```
 
 This filter captures:
@@ -211,11 +229,38 @@ sleep 10
 echo "QoS policy propagation wait complete"
 ```
 
+Stop the traffic capture:
+
+```bash {"name":"stop-capture","interactive":"false"}
+PCAP_FILE="$LOGS_DIR/capture.pcapng"
+PID_FILE="$LOGS_DIR/capture.pid"
+
+if [ -f "$PID_FILE" ]; then
+  PID="$(cat "$PID_FILE" 2>/dev/null || true)"
+  if [ -n "$PID" ]; then
+    sudo kill -TERM "$PID" 2>/dev/null || true
+    sleep 1
+    sudo kill -KILL "$PID" 2>/dev/null || true
+  fi
+  rm -f "$PID_FILE"
+fi
+sudo chmod a+r "$PCAP_FILE" 2>/dev/null || true
+echo "Capture stopped"
+```
+
 ## Step 4: Trace the Signalling Path
 
-Go back to your Wireshark/tshark capture. You should see the following sequence of events:
+Review the captured traffic to trace the QoD signalling flow:
+
+```bash {"name":"view-capture","interactive":"false","excludeFromRunAll":"true"}
+PCAP_FILE="$LOGS_DIR/adapter_capture.pcapng"
+# Open file with wireshark
+wireshark $PCAP_FILE
+```
 
 ### Expected Signalling Flow
+
+You should see the following sequence of events:
 
 ```text
 grpcurl ──gRPC──▶ AF Core (.141)
@@ -417,6 +462,16 @@ docker run --rm --network host \
   }' \
   192.168.70.141:50051 \
   af.proto.InternalCommunication/SendMessage
+```
+
+## Step 6: Collect Logs
+
+After the adapter run, collect logs from all containers for analysis:
+
+```bash {"name":"collect-logs","interactive":"false"}
+./build/scripts/ci_helper.sh collect_logs $LOGS_DIR
+echo "Logs collected to $LOGS_DIR"
+ls -la $LOGS_DIR
 ```
 
 ## Cleanup

@@ -1,0 +1,53 @@
+# af_core connection
+af_core:
+  address: "192.168.70.141:50051"
+  timeout_seconds: 30
+
+# Retry policy for gRPC calls
+retry:
+  max_retries: 3
+  initial_delay_ms: 1000
+
+# Monitoring loop settings
+monitor:
+  interval_seconds: 10
+  iterations: 6            # monitor for ~60 seconds total, or set to -1 for indefinite monitoring
+
+# Stream definitions — each entry becomes a QoD session request
+streams:
+  - name: "video_stream"
+    description: "HD camera feed for remote monitoring/processing"
+    device:
+      ipv4_address:
+        public_address: "10.60.0.1"
+        public_port: 8554
+    application_server:
+      ipv4_address: "0.0.0.0/0"
+    device_ports:
+      ports: [8554]
+    qos_profile: "QOS_L"
+    duration_seconds: 3600
+
+  - name: "webrtc_control"
+    description: "Real-time teleoperation commands and status"
+    device:
+      ipv4_address:
+        public_address: "10.60.0.1"
+        public_port: 8443
+    application_server:
+      ipv4_address: "0.0.0.0/0"
+    device_ports:
+      ports: [8443]
+    qos_profile: "QOS_E"
+    duration_seconds: 3600
+
+  - name: "general_traffic"
+    description: "Sensor data, logs, diagnostics (best-effort)"
+    device:
+      ipv4_address:
+        public_address: "10.60.0.1"
+        public_port: 0
+    application_server:
+      ipv4_address: "0.0.0.0/0"
+    qos_profile: "QOS_S"
+    duration_seconds: 3600

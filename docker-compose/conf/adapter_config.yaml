@@ -1,0 +1,40 @@
+# Adapter integration-test config.
+af_core:
+  address: "192.168.70.141:50051"
+  timeout_seconds: 30
+
+retry:
+  max_retries: 3
+  initial_delay_ms: 1000
+
+# Shorter monitor cycle for CI — finish quickly
+monitor:
+  interval_seconds: 5
+  iterations: 3  # Set to -1 for indefinite monitoring (until SIGINT/SIGTERM)
+
+streams:
+  - name: "video_stream"
+    description: "HD camera feed for remote monitoring/processing"
+    device:
+      ipv4_address:
+        public_address: "10.60.0.1"
+        public_port: 8554
+    application_server:
+      ipv4_address: "0.0.0.0/0"
+    device_ports:
+      ports: [8554]
+    qos_profile: "QOS_L"
+    duration_seconds: 300
+
+  - name: "webrtc_control"
+    description: "Real-time teleoperation commands and status"
+    device:
+      ipv4_address:
+        public_address: "10.60.0.1"
+        public_port: 8443
+    application_server:
+      ipv4_address: "0.0.0.0/0"
+    device_ports:
+      ports: [8443]
+    qos_profile: "QOS_E"
+    duration_seconds: 300
