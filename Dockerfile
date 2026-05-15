@@ -153,7 +153,7 @@ RUN cd /app && \
              -DUSE_SYSTEM_OPENSSL=ON \
              -DUSE_SYSTEM_BOOST=ON \
              -DCMAKE_INSTALL_PREFIX=/usr/local && \
-    make -j$(nproc) af_bundled && \
+    make -j$(nproc) af && \
     make install && \
     ldconfig
 
@@ -202,21 +202,21 @@ RUN apt-get update && \
 RUN ldconfig
 
 # Copy the bundled binary
-COPY --from=builder /app/build-output/bin/af_bundled /usr/local/bin/
+COPY --from=builder /app/build-output/bin/af /usr/local/bin/
 
 # Copy unified config
 COPY config/af.yaml /etc/oai/af/af.yaml
 
 # Create a non-root user
 RUN groupadd -r afuser && useradd -r -g afuser afuser && \
-    chown -R afuser:afuser /usr/local/bin/af_bundled /etc/oai/af
+    chown -R afuser:afuser /usr/local/bin/af /etc/oai/af
 
 WORKDIR /usr/local/bin
-RUN chmod +x ./af_bundled
+RUN chmod +x ./af
 
 USER afuser
 
 # Expose ports: HTTP/2 API (8081)
 EXPOSE 8081
 
-CMD ["/usr/local/bin/af_bundled", "--config", "/etc/oai/af/af.yaml"]
+CMD ["/usr/local/bin/af", "--config", "/etc/oai/af/af.yaml"]

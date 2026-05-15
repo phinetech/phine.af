@@ -365,9 +365,9 @@ services:
       - gnb
 
   # Bundled AF - single container running all AF components
-  af_bundled:
-    image: tariromukute/af-bundled:${TAG:-latest}
-    container_name: af-bundled
+  af:
+    image: tariromukute/af:${TAG:-latest}
+    container_name: af
     build:
       context: ..
       dockerfile: Dockerfile

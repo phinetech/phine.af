@@ -353,12 +353,12 @@ docker rm "$CID"
 ```bash
 mkdir -p build-output && cd build-output
 cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_BUNDLED=ON
-make -j$(nproc) af_bundled
+make -j$(nproc) af
 ```
 
 **3. Run:**
 ```bash
-./bin/af_bundled --config config/af.yaml
+./bin/af --config config/af.yaml
 ```
 
 The unified config file [`config/af.yaml`](config/af.yaml) contains settings for all three components with `communication.type: direct`.
@@ -381,9 +381,9 @@ docker build -f af_core/Dockerfile -t af-core .
 docker build -f northbound/api_component/Dockerfile -t af-api .
 ```
 
-**Build the bundled image (all-in-one):**
+**Build the AF image (all-in-one):**
 ```bash
-docker build -f Dockerfile -t af-bundled .
+docker build -f Dockerfile -t af .
 ```
 
 ---
@@ -394,7 +394,7 @@ docker build -f Dockerfile -t af-bundled .
 |------|-------------|
 | [docker-compose-free5gc-build.yaml](docker-compose/docker-compose-free5gc-build.yaml) | Microservice AF + free5gc core |
 | [docker-compose-oai-build.yaml](docker-compose/docker-compose-oai-build.yaml) | Microservice AF + OAI core |
-| [docker-compose-bundled.yaml](docker-compose/docker-compose-bundled.yaml) | **Bundled AF** + free5gc core |
+| [docker-compose-bundled.yaml](docker-compose/docker-compose-bundled.yaml) | **AF** (single container) + free5gc core |
 | [docker-compose-build.yaml](docker-compose/docker-compose-build.yaml) | AF components only |
 
 **Start the bundled stack:**

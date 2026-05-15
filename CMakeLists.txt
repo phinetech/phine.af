@@ -145,9 +145,9 @@ option(BUILD_BUNDLED "Build single bundled AF application" OFF)
 if(BUILD_BUNDLED)
   message(STATUS "Building bundled AF application")
 
-  add_executable(af_bundled src/main.cpp)
+  add_executable(af src/main.cpp)
 
-  target_include_directories(af_bundled
+  target_include_directories(af
     PRIVATE
       ${CMAKE_SOURCE_DIR}
       ${CMAKE_SOURCE_DIR}/af_core/include
@@ -169,7 +169,7 @@ if(BUILD_BUNDLED)
   # Link all component libraries + common
   # Note: pcf_handler_lib depends on OAI static libraries. We use whole-archive
   # to ensure all symbols from static libs are included in the final binary.
-  target_link_libraries(af_bundled
+  target_link_libraries(af
     PRIVATE
       af_core_lib
       api_component
@@ -180,12 +180,12 @@ if(BUILD_BUNDLED)
   )
 
   # Ensure proper static library resolution (needed for transitive deps from static libs)
-  target_link_options(af_bundled PRIVATE
+  target_link_options(af PRIVATE
     -Wl,--no-as-needed
     -L/usr/local/lib
   )
 
-  install(TARGETS af_bundled
+  install(TARGETS af
     RUNTIME DESTINATION bin
   )
 endif()
