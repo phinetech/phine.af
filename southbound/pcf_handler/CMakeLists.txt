@@ -216,9 +216,8 @@ message(STATUS "OAI include dirs: ${OAI_INCLUDE_DIRS}")
 # Use the root common library (built by parent CMakeLists.txt)
 # No need to add_subdirectory or find installed library - parent handles it
 
-# Define source files (only pcf_handler specific sources)
-set(SOURCES
-    src/main.cpp
+# Define library sources (everything except main.cpp)
+set(LIB_SOURCES
     src/helpers.cpp
     src/qod_pcf_handler.cpp
     src/request_router.cpp
@@ -227,10 +226,11 @@ set(SOURCES
     src/pcf_client_wrapper.cpp
 )
 
-# Create shared library
-# add_library(pcf_handler STATIC ${SOURCES})
-# Create test executable
-add_executable(pcf_server ${SOURCES})
+# Create static library for reuse by bundled build
+add_library(pcf_handler_lib STATIC ${LIB_SOURCES})
+
+# Create standalone executable
+add_executable(pcf_server src/main.cpp)
 
 # Set include directories - add common library include paths
 # For Docker builds, use installed paths; for source builds, use relative paths
@@ -257,15 +257,6 @@ elseif(EXISTS "/usr/local/include/af")
         /usr/local/include/af/common
     )
 endif()
-
-target_include_directories(pcf_server
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${OAI_INCLUDE_DIRS}
-        ${COMMON_INCLUDE_DIRS}
-        /usr/local/include
-        /usr/local/include/af
-)
 
 # Find AF common libraries
 # Check if targets exist (parent build) or find installed libraries (standalone Docker build)
@@ -324,35 +315,68 @@ else()
     endif()
 endif()
 
-# Link libraries - use AF common libraries (targets or installed)
-# Note: Link order matters - AF libs use gRPC, so gRPC comes after
+# Set PCF handler dependencies (shared between lib and standalone executable)
+set(PCF_HANDLER_DEPS
+    ${AF_COMMON_LIBS}
+    oai::CONFIG
+    oai::PCF
+    oai::COMMON_MODEL
+    oai::LOGGER
+    oai::NAS
+    oai::COMMON
+    oai::UTILS
+    gRPC::grpc++
+    gRPC::grpc
+    gRPC::grpc++_reflection
+    gRPC::gpr
+    protobuf::libprotobuf
+    ${SPDLOG_TARGET}
+    nlohmann_json::nlohmann_json
+    yaml-cpp
+    OpenSSL::Crypto
+    OpenSSL::SSL
+    nghttp2::nghttp2
+    nghttp2::asio_http2
+    Boost::system
+    Boost::thread
+    crypto
+    # Abseil libraries required by gRPC
+    ${ABSL_LINK_LIBRARIES}
+)
+
+# --- Configure the static library (for bundled build reuse) ---
+target_include_directories(pcf_handler_lib
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${OAI_INCLUDE_DIRS}
+        ${COMMON_INCLUDE_DIRS}
+        /usr/local/include
+        /usr/local/include/af
+)
+
+target_link_libraries(pcf_handler_lib
+    PUBLIC
+        ${PCF_HANDLER_DEPS}
+)
+
+target_link_options(pcf_handler_lib PUBLIC
+    -Wl,--no-as-needed
+    -L/usr/local/lib
+)
+
+# --- Configure the standalone executable ---
+target_include_directories(pcf_server
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${OAI_INCLUDE_DIRS}
+        ${COMMON_INCLUDE_DIRS}
+        /usr/local/include
+        /usr/local/include/af
+)
+
 target_link_libraries(pcf_server
     PUBLIC
-        ${AF_COMMON_LIBS}
-        oai::CONFIG
-        oai::PCF
-        oai::COMMON_MODEL
-        oai::LOGGER
-        oai::NAS
-        oai::COMMON
-        oai::UTILS
-        gRPC::grpc++
-        gRPC::grpc
-        gRPC::grpc++_reflection
-        gRPC::gpr
-        protobuf::libprotobuf
-        ${SPDLOG_TARGET}
-        nlohmann_json::nlohmann_json
-        yaml-cpp
-        OpenSSL::Crypto
-        OpenSSL::SSL
-        nghttp2::nghttp2
-        nghttp2::asio_http2
-        Boost::system
-        Boost::thread
-        crypto
-        # Abseil libraries required by gRPC
-        ${ABSL_LINK_LIBRARIES}
+        pcf_handler_lib
 )
 
 # Add linker options to ensure Abseil libraries are properly linked

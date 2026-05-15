@@ -14,7 +14,7 @@
 find_package(gRPC CONFIG QUIET)
 if(gRPC_FOUND)
     message(STATUS "Found gRPC via config file: ${gRPC_CONFIG}")
-    
+
     # Ensure the imported targets exist
     if(NOT TARGET gRPC::grpc++)
         message(WARNING "gRPC::grpc++ target not defined in config, creating manually")
@@ -23,7 +23,7 @@ if(gRPC_FOUND)
             INTERFACE_LINK_LIBRARIES "gRPC::grpc"
         )
     endif()
-    
+
     if(NOT TARGET gRPC::grpc_cpp_plugin)
         message(WARNING "gRPC::grpc_cpp_plugin target not defined in config, creating manually")
         add_executable(gRPC::grpc_cpp_plugin IMPORTED)
@@ -31,7 +31,7 @@ if(gRPC_FOUND)
             IMPORTED_LOCATION "${gRPC_CPP_PLUGIN_EXECUTABLE}"
         )
     endif()
-    
+
     return()
 endif()
 
