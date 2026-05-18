@@ -39,7 +39,7 @@ services:
 
     oai-udr:
         container_name: "oai-udr"
-        image: tariromukute/oai-udr:fix-am-data-endpoint
+        image: phinetech/oai-udr:fix-am-data-endpoint
         expose:
             - 80/tcp
             - 8080/tcp
@@ -98,7 +98,7 @@ services:
                 ipv4_address: 192.168.70.130
     oai-amf:
         container_name: "oai-amf"
-        image: tariromukute/oai-amf:fix-pcf-int
+        image: phinetech/oai-amf:fix-pcf-int
         expose:
             - 80/tcp
             - 8080/tcp
@@ -116,8 +116,8 @@ services:
     oai-smf:
         container_name: "oai-smf"
         # SMF starts failing on commit 0e66e168, (Merge branch 'snssai_w_wo_ox' into 'develop')
-        image: tariromukute/oai-smf:fix-missing-an-type-v1
-        # image: tariromukute/oai-smf:smpa-latest
+        image: phinetech/oai-smf:fix-missing-an-type-v1
+        # image: phinetech/oai-smf:smpa-latest
         # image: oaisoftwarealliance/oai-smf:v2.2.0
         expose:
             - 80/tcp
@@ -137,7 +137,7 @@ services:
     oai-pcf:
         container_name: "oai-pcf"
         # image: free5gc/pcf:latest
-        image: tariromukute/free5gc-pcf:latest
+        image: phinetech/free5gc-pcf:latest
         command: ./pcf -c ./config/pcfcfg.yaml
         expose:
             - "8000"
@@ -228,7 +228,7 @@ services:
                 ipv4_address: 192.168.70.143
     # Southbound Handlers
     pcf_handler:
-        image: tariromukute/pcf-handler:${TAG:-latest}
+        image: phinetech/pcf-handler:${TAG:-latest}
         container_name: af-pcf-handler
         depends_on:
             - oai-pcf
@@ -242,7 +242,7 @@ services:
 
     # AF Core
     af_core:
-        image: tariromukute/af-core:${TAG:-latest}
+        image: phinetech/af-core:${TAG:-latest}
         container_name: af-core
         build:
             context: ..
@@ -253,7 +253,7 @@ services:
 
     # Northbound Components
     api_component:
-        image: tariromukute/af-api:${TAG:-latest}
+        image: phinetech/af-api:${TAG:-latest}
         container_name: af-north-api
         depends_on:
             - af_core
@@ -269,7 +269,7 @@ services:
         privileged: true
         init: true
         container_name: gnb
-        image: tariromukute/ueransim:v3.2.7
+        image: phinetech/ueransim:v3.2.7
         command:
             - /bin/bash
             - -c
@@ -294,7 +294,7 @@ services:
         privileged: true
         init: true
         container_name: ue
-        image: tariromukute/ueransim:v3.2.7
+        image: phinetech/ueransim:v3.2.7
         # nr-ue -c /home/config-ue.yaml
         # ping -I uesimtun0 8.8.8.8
         command:

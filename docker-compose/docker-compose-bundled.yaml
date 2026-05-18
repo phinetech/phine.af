@@ -7,7 +7,7 @@ version: "3.8"
 services:
   free5gc-upf:
     container_name: "upf"
-    image: tariromukute/oai-upf:fix-measurement-ie-v2
+    image: phinetech/oai-upf:fix-measurement-ie-v2
     expose:
       - 2152/udp
       - 8805/udp
@@ -125,7 +125,7 @@ services:
 
   free5gc-pcf:
     container_name: pcf
-    image: tariromukute/free5gc-pcf:latest
+    image: phinetech/free5gc-pcf:latest
     command: ./pcf -c ./config/pcfcfg.yaml
     expose:
       - "8000"
@@ -314,7 +314,7 @@ services:
 
   gnb:
     container_name: gnb
-    image: tariromukute/ueransim:v3.2.7
+    image: phinetech/ueransim:v3.2.7
     command: ./nr-gnb -c /ueransim/config/gnbcfg.yaml
     volumes:
       - ./ueransim/free5gc-gnb.yaml:/ueransim/config/gnbcfg.yaml
@@ -338,7 +338,7 @@ services:
 
   ue:
     container_name: ue
-    image: tariromukute/ueransim:v3.2.7
+    image: phinetech/ueransim:v3.2.7
     command:
       - /bin/bash
       - -c
@@ -366,7 +366,7 @@ services:
 
   # Bundled AF - single container running AF Core + southbound handler
   af:
-    image: tariromukute/af:${TAG:-latest}
+    image: phinetech/af:${TAG:-latest}
     container_name: af
     build:
       context: ..
@@ -388,7 +388,7 @@ services:
 
   # Standalone northbound API for bundled core/southbound deployment
   api_component:
-    image: tariromukute/af-api:${TAG:-latest}
+    image: phinetech/af-api:${TAG:-latest}
     container_name: af-north-api
     build:
       context: ..

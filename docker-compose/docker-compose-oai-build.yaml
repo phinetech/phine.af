@@ -98,7 +98,7 @@ services:
         container_name: "oai-smf"
         # SMF starts failing on commit 0e66e168, (Merge branch 'snssai_w_wo_ox' into 'develop')
         image: oaisoftwarealliance/oai-smf:develop
-        # image: tariromukute/oai-smf:smpa-latest
+        # image: phinetech/oai-smf:smpa-latest
         # image: oaisoftwarealliance/oai-smf:v2.1.9
         expose:
             - 80/tcp
@@ -204,7 +204,7 @@ services:
                 ipv4_address: 192.168.70.143
     # Southbound Handlers
     pcf_handler:
-        image: tariromukute/pcf-handler:${TAG:-latest}
+        image: phinetech/pcf-handler:${TAG:-latest}
         container_name: af-pcf-handler
         depends_on:
             - oai-pcf
@@ -218,7 +218,7 @@ services:
 
     # AF Core
     af_core:
-        image: tariromukute/af-core:${TAG:-latest}
+        image: phinetech/af-core:${TAG:-latest}
         container_name: af-core
         build:
             context: ..
@@ -229,7 +229,7 @@ services:
 
     # Northbound Components
     api_component:
-        image: tariromukute/af-api:${TAG:-latest}
+        image: phinetech/af-api:${TAG:-latest}
         container_name: af-north-api
         depends_on:
             - af_core
@@ -245,7 +245,7 @@ services:
         privileged: true
         init: true
         container_name: gnb
-        image: tariromukute/ueransim:v3.2.7
+        image: phinetech/ueransim:v3.2.7
         command:
             - /bin/bash
             - -c
@@ -270,7 +270,7 @@ services:
         privileged: true
         init: true
         container_name: ue
-        image: tariromukute/ueransim:v3.2.7
+        image: phinetech/ueransim:v3.2.7
         # nr-ue -c /home/config-ue.yaml
         # ping -I uesimtun0 8.8.8.8
         command:

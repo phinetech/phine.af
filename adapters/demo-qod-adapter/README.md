@@ -56,7 +56,7 @@ Or use docker-compose (add the service to `docker-compose/docker-compose-build.y
 
 ```yaml
 demo_qod_adapter:
-  image: tariromukute/demo-qod-adapter:${TAG:-latest}
+  image: phinetech/demo-qod-adapter:${TAG:-latest}
   container_name: demo-qod-adapter
   build:
     context: ..

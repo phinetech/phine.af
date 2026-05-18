@@ -3,7 +3,7 @@ version: "3.8"
 services:
   free5gc-upf:
     container_name: "upf"
-    image: tariromukute/oai-upf:fix-measurement-ie-v2
+    image: phinetech/oai-upf:fix-measurement-ie-v2
     expose:
       - 2152/udp
       - 8805/udp
@@ -122,7 +122,7 @@ services:
 
   free5gc-pcf:
     container_name: pcf
-    image: tariromukute/free5gc-pcf:latest
+    image: phinetech/free5gc-pcf:latest
     command: ./pcf -c ./config/pcfcfg.yaml
     expose:
       - "8000"
@@ -311,7 +311,7 @@ services:
 
   gnb:
     container_name: gnb
-    image: tariromukute/ueransim:v3.2.7
+    image: phinetech/ueransim:v3.2.7
     command: ./nr-gnb -c /ueransim/config/gnbcfg.yaml
     volumes:
       - ./ueransim/free5gc-gnb.yaml:/ueransim/config/gnbcfg.yaml
@@ -335,7 +335,7 @@ services:
 
   ue:
     container_name: ue
-    image: tariromukute/ueransim:v3.2.7
+    image: phinetech/ueransim:v3.2.7
     command:
       - /bin/bash
       - -c
@@ -382,7 +382,7 @@ services:
         ipv4_address: 192.168.70.143
     # Southbound Handlers
   pcf_handler:
-    image: tariromukute/pcf-handler:${TAG:-latest}
+    image: phinetech/pcf-handler:${TAG:-latest}
     container_name: af-pcf-handler
     depends_on:
       - free5gc-pcf
@@ -398,7 +398,7 @@ services:
 
   # AF Core
   af_core:
-    image: tariromukute/af-core:${TAG:-latest}
+    image: phinetech/af-core:${TAG:-latest}
     container_name: af-core
     build:
       context: ..
@@ -409,7 +409,7 @@ services:
 
   # # Northbound Components
   # api_component:
-  #   image: tariromukute/af-api:${TAG:-latest}
+  #   image: phinetech/af-api:${TAG:-latest}
   #   container_name: af-north-api
   #   depends_on:
   #     - af_core
