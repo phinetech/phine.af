@@ -101,6 +101,12 @@ public:
     }
 
     /**
+     * @brief Get the configured destination used to reach the PCF handler.
+     * @return Destination string for the PCF handler.
+     */
+    const std::string& get_pcf_destination() const { return pcf_destination_; }
+
+    /**
      * @brief Initialize the component's logger
      * @param log_level The log level to use
      */
@@ -109,6 +115,13 @@ public:
 private:
     // Configuration
     std::string config_path_;
+    std::string core_comm_type_{"grpc"};
+    std::string core_server_address_{"0.0.0.0"};
+    std::string core_server_port_{"50051"};
+    std::string pcf_comm_type_{"grpc"};
+    std::string pcf_server_address_{"pcf_handler"};
+    std::string pcf_server_port_{"50055"};
+    std::string pcf_destination_{"pcf_handler:50055"};
 
     std::shared_ptr<af::core::events::EventDispatcher> event_dispatcher_;
 

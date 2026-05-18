@@ -28,22 +28,18 @@ ApiAdapter::ApiAdapter(const std::string& config_path)
 
     // Create communication interface to AF Core
     std::unordered_map<std::string, std::string> comm_config;
-    comm_config["target_service"] = "af_core";
-    core_comm_ = af::communication::CommunicationFactory::create_service(
-        "grpc", "api_adapter", comm_config);
-    logger_->info("Created communication service for AF Core");
-
-    try {
-        if (!core_comm_->initialize("api_adapter", comm_config)) {
-            throw std::runtime_error("Failed to create communication service");
-        }
-    } catch (const std::exception& e) {
-        logger_->error("Error creating communication service: {}", e.what());
-        throw;
+    if (!core_address_.empty()) {
+        comm_config["core_address"] = core_address_;
     }
-    // if (!core_comm_->initialize("api_adapter", comm_config)) {
-    //     logger_->error("Failed to initialize communication with AF Core");
-    // }
+    if (!core_port_.empty()) {
+        comm_config["core_port"] = core_port_;
+    }
+    if (core_comm_type_ == "grpc") {
+        comm_config["client_only"] = "true";
+    }
+    core_comm_ = af::communication::CommunicationFactory::create_service(
+        core_comm_type_, "api_adapter", comm_config);
+    logger_->info("Created communication service for AF Core");
 }
 
 ApiAdapter::~ApiAdapter() {
@@ -75,7 +71,7 @@ void ApiAdapter::initialize() {
         boost::system::error_code ec;
 
         // Initialize API handlers with communication interface
-        api_handlers_->initialize(core_comm_);
+        api_handlers_->initialize(core_comm_, core_destination_);
 
         // Start the communication service
         if (!core_comm_->start()) {
@@ -274,16 +270,46 @@ void ApiAdapter::loadConfig(const std::string& config_path) {
         YAML::Node config = YAML::LoadFile(config_path);
 
         std::cout << "Loading configuration from: " << config_path << std::endl;
-        host_ = config["api_adapter"]["host"].as<std::string>("0.0.0.0");
-        port_ = config["api_adapter"]["port"].as<int>(8080);
-        threads_ = config["api_adapter"]["threads"].as<int>(4);
-        tls_enabled_ = config["api_adapter"]["tls_enabled"].as<bool>(false);
-        cert_file_ = config["api_adapter"]["cert_file"].as<std::string>("");
-        key_file_ = config["api_adapter"]["key_file"].as<std::string>("");
+        YAML::Node adapter_config = config["api_adapter"] ? config["api_adapter"] : config["api_component"];
+        YAML::Node comm_config = adapter_config && adapter_config["communication"]
+            ? adapter_config["communication"]
+            : config["communication"];
+
+        host_ = adapter_config["host"].as<std::string>("0.0.0.0");
+        port_ = adapter_config["port"].as<int>(8080);
+        threads_ = adapter_config["threads"].as<int>(4);
+        tls_enabled_ = adapter_config["tls_enabled"].as<bool>(false);
+        cert_file_ = adapter_config["cert_file"].as<std::string>("");
+        key_file_ = adapter_config["key_file"].as<std::string>("");
+
+        core_comm_type_ = comm_config["type"].as<std::string>("grpc");
+
+        if (comm_config["core_address"]) {
+            core_address_ = comm_config["core_address"].as<std::string>();
+        } else if (comm_config["af_core_host"]) {
+            core_address_ = comm_config["af_core_host"].as<std::string>();
+        } else {
+            core_address_ = "localhost";
+        }
+
+        if (comm_config["core_port"]) {
+            core_port_ = comm_config["core_port"].as<std::string>();
+        } else if (comm_config["af_core_port"]) {
+            core_port_ = std::to_string(comm_config["af_core_port"].as<int>());
+        } else {
+            core_port_ = "50051";
+        }
+
+        if (core_comm_type_ == "direct") {
+            core_destination_ = comm_config["af_core_service"].as<std::string>("af_core");
+        } else {
+            core_destination_ = core_address_ + ":" + core_port_;
+        }
 
         std::cout << "Configuration loaded successfully" << std::endl;
-        logger_->info("Loaded configuration: host={}, port={}, threads={}, tls={}",
-                     host_, port_, threads_, tls_enabled_ ? "enabled" : "disabled");
+        logger_->info("Loaded configuration: host={}, port={}, threads={}, tls={}, core_type={}, core_destination={}",
+                     host_, port_, threads_, tls_enabled_ ? "enabled" : "disabled",
+                     core_comm_type_, core_destination_);
     }
     catch (const std::exception& e) {
         logger_->error("Failed to load configuration: {}", e.what());
@@ -294,6 +320,10 @@ void ApiAdapter::loadConfig(const std::string& config_path) {
         tls_enabled_ = false;
         cert_file_ = "";
         key_file_ = "";
+        core_comm_type_ = "grpc";
+        core_address_ = "localhost";
+        core_port_ = "50051";
+        core_destination_ = core_address_ + ":" + core_port_;
     }
 }
 

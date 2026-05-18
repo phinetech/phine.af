@@ -139,8 +139,9 @@ if(BUILD_TESTS)
 endif()
 
 # Bundled application configuration
-# Build a single executable that includes all components (northbound, core, southbound)
-# using direct (in-memory) communication instead of gRPC between components.
+# Build a single executable that bundles AF Core and southbound handlers.
+# Northbound applications remain standalone services and connect to AF Core
+# over the configured communication interface.
 option(BUILD_BUNDLED "Build single bundled AF application" OFF)
 if(BUILD_BUNDLED)
   message(STATUS "Building bundled AF application")
@@ -151,7 +152,6 @@ if(BUILD_BUNDLED)
     PRIVATE
       ${CMAKE_SOURCE_DIR}
       ${CMAKE_SOURCE_DIR}/af_core/include
-      ${CMAKE_SOURCE_DIR}/northbound/api_component/include
       ${CMAKE_SOURCE_DIR}/southbound/pcf_handler/include
       ${CMAKE_SOURCE_DIR}/common
       ${CMAKE_SOURCE_DIR}/common/component/include
@@ -166,13 +166,12 @@ if(BUILD_BUNDLED)
       ${CMAKE_SOURCE_DIR}/common/communication/adapters/include
   )
 
-  # Link all component libraries + common
+    # Link bundled core + southbound libraries + common
   # Note: pcf_handler_lib depends on OAI static libraries. We use whole-archive
   # to ensure all symbols from static libs are included in the final binary.
   target_link_libraries(af
     PRIVATE
       af_core_lib
-      api_component
       -Wl,--whole-archive
       pcf_handler_lib
       -Wl,--no-whole-archive

@@ -4,6 +4,16 @@
 
 - `docker-compose/docker-compose-oai-build.yaml`
 - `docker-compose/docker-compose-free5gc-build.yaml`
+- `docker-compose/docker-compose-bundled.yaml`
+
+### Bundled deployment
+
+The bundled deployment keeps:
+
+- `af`: bundled AF Core + southbound PCF handler
+- `api_component`: standalone northbound HTTP/2 API
+
+In other words, “bundled” means **core + southbound** are packaged together. Northbound adapters are still deployed separately.
 
 
 ## Test environment

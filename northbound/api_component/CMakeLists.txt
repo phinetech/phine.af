@@ -57,8 +57,10 @@ find_package(NGHTTP2 REQUIRED)
 # find_package(nghttp2_asio REQUIRED)
 # Find gRPC
 find_package(gRPC REQUIRED)
-# FInd protobuf
-find_package(Protobuf REQUIRED)
+# Find protobuf (guard against re-importing when already defined by a parent CMake scope)
+if(NOT TARGET protobuf::libprotobuf)
+    find_package(Protobuf REQUIRED)
+endif()
 
 
 # Include the nghttp2_asio headers

@@ -149,9 +149,41 @@ void PcfHandler::load_config() {
         use_tls_ = config["pcf_handler"]["use_tls"].as<bool>(false);
         api_version_ = config["pcf_handler"]["api_version"].as<std::string>("v1");
 
+        auto comm_config = config["pcf_handler"]["communication"];
+        if (comm_config) {
+            if (comm_config["type"]) {
+                comm_type_ = comm_config["type"].as<std::string>();
+            }
+            if (comm_config["server_address"]) {
+                server_address_ = comm_config["server_address"].as<std::string>();
+            }
+            if (comm_config["server_port"]) {
+                server_port_ = comm_config["server_port"].as<std::string>();
+            }
+            if (comm_config["core_address"]) {
+                core_address_ = comm_config["core_address"].as<std::string>();
+            }
+            if (comm_config["core_port"]) {
+                core_port_ = comm_config["core_port"].as<std::string>();
+            }
+        }
+
+        if (comm_type_ == "direct") {
+            core_destination_ = "af_core";
+        } else {
+            std::string advertised_core = core_address_;
+            if (advertised_core.empty() || advertised_core == "0.0.0.0") {
+                advertised_core = "af_core";
+            }
+            core_destination_ = advertised_core + ":" + core_port_;
+        }
+
         logger_->info("PCF base URL: {}", pcf_base_url_);
         logger_->info("Using TLS: {}", use_tls_ ? "true" : "false");
         logger_->info("API version: {}", api_version_);
+        logger_->info("Communication type: {}", comm_type_);
+        logger_->info("PCF handler listen address: {}:{}", server_address_, server_port_);
+        logger_->info("AF Core destination: {}", core_destination_);
     }
     catch (const std::exception& e) {
         logger_->error("Failed to load configuration: {}", e.what());
@@ -160,6 +192,12 @@ void PcfHandler::load_config() {
         pcf_base_url_ = "http://pcf:80/npcf-policyauthorization/v1";
         use_tls_ = false;
         api_version_ = "v1";
+        comm_type_ = "grpc";
+        server_address_ = "0.0.0.0";
+        server_port_ = "50055";
+        core_address_ = "af_core";
+        core_port_ = "50051";
+        core_destination_ = "af_core:50051";
     }
 }
 
@@ -169,18 +207,14 @@ void PcfHandler::initialize_communication() {
 
         // Create communication service
         std::unordered_map<std::string, std::string> comm_config;
-        comm_config["server_address"] = "0.0.0.0";
-        comm_config["server_port"] = "50055";  // Use a different port than AF Core
+        comm_config["server_address"] = server_address_;
+        comm_config["server_port"] = server_port_;
 
         core_comm_ = af::communication::CommunicationFactory::create_service(
-            "grpc", "pcf_handler", comm_config);
+            comm_type_, "pcf_handler", comm_config);
 
         if (!core_comm_) {
             throw std::runtime_error("Failed to create communication service");
-        }
-
-        if (!core_comm_->initialize("pcf_handler", comm_config)) {
-            throw std::runtime_error("Failed to initialize communication service");
         }
 
         logger_->info("Communication with AF Core initialized");
@@ -857,7 +891,7 @@ void PcfHandler::forward_notification(const std::string& notification_type,
 
     // Send asynchronously to AF Core
     if (core_comm_) {
-        core_comm_->send_async("af_core", message, [this](const af::communication::MessagePtr& response) -> af::communication::MessagePtr {
+        core_comm_->send_async(core_destination_, message, [this](const af::communication::MessagePtr& response) -> af::communication::MessagePtr {
             if (response) {
                 logger_->debug("Received response from AF Core: {}", response->message_type);
             }

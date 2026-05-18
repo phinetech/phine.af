@@ -18,7 +18,8 @@ public:
     ~ApiHandlers();
 
     // Initialize handlers with communication interface to AF Core
-    void initialize(std::shared_ptr<af::communication::CommunicationService> core_comm);
+    void initialize(std::shared_ptr<af::communication::CommunicationService> core_comm,
+                    const std::string& core_destination);
 
     // API endpoint handlers
     void getHealth(const nghttp2::asio_http2::server::request& req, const nghttp2::asio_http2::server::response& res);
@@ -38,6 +39,7 @@ public:
 private:
     // Communication interface for talking to AF Core
     std::shared_ptr<af::communication::CommunicationService> core_comm_;
+    std::string core_destination_;
 
     // Logger
     std::shared_ptr<spdlog::logger> logger_;

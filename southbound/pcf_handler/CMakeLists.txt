@@ -36,9 +36,12 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # Find Protobuf FIRST (required by gRPC)
-find_package(Protobuf CONFIG QUIET)
-if(NOT Protobuf_FOUND)
-    find_package(Protobuf REQUIRED)
+# Guard against re-importing when already defined by a parent CMake scope
+if(NOT TARGET protobuf::libprotobuf)
+    find_package(Protobuf CONFIG QUIET)
+    if(NOT Protobuf_FOUND)
+        find_package(Protobuf REQUIRED)
+    endif()
 endif()
 
 # Create aliases if they don't exist

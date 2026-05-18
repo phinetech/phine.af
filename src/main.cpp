@@ -2,9 +2,9 @@
  * @file main.cpp
  * @brief Main entry point for the bundled AF application
  *
- * This runs all three AF components (Northbound API, Core, Southbound PCF Handler)
- * in a single process using direct (in-memory) communication instead of gRPC
- * between components.
+ * This runs the AF Core and southbound PCF Handler in a single process.
+ * Northbound applications remain standalone processes and connect to AF Core
+ * over gRPC.
  */
 
 #include <iostream>
@@ -16,11 +16,9 @@
 #include <spdlog/spdlog.h>
 
 #include "af_orchestrator.h"
-#include "api_adapter.h"
 #include "pcf_handler.h"
 
 // Global pointers for signal handling
-static af::northbound::ApiAdapter* g_api_adapter = nullptr;
 static af::core::AfOrchestrator* g_orchestrator = nullptr;
 static af::southbound::PcfHandler* g_pcf_handler = nullptr;
 static std::atomic<bool> g_running{true};
@@ -31,11 +29,6 @@ void signalHandler(int signum) {
     g_running = false;
 
     // Stop components in reverse order of dependency
-    if (g_api_adapter) {
-        std::cout << "Stopping Northbound API server..." << std::endl;
-        g_api_adapter->stop();
-    }
-
     if (g_orchestrator) {
         std::cout << "Stopping AF Core..." << std::endl;
         g_orchestrator->stop();
@@ -69,7 +62,7 @@ std::string parseConfigPath(int argc, char* argv[]) {
 int main(int argc, char* argv[]) {
     try {
         std::cout << "=========================================" << std::endl;
-        std::cout << " 5G Application Function (Bundled Mode)  " << std::endl;
+        std::cout << " 5G Application Function (Core/SB Bundle) " << std::endl;
         std::cout << "=========================================" << std::endl;
 
         // Parse command line arguments
@@ -80,31 +73,24 @@ int main(int argc, char* argv[]) {
         signal(SIGINT, signalHandler);
         signal(SIGTERM, signalHandler);
 
-        // --- Initialize components bottom-up (southbound first) ---
+        // --- Initialize bundled components bottom-up (southbound first) ---
 
         // 1. Southbound: PCF Handler
-        std::cout << "[1/3] Initializing PCF Handler (southbound)..." << std::endl;
+        std::cout << "[1/2] Initializing PCF Handler (southbound)..." << std::endl;
         af::southbound::PcfHandler pcf_handler(config_path);
         g_pcf_handler = &pcf_handler;
         pcf_handler.initialize();
         std::cout << "  PCF Handler initialized." << std::endl;
 
         // 2. Core: AF Orchestrator
-        std::cout << "[2/3] Initializing AF Core (orchestrator)..." << std::endl;
+        std::cout << "[2/2] Initializing AF Core (orchestrator)..." << std::endl;
         af::core::AfOrchestrator orchestrator(config_path);
         g_orchestrator = &orchestrator;
         orchestrator.initialize();
         std::cout << "  AF Core initialized." << std::endl;
 
-        // 3. Northbound: API Adapter
-        std::cout << "[3/3] Initializing API Adapter (northbound)..." << std::endl;
-        af::northbound::ApiAdapter api_adapter(config_path);
-        g_api_adapter = &api_adapter;
-        api_adapter.initialize();
-        std::cout << "  API Adapter initialized." << std::endl;
-
-        // --- Start components bottom-up ---
-        std::cout << "Starting all components..." << std::endl;
+        // --- Start bundled components ---
+        std::cout << "Starting bundled AF Core and southbound components..." << std::endl;
 
         // Start PCF Handler in a separate thread
         std::thread pcf_thread([&pcf_handler]() {
@@ -124,20 +110,12 @@ int main(int argc, char* argv[]) {
             }
         });
 
-        // Give core and southbound a moment to start their gRPC servers
+        // Give core and southbound a moment to start their communication services
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        // Start API Adapter in a separate thread (this runs the HTTP/2 server)
-        std::thread api_thread([&api_adapter]() {
-            try {
-                api_adapter.start();
-            } catch (const std::exception& e) {
-                std::cerr << "API Adapter error: " << e.what() << std::endl;
-            }
-        });
-
         std::cout << "=========================================" << std::endl;
-        std::cout << " All components started successfully.     " << std::endl;
+        std::cout << " Bundled AF started successfully.         " << std::endl;
+        std::cout << " AF Core is available for northbound apps." << std::endl;
         std::cout << " Press Ctrl+C to stop.                    " << std::endl;
         std::cout << "=========================================" << std::endl;
 
@@ -158,7 +136,6 @@ int main(int argc, char* argv[]) {
         });
 
         // Wait for threads
-        if (api_thread.joinable()) api_thread.join();
         if (core_thread.joinable()) core_thread.join();
         if (pcf_thread.joinable()) pcf_thread.join();
         if (cleanup_thread.joinable()) cleanup_thread.join();

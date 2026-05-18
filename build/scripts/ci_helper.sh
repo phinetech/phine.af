@@ -109,23 +109,34 @@ function wait_for_nrf() {
 function wait_for_af() {
     local retries=30
     local wait_time=2
-    echo "Waiting for AF Core to be ready..."
+    echo "Waiting for AF gRPC endpoint to be ready..."
 
     for i in $(seq 1 $retries); do
-        # Get AF Core container IP
-        AF_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' af-core 2>/dev/null || true)
+        local AF_CONTAINER=""
+
+        if docker ps -a --format '{{.Names}}' | grep -q '^af-core$'; then
+            AF_CONTAINER="af-core"
+        elif docker ps -a --format '{{.Names}}' | grep -q '^af$'; then
+            AF_CONTAINER="af"
+        fi
+
+        if [ -n "$AF_CONTAINER" ]; then
+            AF_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$AF_CONTAINER" 2>/dev/null || true)
+        else
+            AF_IP=""
+        fi
 
         if [ -n "$AF_IP" ]; then
             if grpcurl -plaintext "${AF_IP}:50051" list > /dev/null 2>&1; then
-                echo "AF Core is ready!"
+                echo "AF gRPC endpoint is ready (${AF_CONTAINER})!"
                 return 0
             fi
         fi
-        echo "Waiting for AF Core... ($i/$retries)"
+        echo "Waiting for AF endpoint... ($i/$retries)"
         sleep $wait_time
     done
 
-    echo "Timeout waiting for AF Core"
+    echo "Timeout waiting for AF endpoint"
     return 1
 }
 
@@ -140,6 +151,7 @@ function collect_logs() {
 
     # List of containers
     local CONTAINERS=(
+        "af:af.log"
         "af-core:af_core.log"
         "af-north-api:api_component.log"
         "af-pcf-handler:pcf_handler.log"

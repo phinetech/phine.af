@@ -1,8 +1,8 @@
 version: "3.8"
 
 # Docker Compose for bundled AF deployment
-# Runs all AF components (northbound API, core, southbound PCF handler) as a single container
-# alongside the 5G core network (free5gc)
+# Runs AF Core + southbound PCF handler as a single container, while northbound
+# applications remain standalone services alongside the 5G core network (free5gc)
 
 services:
   free5gc-upf:
@@ -364,7 +364,7 @@ services:
       - free5gc-upf
       - gnb
 
-  # Bundled AF - single container running all AF components
+  # Bundled AF - single container running AF Core + southbound handler
   af:
     image: tariromukute/af:${TAG:-latest}
     container_name: af
@@ -376,16 +376,36 @@ services:
     volumes:
       - ./conf/af.yaml:/etc/oai/af/af.yaml
     expose:
-      - 8081/tcp
+      - 50051/tcp
     ports:
-      - "8081:8081"
+      - "50051:50051"
     networks:
       public_net:
         ipv4_address: 192.168.70.141
         aliases:
           - af.local
           - af-core
-          - af-pcf-handler
+
+  # Standalone northbound API for bundled core/southbound deployment
+  api_component:
+    image: tariromukute/af-api:${TAG:-latest}
+    container_name: af-north-api
+    build:
+      context: ..
+      dockerfile: northbound/api_component/Dockerfile
+    depends_on:
+      - af
+    volumes:
+      - ./conf/api_adapter.yaml:/etc/oai/af/api_adapter.yaml
+    expose:
+      - 8081/tcp
+    ports:
+      - "8081:8081"
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.142
+        aliases:
+          - af-api
 
 networks:
   public_net:

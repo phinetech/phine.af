@@ -1,6 +1,6 @@
 # Dockerfile for the bundled AF application
-# Builds all three components (northbound, core, southbound) into a single binary
-# using direct (in-memory) communication between components.
+# Builds AF Core and the southbound PCF handler into a single binary.
+# Northbound applications remain standalone services.
 
 # Pre-built gRPC/protobuf
 FROM phinetech/grpc-builder:v1.72.2 AS grpc-builder
@@ -12,6 +12,9 @@ FROM phinetech/oai-cn5g-common-src:latest AS oai-builder
 FROM debian:bookworm-slim AS base
 ENV DEBIAN_FRONTEND=noninteractive
 ENV IS_DOCKERFILE=1
+# Allow pkg-config and CMake helpers to discover libraries and .pc files copied
+# into /usr/local from earlier build stages, especially nghttp2/nghttp2_asio.
+ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig
 WORKDIR /app
 
 # =============================================================================
@@ -47,7 +50,9 @@ RUN apt-get update && \
 
 WORKDIR /tmp
 
-# Install nghttp2 (needed by northbound API + southbound PCF handler)
+# Install nghttp2 with ASIO support
+# Note: ENABLE_LIB_ONLY=ON builds the shared nghttp2 library required by nghttp2_asio.
+# Boost and OpenSSL must be installed first for the ASIO library to build.
 RUN git clone --recurse-submodules -b v1.65.0 --depth 1 --shallow-submodules https://github.com/nghttp2/nghttp2.git && \
     cd nghttp2 && \
     mkdir build && cd build && \
@@ -60,6 +65,8 @@ RUN git clone --recurse-submodules -b v1.65.0 --depth 1 --shallow-submodules htt
     cd /tmp && rm -rf nghttp2
 
 RUN ldconfig
+
+# Create symlinks for nghttp2 libraries
 RUN ln -sf /usr/local/lib/libnghttp2.so /usr/lib/libnghttp2.so
 
 # Install nghttp2_asio
@@ -75,6 +82,8 @@ RUN git clone https://github.com/nghttp2/nghttp2-asio.git && \
     cd /tmp && rm -rf nghttp2-asio
 
 RUN ldconfig
+
+# Create symlinks for nghttp2_asio libraries
 RUN ln -sf /usr/local/lib/libnghttp2_asio.so /usr/lib/libnghttp2_asio.so
 
 # =============================================================================
@@ -94,6 +103,7 @@ RUN apt-get update && \
       libc6-dev \
       linux-libc-dev \
       git \
+      pkg-config \
       libspdlog-dev \
       libyaml-cpp-dev \
       libfmt-dev \
@@ -129,6 +139,8 @@ COPY --from=oai-builder /usr/local/include/oai /usr/local/include/oai
 COPY --from=oai-builder /usr/local/lib/cmake/oai_cn5g_common /usr/local/lib/cmake/oai_cn5g_common
 
 RUN ldconfig
+RUN ln -sf /usr/local/lib/libnghttp2.so /usr/lib/libnghttp2.so && \
+    ln -sf /usr/local/lib/libnghttp2_asio.so /usr/lib/libnghttp2_asio.so
 
 # Copy entire project source
 COPY common/ /app/common/
@@ -152,6 +164,7 @@ RUN cd /app && \
              -DUSE_SYSTEM_NGHTTP2_ASIO=ON \
              -DUSE_SYSTEM_OPENSSL=ON \
              -DUSE_SYSTEM_BOOST=ON \
+             -DCMAKE_PREFIX_PATH=/usr/local \
              -DCMAKE_INSTALL_PREFIX=/usr/local && \
     make -j$(nproc) af && \
     make install && \
@@ -216,7 +229,7 @@ RUN chmod +x ./af
 
 USER afuser
 
-# Expose ports: HTTP/2 API (8081)
-EXPOSE 8081
+# Expose ports: AF Core gRPC (50051)
+EXPOSE 50051
 
 CMD ["/usr/local/bin/af", "--config", "/etc/oai/af/af.yaml"]

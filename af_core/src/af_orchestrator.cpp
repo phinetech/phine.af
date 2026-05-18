@@ -70,10 +70,10 @@ void AfOrchestrator::initialize() {
 
     // Initialize QoD components (after communication is ready)
     if (communication_services_.find("pcf") != communication_services_.end()) {
-        qod_session_manager_->initialize(communication_services_["pcf"]);
+        qod_session_manager_->initialize(communication_services_["pcf"], pcf_destination_);
     } else {
         logger_->warn("PCF service not available, QoD session manager initialized without PCF");
-        qod_session_manager_->initialize(nullptr);
+        qod_session_manager_->initialize(nullptr, "");
     }
     qod_notification_manager_->initialize(this);
 
@@ -94,7 +94,48 @@ void AfOrchestrator::load_config() {
         logger_->info("Loading configuration from {}", config_path_);
         YAML::Node config = YAML::LoadFile(config_path_);
 
-        // TODO: Load specific configuration values
+        auto af_core_config = config["af_core"];
+        auto af_core_comm = af_core_config ? af_core_config["communication"] : YAML::Node();
+        if (af_core_comm) {
+            if (af_core_comm["type"]) {
+                core_comm_type_ = af_core_comm["type"].as<std::string>();
+            }
+            if (af_core_comm["server_address"]) {
+                core_server_address_ = af_core_comm["server_address"].as<std::string>();
+            }
+            if (af_core_comm["server_port"]) {
+                core_server_port_ = af_core_comm["server_port"].as<std::string>();
+            }
+        }
+
+        auto pcf_handler_config = config["pcf_handler"];
+        auto pcf_comm = pcf_handler_config ? pcf_handler_config["communication"] : YAML::Node();
+        if (pcf_comm) {
+            if (pcf_comm["type"]) {
+                pcf_comm_type_ = pcf_comm["type"].as<std::string>();
+            }
+            if (pcf_comm["server_address"]) {
+                pcf_server_address_ = pcf_comm["server_address"].as<std::string>();
+            }
+            if (pcf_comm["server_port"]) {
+                pcf_server_port_ = pcf_comm["server_port"].as<std::string>();
+            }
+        }
+
+        if (pcf_comm_type_ == "direct") {
+            pcf_destination_ = "pcf_handler";
+        } else {
+            std::string advertised_address = pcf_server_address_;
+            if (advertised_address.empty() || advertised_address == "0.0.0.0") {
+                advertised_address = "pcf_handler";
+            }
+            pcf_destination_ = advertised_address + ":" + pcf_server_port_;
+        }
+
+        logger_->info("AF Core communication type: {} on {}:{}",
+                      core_comm_type_, core_server_address_, core_server_port_);
+        logger_->info("PCF handler communication type: {} destination: {}",
+                      pcf_comm_type_, pcf_destination_);
 
         logger_->info("Configuration loaded successfully");
     }
@@ -110,12 +151,11 @@ void AfOrchestrator::initialize_communication() {
 
         // Create main communication service for inbound communication
         std::unordered_map<std::string, std::string> main_comm_config;
-        // TODO: Load specific configuration values for main communication service
-        main_comm_config["server_address"] = "0.0.0.0";
-        main_comm_config["server_port"] = "50051";  // Use a fixed port for the core
+        main_comm_config["server_address"] = core_server_address_;
+        main_comm_config["server_port"] = core_server_port_;
 
         auto main_comm = af::communication::CommunicationFactory::create_service(
-            "grpc", "af_core", main_comm_config);
+            core_comm_type_, "af_core", main_comm_config);
 
         if (!main_comm) {
             throw std::runtime_error("Failed to create main communication service");
@@ -128,23 +168,16 @@ void AfOrchestrator::initialize_communication() {
 
         // PCF interface
         std::unordered_map<std::string, std::string> pcf_comm_config;
-        pcf_comm_config["client_only"] = "true";
-        pcf_comm_config["server_address"] = "192.168.70.140";  // Example address
-        pcf_comm_config["server_port"] = "50052";  // Example port for PCF
+        if (pcf_comm_type_ == "grpc") {
+            pcf_comm_config["client_only"] = "true";
+            pcf_comm_config["server_address"] = pcf_server_address_;
+            pcf_comm_config["server_port"] = pcf_server_port_;
+        }
         auto pcf_comm = af::communication::CommunicationFactory::create_service(
-            "grpc", "af_core_pcf", pcf_comm_config);
+            pcf_comm_type_, "af_core_pcf", pcf_comm_config);
 
         if (pcf_comm) {
             communication_services_["pcf"] = pcf_comm;
-        }
-
-        // NEF interface
-        std::unordered_map<std::string, std::string> nef_comm_config;
-        auto nef_comm = af::communication::CommunicationFactory::create_service(
-            "grpc", "af_core_nef", nef_comm_config);
-
-        if (nef_comm) {
-            communication_services_["nef"] = nef_comm;
         }
 
         logger_->info("Communication interfaces initialized");

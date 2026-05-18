@@ -334,7 +334,7 @@ make pcf_server       # Southbound PCF handler
 
 ### Bundled build (single binary)
 
-All three components run in one process using direct (in-memory) communication. No gRPC between components.
+The bundled `af` binary contains **AF Core** and the **southbound PCF handler** in one process. Northbound applications remain standalone services and connect to AF Core over gRPC.
 
 **1. Install OAI CN5G Common libraries from Docker image (one-time):**
 ```bash
@@ -363,7 +363,7 @@ make -j$(nproc) af
 ./bin/af --config config/af.yaml
 ```
 
-The unified config file [`config/af.yaml`](config/af.yaml) contains settings for all three components with `communication.type: direct`.
+The unified config file [config/af.yaml](config/af.yaml) configures AF Core for external gRPC access and the bundled southbound handler for in-process direct communication.
 
 ---
 
@@ -396,7 +396,7 @@ docker build -f Dockerfile -t af .
 |------|-------------|
 | [docker-compose-free5gc-build.yaml](docker-compose/docker-compose-free5gc-build.yaml) | Microservice AF + free5gc core |
 | [docker-compose-oai-build.yaml](docker-compose/docker-compose-oai-build.yaml) | Microservice AF + OAI core |
-| [docker-compose-bundled.yaml](docker-compose/docker-compose-bundled.yaml) | **AF** (single container) + free5gc core |
+| [docker-compose-bundled.yaml](docker-compose/docker-compose-bundled.yaml) | bundled **AF Core + southbound** container + standalone northbound API + free5gc core |
 | [docker-compose-build.yaml](docker-compose/docker-compose-build.yaml) | AF components only |
 
 **Start the bundled stack:**

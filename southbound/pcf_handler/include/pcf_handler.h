@@ -126,6 +126,12 @@ private:
     std::string pcf_base_url_;
     bool use_tls_;
     std::string api_version_;
+    std::string comm_type_{"grpc"};
+    std::string server_address_{"0.0.0.0"};
+    std::string server_port_{"50055"};
+    std::string core_address_{"af_core"};
+    std::string core_port_{"50051"};
+    std::string core_destination_{"af_core:50051"};
 
     // Components
     std::shared_ptr<PcfClientWrapper> pcf_client_;
