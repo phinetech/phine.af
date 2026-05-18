@@ -4,10 +4,6 @@
 
 # AF Core (Orchestrator)
 af_core:
-  pcf_base_url: "http://pcf:80/npcf-policyauthorization/v1"
-  use_tls: false
-  api_version: "v1"
-
   logging:
     level: "info"
     console_output: true
@@ -16,15 +12,25 @@ af_core:
 
   # AF Core remains externally reachable by standalone northbound apps.
   communication:
-    type: "grpc"
-    server_address: "0.0.0.0"
-    server_port: "50051"
+    kind: "grpc"
+    listen:
+      host: "0.0.0.0"
+      port: 50051
+
+  qod:
+    max_session_duration: 86400
+    min_session_duration: 60
+    session_cleanup_interval: 60
+    unavailable_session_ttl: 360
+    enable_notifications: true
+    api_base_url: "https://api.example.com/quality-on-demand/v1"
 
 # Southbound PCF Handler
 pcf_handler:
-  pcf_base_url: "http://pcf:80/npcf-policyauthorization/v1"
-  use_tls: false
-  api_version: "v1"
+  pcf:
+    base_url: "http://pcf:80/npcf-policyauthorization/v1"
+    use_tls: false
+    api_version: "v1"
 
   logging:
     level: "info"
@@ -34,7 +40,10 @@ pcf_handler:
 
   # The bundled southbound handler communicates with AF Core in-process.
   communication:
-    type: "direct"
+    kind: "direct"
+    listen:
+      host: "0.0.0.0"
+      port: 50055
 
 # Global settings
 logging:

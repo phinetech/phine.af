@@ -17,6 +17,7 @@
 #include <chrono>
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
+#include <af_typed_config.hpp>
 #include "pcf_client_wrapper.h"
 #include <models/qod/qod_session.h>
 #include <message.h>
@@ -55,9 +56,9 @@ class QodPcfHandler {
 public:
     /**
      * @brief Constructor
-     * @param config_path Path to configuration file
+     * @param config Typed PCF handler configuration
      */
-    explicit QodPcfHandler(const std::string& config_path);
+    explicit QodPcfHandler(const af::config::PcfHandlerConfig& config);
 
     /**
      * @brief Destructor
@@ -307,19 +308,10 @@ private:
     // === Response helpers ===
     // Now using ServiceHandlerHelpers::create_success_response from common
 
-    /**
-     * @brief Load configuration from file
-     * @param path Path to configuration file
-     */
-    void load_config(const std::string& path);
-
     // === Member Variables ===
 
     // Configuration
-    std::string config_path_;
-    std::string pcf_base_url_;
-    bool use_tls_;
-    std::string api_version_;
+    af::config::PcfHandlerConfig config_;
 
     std::shared_ptr<PcfClientWrapper> pcf_client_;
 

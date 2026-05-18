@@ -18,6 +18,7 @@
 #include "ue_state_manager.h"
 #include "common/component/include/af_component.h"
 #include "common/communication/include/communication_interface.h"
+#include "af_typed_config.hpp"
 
 // QoD includes
 #include "qod/qod_session_manager.h"
@@ -115,12 +116,7 @@ public:
 private:
     // Configuration
     std::string config_path_;
-    std::string core_comm_type_{"grpc"};
-    std::string core_server_address_{"0.0.0.0"};
-    std::string core_server_port_{"50051"};
-    std::string pcf_comm_type_{"grpc"};
-    std::string pcf_server_address_{"pcf_handler"};
-    std::string pcf_server_port_{"50055"};
+    af::config::AppConfig app_config_{};
     std::string pcf_destination_{"pcf_handler:50055"};
 
     std::shared_ptr<af::core::events::EventDispatcher> event_dispatcher_;

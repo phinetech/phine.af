@@ -5,7 +5,6 @@
 
 #include "qod_pcf_handler.h"
 #include "flow_description_utils.h"
-#include <yaml-cpp/yaml.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <random>
@@ -19,17 +18,16 @@
 namespace af {
 namespace southbound {
 
-QodPcfHandler::QodPcfHandler(const std::string& config_path)
-    : config_path_(config_path) {
+QodPcfHandler::QodPcfHandler(const af::config::PcfHandlerConfig& config)
+    : config_(config) {
 
     // Setup logger
-    initializeLogger(spdlog::level::debug);
-
-    // Load configuration
-    load_config(config_path_);
+    initializeLogger(config_.logging.level);
 
     pcf_client_ = std::make_shared<PcfClientWrapper>(
-        pcf_base_url_, use_tls_, api_version_);
+        config_.pcf.base_url,
+        config_.pcf.use_tls,
+        config_.pcf.api_version);
 
     initialize();
 
@@ -56,32 +54,6 @@ void QodPcfHandler::initialize() {
     // register_handlers();
 
     logger_->info("PCF Handler initialization complete");
-}
-
-void QodPcfHandler::load_config(const std::string& path) {
-    try {
-        logger_->info("Loading configuration from {}", config_path_);
-        YAML::Node config = YAML::LoadFile(config_path_);
-
-        // Load PCF connection details
-        pcf_base_url_ = config["pcf_handler"]["pcf_base_url"].as<std::string>(
-            "http://pcf:80/npcf-policyauthorization/v1");
-
-        use_tls_ = config["pcf_handler"]["use_tls"].as<bool>(false);
-        api_version_ = config["pcf_handler"]["api_version"].as<std::string>("v1");
-
-        logger_->info("PCF base URL: {}", pcf_base_url_);
-        logger_->info("Using TLS: {}", use_tls_ ? "true" : "false");
-        logger_->info("API version: {}", api_version_);
-    }
-    catch (const std::exception& e) {
-        logger_->error("Failed to load configuration: {}", e.what());
-
-        // Set default values
-        pcf_base_url_ = "http://pcf:80/npcf-policyauthorization/v1";
-        use_tls_ = false;
-        api_version_ = "v1";
-    }
 }
 
 // Register handlers with communication service
