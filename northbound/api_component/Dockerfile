@@ -190,6 +190,8 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy necessary runtime dependencies from the builder image
+COPY --from=builder /usr/local/lib/libssl.so* /usr/local/lib/
+COPY --from=builder /usr/local/lib/libcrypto.so* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libnghttp2* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libgrpc* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libprotobuf* /usr/local/lib/
