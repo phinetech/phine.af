@@ -155,6 +155,7 @@ function collect_logs() {
         "af-core:af_core.log"
         "af-north-api:api_component.log"
         "af-pcf-handler:pcf_handler.log"
+        "af-demo-qod:af_demo_qod.log"
         "af-integration-tests:integration_tests.log"
         "demo-qod-adapter:demo_qod_adapter.log"
         "pcf:pcf.log"

@@ -9,6 +9,11 @@
 cmake_minimum_required(VERSION 3.14)
 project(demo_qod_adapter VERSION 1.0.0 LANGUAGES CXX)
 
+set(DEMO_QOD_ADAPTER_TOP_LEVEL OFF)
+if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    set(DEMO_QOD_ADAPTER_TOP_LEVEL ON)
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -22,6 +27,25 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
+
+option(BUILD_DEMO_QOD_STANDALONE "Build the standalone demo QoD adapter executable" ${DEMO_QOD_ADAPTER_TOP_LEVEL})
+option(BUILD_DEMO_QOD_BUNDLE "Build demo QoD adapter bundle support into the AF executable" ${BUILD_BUNDLED})
+
+function(demo_qod_adapter_finalize_bundle)
+    if(NOT TARGET af)
+        message(FATAL_ERROR
+            "Unable to finalise the bundled demo QoD adapter because the root target 'af' was not created.")
+    endif()
+
+    if(NOT TARGET demo_qod_adapter_bundle)
+        message(FATAL_ERROR
+            "Unable to finalise the bundled demo QoD adapter because target 'demo_qod_adapter_bundle' does not exist.")
+    endif()
+
+    target_link_libraries(af
+        PRIVATE
+            demo_qod_adapter_bundle)
+endfunction()
 
 # ─── Find dependencies ───────────────────────────────────────────────────────
 
@@ -213,9 +237,35 @@ set_target_properties(adapter_protos PROPERTIES
     CXX_STANDARD 17
 )
 
+if(TARGET af_config)
+    set(DEMO_QOD_CONFIG_LIB af_config)
+else()
+    add_library(demo_qod_adapter_config_support STATIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../common/config/src/af_config.cpp
+    )
+
+    target_include_directories(demo_qod_adapter_config_support
+        PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../common/config/include
+    )
+
+    target_link_libraries(demo_qod_adapter_config_support
+        PUBLIC
+            yaml-cpp
+    )
+
+    set_target_properties(demo_qod_adapter_config_support PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+        CXX_STANDARD 17
+    )
+
+    set(DEMO_QOD_CONFIG_LIB demo_qod_adapter_config_support)
+endif()
+
 # ─── Adapter library (shared between main and tests) ─────────────────────────
 
 add_library(adapter_lib STATIC
+    src/adapter_config.cpp
     src/qod_client.cpp
     src/session_manager.cpp
 )
@@ -228,6 +278,7 @@ target_include_directories(adapter_lib
 target_link_libraries(adapter_lib
     PUBLIC
         adapter_protos
+        ${DEMO_QOD_CONFIG_LIB}
         gRPC::grpc++
         protobuf::libprotobuf
         nlohmann_json::nlohmann_json
@@ -243,12 +294,51 @@ set_target_properties(adapter_lib PROPERTIES
 
 # ─── Main executable ─────────────────────────────────────────────────────────
 
-add_executable(demo_qod_adapter src/main.cpp)
+if(BUILD_DEMO_QOD_STANDALONE)
+    add_executable(demo_qod_adapter src/main.cpp)
 
-target_link_libraries(demo_qod_adapter
-    PRIVATE
-        adapter_lib
-)
+    target_link_libraries(demo_qod_adapter
+        PRIVATE
+            adapter_lib
+    )
+endif()
+
+# ─── Bundled AF integration ─────────────────────────────────────────────────
+
+if(BUILD_DEMO_QOD_BUNDLE AND BUILD_BUNDLED)
+    add_library(demo_qod_adapter_bundle OBJECT
+        src/bundled_entry.cpp
+    )
+
+    target_include_directories(demo_qod_adapter_bundle
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+
+    target_link_libraries(demo_qod_adapter_bundle
+        PRIVATE
+            adapter_lib
+    )
+
+    set_target_properties(demo_qod_adapter_bundle PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+        CXX_STANDARD 17
+    )
+
+    if(TARGET af)
+        target_link_libraries(af
+            PRIVATE
+                demo_qod_adapter_bundle
+        )
+    elseif(CMAKE_VERSION VERSION_LESS 3.19)
+        message(FATAL_ERROR
+            "Bundled demo QoD adapter support requires CMake 3.19 or newer "
+            "when the adapter is injected before the root 'af' target exists.")
+    else()
+        cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL
+            demo_qod_adapter_finalize_bundle)
+    endif()
+endif()
 
 # ─── Tests (optional) ────────────────────────────────────────────────────────
 
@@ -292,5 +382,7 @@ message(STATUS "=== Demo QoD Adapter Configuration ===")
 message(STATUS "  Version:    ${PROJECT_VERSION}")
 message(STATUS "  Proto file: ${PROTO_FILE}")
 message(STATUS "  Gen dir:    ${PROTO_GEN_DIR}")
+message(STATUS "  Standalone: ${BUILD_DEMO_QOD_STANDALONE}")
+message(STATUS "  Bundle:     ${BUILD_DEMO_QOD_BUNDLE}")
 message(STATUS "  Tests:      ${BUILD_ADAPTER_TESTS}")
 message(STATUS "")

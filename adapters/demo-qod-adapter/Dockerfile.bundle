@@ -1,0 +1,189 @@
+# Dockerfile for the bundled AF + Demo QoD Adapter application.
+# Build from the repository root context, for example:
+#   docker build -f adapters/demo-qod-adapter/Dockerfile.bundle -t phine-af-demo-qod .
+
+FROM phinetech/grpc-builder:v1.72.2 AS grpc-builder
+FROM phinetech/oai-cn5g-common-src:latest AS oai-builder
+
+FROM debian:bookworm-slim AS base
+ENV DEBIAN_FRONTEND=noninteractive
+ENV IS_DOCKERFILE=1
+ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig
+WORKDIR /app
+
+FROM base AS dependencies
+
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get upgrade --yes && \
+    DEBIAN_FRONTEND=noninteractive apt-get install --yes \
+      build-essential \
+      cmake \
+      psmisc \
+      libssl-dev \
+      libboost-system-dev \
+      libboost-thread-dev \
+      libboost-dev \
+      libboost-all-dev \
+      pkg-config \
+      git \
+      libspdlog-dev \
+      libyaml-cpp-dev \
+      libfmt-dev \
+      nlohmann-json3-dev \
+      autoconf \
+      automake \
+      libtool \
+      curl \
+      make \
+      g++ \
+      unzip \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /tmp
+
+RUN git clone --recurse-submodules -b v1.65.0 --depth 1 --shallow-submodules https://github.com/nghttp2/nghttp2.git && \
+    cd nghttp2 && \
+    mkdir build && cd build && \
+    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local \
+             -DOPENSSL_ROOT_DIR=/usr \
+             -DENABLE_LIB_ONLY=ON \
+             -DCMAKE_BUILD_TYPE=Release && \
+    make -j$(nproc) && \
+    make install && \
+    cd /tmp && rm -rf nghttp2
+
+RUN git clone https://github.com/nghttp2/nghttp2-asio.git && \
+    cd nghttp2-asio && \
+    mkdir build && cd build && \
+    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local \
+             -DOPENSSL_ROOT_DIR=/usr \
+             -DNGHTTP2_ROOT_DIR=/usr/local \
+             -DCMAKE_BUILD_TYPE=Release && \
+    make -j$(nproc) && \
+    make install && \
+    cd /tmp && rm -rf nghttp2-asio
+
+RUN ln -sf /usr/local/lib/libnghttp2.so /usr/lib/libnghttp2.so && \
+    ln -sf /usr/local/lib/libnghttp2_asio.so /usr/lib/libnghttp2_asio.so && \
+    ldconfig
+
+FROM base AS builder
+
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends \
+      build-essential \
+      cmake \
+      libssl-dev \
+      libboost-system-dev \
+      libboost-thread-dev \
+      libboost-all-dev \
+      libc6-dev \
+      linux-libc-dev \
+      git \
+      pkg-config \
+      libspdlog-dev \
+      libyaml-cpp-dev \
+      libfmt-dev \
+      nlohmann-json3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=grpc-builder /usr/local/ /usr/local/
+COPY --from=dependencies /usr/local/ /usr/local/
+
+COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libfmt.so* /usr/lib/x86_64-linux-gnu/
+COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libspdlog.so* /usr/lib/x86_64-linux-gnu/
+COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libyaml-cpp.so* /usr/lib/x86_64-linux-gnu/
+
+COPY --from=dependencies /usr/include/nlohmann /usr/include/nlohmann
+COPY --from=dependencies /usr/include/fmt /usr/include/fmt
+COPY --from=dependencies /usr/include/spdlog /usr/include/spdlog
+COPY --from=dependencies /usr/include/yaml-cpp /usr/include/yaml-cpp
+
+COPY --from=oai-builder /usr/local/lib/libCONFIG.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libPCF.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libCOMMON_MODEL.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libLOGGER.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libNAS.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libCOMMON.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/lib/libUTILS.a /usr/local/lib/
+COPY --from=oai-builder /usr/local/include/oai /usr/local/include/oai
+COPY --from=oai-builder /usr/local/lib/cmake/oai_cn5g_common /usr/local/lib/cmake/oai_cn5g_common
+
+RUN ln -sf /usr/local/lib/libnghttp2.so /usr/lib/libnghttp2.so && \
+    ln -sf /usr/local/lib/libnghttp2_asio.so /usr/lib/libnghttp2_asio.so && \
+    ldconfig
+
+COPY common/ /app/common/
+COPY build/cmake/ /app/build/cmake/
+COPY CMakeLists.txt /app/CMakeLists.txt
+COPY src/ /app/src/
+COPY af_core/ /app/af_core/
+COPY northbound/ /app/northbound/
+COPY southbound/ /app/southbound/
+COPY config/ /app/config/
+COPY adapters/demo-qod-adapter/ /app/adapters/demo-qod-adapter/
+
+RUN cd /app && \
+    mkdir -p build-output && \
+    cd build-output && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release \
+             -DBUILD_BUNDLED=ON \
+             -DCMAKE_PROJECT_phine.af_INCLUDE=/app/adapters/demo-qod-adapter/BundleInject.cmake \
+             -DUSE_SYSTEM_GRPC=ON \
+             -DUSE_SYSTEM_PROTOBUF=ON \
+             -DUSE_SYSTEM_NGHTTP2=ON \
+             -DUSE_SYSTEM_NGHTTP2_ASIO=ON \
+             -DUSE_SYSTEM_OPENSSL=ON \
+             -DUSE_SYSTEM_BOOST=ON \
+             -DCMAKE_PREFIX_PATH=/usr/local && \
+    cmake --build . --target af -j$(nproc) && \
+    ldconfig
+
+FROM base AS runtime
+
+COPY --from=builder /usr/local/lib/libnghttp2* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libgrpc* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libgpr* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libupb* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libre2* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libaddress_sorting* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libz.so* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libutf8* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libabsl* /usr/local/lib/
+COPY --from=grpc-builder /usr/local/lib/libprotobuf* /usr/local/lib/
+
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libssl.so* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libcrypto.so* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libfmt.so* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libspdlog.so* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libyaml-cpp.so* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libboost* /usr/lib/x86_64-linux-gnu/
+
+COPY --from=builder /app/build-output/lib/libaf_communication_factory* /usr/local/lib/
+COPY --from=builder /app/build-output/lib/libaf_direct_communication* /usr/local/lib/
+COPY --from=builder /app/build-output/lib/libaf_grpc_communication* /usr/local/lib/
+COPY --from=builder /app/build-output/lib/libaf_common_component* /usr/local/lib/
+COPY --from=builder /app/build-output/bin/af /usr/local/bin/
+
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends \
+      libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY adapters/demo-qod-adapter/config.yaml /etc/oai/af/demo_qod_adapter.yaml
+COPY config/af.yaml /etc/oai/af/af.yaml
+
+RUN groupadd -r afuser && useradd -r -g afuser afuser && \
+    chmod +x /usr/local/bin/af && \
+    chown -R afuser:afuser /usr/local/bin/af /etc/oai/af && \
+    ldconfig
+
+ENV PHINE_DEMO_QOD_ADAPTER_CONFIG=/etc/oai/af/demo_qod_adapter.yaml
+
+USER afuser
+
+EXPOSE 50051
+
+CMD ["/usr/local/bin/af", "--config", "/etc/oai/af/af.yaml"]
