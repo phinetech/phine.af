@@ -95,10 +95,10 @@ docker build -f adapters/demo-qod-adapter/Dockerfile.bundle -t phine-af-demo-qod
 docker run --rm -p 50051:50051 phine-af-demo-qod
 ```
 
-Or use the dedicated compose file:
+Or use the unified Compose file with the `demo-qod` profile:
 
 ```bash
-docker compose -f docker-compose/docker-compose-demo-qod-bundled.yaml up --build
+docker compose -f docker-compose/compose.yaml --profile free5gc --profile demo-qod up --build
 ```
 
 The bundled image copies:
@@ -106,11 +106,11 @@ The bundled image copies:
 - `config/af.yaml` to `/etc/oai/af/af.yaml`
 - `adapters/demo-qod-adapter/config.yaml` to `/etc/oai/af/demo_qod_adapter.yaml`
 
-The dedicated compose file is:
+The documented Compose entrypoint is:
 
-- `docker-compose/docker-compose-demo-qod-bundled.yaml`
+- `docker-compose/compose.yaml`
 
-Or use docker-compose (add the service to `docker-compose/docker-compose-build.yaml`):
+Or use the standalone adapter together with split AF:
 
 ```yaml
 demo_qod_adapter:

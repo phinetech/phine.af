@@ -1,0 +1,95 @@
+name: phine-af
+
+# Simple getting-started stack.
+#
+# Starts bundled AF + free5GC core + UERANSIM RAN
+# without requiring profile selection.
+#
+# Usage:
+#   docker compose up -d --build
+
+include:
+  - ./docker-compose/starter.free5gc.yaml
+  - ./docker-compose/starter.ueransim.yaml
+
+x-defaults: &defaults
+  restart: "no"
+  environment: &default-env
+    TZ: ${TZ:-Europe/Paris}
+
+services:
+  oai-ext-dn:
+    <<: *defaults
+    container_name: oai-ext-dn
+    image: ${OAI_EXT_DN_IMAGE:-oaisoftwarealliance/trf-gen-cn5g:latest}
+    privileged: true
+    init: true
+    environment:
+      <<: *default-env
+      EBPF_GW_SETUP: yes
+      EBPF_GW_N6_IP_ADDR: ${EXT_DN_N6_IP_ADDR:-192.168.72.135}
+      GW_SGI_IP_ADDR: ${EXT_DN_GW_SGI_IP_ADDR:-192.168.70.135}
+      GW_N3_IP_ADDR: ${EXT_DN_GW_N3_IP_ADDR:-192.168.71.135}
+      UE_IP_ADDRESS_POOL: ${EXT_DN_UE_IP_POOL:-10.60.0.0/24}
+      N6_UPF_IP_ADDR: ${EXT_DN_N6_UPF_IP_ADDR:-192.168.72.129}
+      SGI_DEMO_OAI_ADDR: ${EXT_DN_SGI_DEMO_OAI_ADDR:-192.168.70.129}
+    healthcheck:
+      test: /bin/bash -c "ip r | grep ${EXT_DN_ROUTE_MATCH:-10.60.0}"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.135
+      n3_net:
+        ipv4_address: 192.168.71.135
+      n6_net:
+        ipv4_address: 192.168.72.135
+
+  af:
+    <<: *defaults
+    container_name: af
+    image: phinetech/af:${TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      <<: *default-env
+    volumes:
+      - ./docker-compose/conf/af.yaml:/etc/oai/af/af.yaml
+    expose:
+      - 50051/tcp
+    ports:
+      - "50051:50051"
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.141
+        aliases:
+          - af.local
+          - af-core
+
+networks:
+  public_net:
+    driver: bridge
+    name: ${PUBLIC_NET_NAME:-demo-oai-public-net}
+    ipam:
+      config:
+        - subnet: ${PUBLIC_NET_SUBNET:-192.168.70.128/26}
+    driver_opts:
+      com.docker.network.bridge.name: ${PUBLIC_NET_BRIDGE:-demo-oai}
+  n3_net:
+    driver: bridge
+    name: ${N3_NET_NAME:-demo-oai-n3-net}
+    ipam:
+      config:
+        - subnet: ${N3_NET_SUBNET:-192.168.71.128/26}
+    driver_opts:
+      com.docker.network.bridge.name: ${N3_NET_BRIDGE:-demo-n3}
+  n6_net:
+    driver: bridge
+    name: ${N6_NET_NAME:-demo-oai-n6-net}
+    ipam:
+      config:
+        - subnet: ${N6_NET_SUBNET:-192.168.72.128/26}
+    driver_opts:
+      com.docker.network.bridge.name: ${N6_NET_BRIDGE:-demo-n6}

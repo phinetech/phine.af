@@ -52,8 +52,9 @@ RUN apt-get update && \
 
 RUN ldconfig
 
-# Copy only what we need: the proto file and the adapter source
+# Copy only what we need: shared proto/config support and the adapter source
 COPY common/protos/message.proto /app/common/protos/message.proto
+COPY common/config/ /app/common/config/
 COPY adapters/demo-qod-adapter/  /app/adapters/demo-qod-adapter/
 
 # Build the adapter

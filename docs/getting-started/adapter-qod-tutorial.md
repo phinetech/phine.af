@@ -91,14 +91,21 @@ The adapter connects to af_core via gRPC and sends QoD session requests using th
 Set up environment variables for this tutorial:
 
 ```bash {"name":"setup-variables","interactive":"false"}
-export COMPOSE_FILE="docker-compose/docker-compose-test.yaml"
+export CORE_PROFILE="free5gc"
+export COMPOSE_FILE="docker-compose/compose.yaml"
+export COMPOSE_PROFILES="--profile $CORE_PROFILE --profile afs --profile standalone-qod"
+export RAN_SERVICES="ueransim-gnb ueransim-ue"
+
 export LOGS_DIR="/tmp/phine.af/adapter-qod-tutorial/logs"
 mkdir -p "$LOGS_DIR"
 sudo mkdir -p "$LOGS_DIR"
 sudo chmod 777 "$LOGS_DIR"
 
 echo "Configuration set:"
+echo "  CORE_PROFILE: $CORE_PROFILE"
 echo "  COMPOSE_FILE: $COMPOSE_FILE"
+echo "  COMPOSE_PROFILES: $COMPOSE_PROFILES"
+echo "  RAN_SERVICES: $RAN_SERVICES"
 echo "  CAPTURE_DIR: $LOGS_DIR"
 ```
 
@@ -119,13 +126,13 @@ Ensure submodules are up to date
 Build the adapter and AF images:
 
 ```bash {"name":"build-images","interactive":"false"}
-docker compose -f $COMPOSE_FILE build af_core pcf_handler demo-qod-adapter
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES build af_core pcf_handler demo-qod-adapter
 ```
 
 Start the 5G core infrastructure:
 
 ```bash {"name":"start-infrastructure","interactive":"false"}
-docker compose -f $COMPOSE_FILE up -d \
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES up -d \
   db free5gc-nrf free5gc-amf free5gc-ausf free5gc-nssf \
   free5gc-pcf free5gc-smf free5gc-udm free5gc-udr \
   free5gc-upf free5gc-webui oai-ext-dn
@@ -141,10 +148,12 @@ sleep 30
 Start the RAN simulator (gNB and UE):
 
 ```bash {"name":"start-ran","interactive":"false"}
-docker compose -f $COMPOSE_FILE up -d gnb ue
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES up -d $RAN_SERVICES
 echo "Waiting for UE to establish connection (20s)..."
 sleep 20
 ```
+
+The Compose service names are profile-specific. For the `free5gc` profile the RAN services are `free5gc-gnb` and `free5gc-ue`. For the `oai-core` profile they are `oai-gnb` and `oai-ue`. In both cases the containers still run with the familiar names `gnb` and `ue`.
 
 Verify the UE has registered and obtained an IP address:
 
@@ -155,7 +164,7 @@ docker exec ue ip addr show uesimtun0 | grep "10.60.0.1"
 Start the AF core and PCF handler:
 
 ```bash {"name":"start-af","interactive":"false"}
-docker compose -f $COMPOSE_FILE up -d af_core pcf_handler
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES up -d af_core pcf_handler
 ```
 
 Wait for the AF Core gRPC server to become ready:
@@ -232,7 +241,7 @@ monitor:
 Start the adapter container. It connects to af_core, creates QoD sessions, monitors them, and exits after the configured number of iterations:
 
 ```bash {"name":"run-adapter","interactive":"false"}
-docker compose -f $COMPOSE_FILE up --exit-code-from demo-qod-adapter demo-qod-adapter
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES up --exit-code-from demo-qod-adapter demo-qod-adapter
 ```
 
 ### Expected Output
@@ -426,7 +435,7 @@ EOF
 Run the adapter in the background with the indefinite config:
 
 ```bash {"name":"run-adapter-indefinite","excludeFromRunAll":"true","background":"true","interactive":"false"}
-docker compose -f $COMPOSE_FILE run --rm \
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES run --rm \
   -v /tmp/adapter_config_indefinite.yaml:/app/config.yaml:ro \
   demo-qod-adapter
 ```
@@ -434,7 +443,7 @@ docker compose -f $COMPOSE_FILE run --rm \
 The adapter will keep monitoring sessions until you stop it:
 
 ```bash {"name":"stop-adapter","excludeFromRunAll":"true","interactive":"false"}
-docker compose -f $COMPOSE_FILE stop demo-qod-adapter
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES stop demo-qod-adapter
 ```
 
 When stopped, the adapter catches SIGTERM, cleans up all sessions, and exits gracefully.
@@ -463,13 +472,13 @@ echo "All tshark processes stopped"
 Stop and remove all containers:
 
 ```bash {"name":"cleanup","interactive":"false"}
-docker compose -f $COMPOSE_FILE down
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES down
 ```
 
 To also remove built images:
 
 ```bash {"name":"cleanup-all","excludeFromRunAll":"true","interactive":"false"}
-docker compose -f $COMPOSE_FILE down --rmi all
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES down --rmi all
 ```
 
 ## CI Quick Run

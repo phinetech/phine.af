@@ -392,25 +392,29 @@ docker build -f Dockerfile -t af .
 
 ### Docker Compose environments
 
-| File | Description |
+| File / Profile | Description |
 |------|-------------|
-| [docker-compose-free5gc-build.yaml](docker-compose/docker-compose-free5gc-build.yaml) | Microservice AF + free5gc core |
-| [docker-compose-oai-build.yaml](docker-compose/docker-compose-oai-build.yaml) | Microservice AF + OAI core |
-| [docker-compose-bundled.yaml](docker-compose/docker-compose-bundled.yaml) | bundled **AF Core + southbound** container + standalone northbound API + free5gc core |
-| [docker-compose-build.yaml](docker-compose/docker-compose-build.yaml) | AF components only |
+| [compose.yaml](compose.yaml) | Simple getting-started stack: AF + free5GC core + UERANSIM |
+| [docker-compose/compose.yaml](docker-compose/compose.yaml) + `free5gc` + `af` | bundled **AF Core + southbound** container + standalone northbound API + free5GC core |
+| [docker-compose/compose.yaml](docker-compose/compose.yaml) + `free5gc` + `afs` | Microservice AF + free5GC core |
+| [docker-compose/compose.yaml](docker-compose/compose.yaml) + `free5gc` + `afs` + `standalone-qod` | Microservice AF + standalone demo QoD adapter + free5GC core |
+| [docker-compose/compose.yaml](docker-compose/compose.yaml) + `free5gc` + `demo-qod` | Bundled AF including demo QoD adapter + free5GC core |
+
+**Start the simple getting-started stack:**
+```bash
+docker compose up -d --build
+```
 
 **Start the bundled stack:**
 ```bash
-cd docker-compose
-docker compose -f docker-compose-bundled.yaml build
-docker compose -f docker-compose-bundled.yaml up
+docker compose -f docker-compose/compose.yaml --profile free5gc --profile af build
+docker compose -f docker-compose/compose.yaml --profile free5gc --profile af up
 ```
 
 **Start the microservice stack (free5gc):**
 ```bash
-cd docker-compose
-docker compose -f docker-compose-free5gc-build.yaml build
-docker compose -f docker-compose-free5gc-build.yaml up
+docker compose -f docker-compose/compose.yaml --profile free5gc --profile afs build
+docker compose -f docker-compose/compose.yaml --profile free5gc --profile afs up
 ```
 
 ## Development

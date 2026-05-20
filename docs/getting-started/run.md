@@ -4,12 +4,11 @@
 
 
 ```bash
-# OAI build environment
-docker compose -f docker-compose/docker-compose-oai-build.yaml up -d
-
-# Free5GC build environment
-docker compose -f docker-compose/docker-compose-free5gc-build.yaml up -d
+# Simple getting-started stack
+docker compose up -d --build
 ```
+
+Use [docker-compose/compose.yaml](../../docker-compose/compose.yaml) only when you need profile-based variants such as split AF, standalone QoD, or OAI-core.
 
 ## Health checks
 

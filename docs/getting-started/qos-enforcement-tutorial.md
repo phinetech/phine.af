@@ -89,9 +89,12 @@ Set up environment variables for this tutorial. Modify these values if you need 
 
 ```bash {"name":"setup-variables","interactive":"false"}
 # Choose one deployment mode:
-#   bundled:        docker-compose/docker-compose-bundled.yaml
-#   microservice:   docker-compose/docker-compose-free5gc-build.yaml
-export COMPOSE_FILE="docker-compose/docker-compose-bundled.yaml"
+#   bundled AF:     AF_PROFILE=af
+#   microservice:   AF_PROFILE=afs
+export COMPOSE_FILE="docker-compose/compose.yaml"
+export AF_PROFILE="af"
+export COMPOSE_PROFILES="--profile free5gc --profile $AF_PROFILE"
+export RAN_SERVICES="ueransim-gnb ueransim-ue"
 export LOGS_DIR="/tmp/phine.af/qos-enforcement-tutorial/logs"
 mkdir -p "$LOGS_DIR"
 sudo mkdir -p "$LOGS_DIR"
@@ -103,13 +106,16 @@ export MIN_MBPS=3
 export MAX_MBPS=12
 echo "Configuration set:"
 echo "  COMPOSE_FILE: $COMPOSE_FILE"
+echo "  AF_PROFILE: $AF_PROFILE"
+echo "  COMPOSE_PROFILES: $COMPOSE_PROFILES"
+echo "  RAN_SERVICES: $RAN_SERVICES"
 echo "  CAPTURE_DIR: $LOGS_DIR"
 echo "  UE_IP: $UE_IP"
 echo "  EXT_DN_IP: $EXT_DN_IP"
 echo "  Bandwidth validation range: ${MIN_MBPS}-${MAX_MBPS} Mbps"
 ```
 
-Use [docker-compose/docker-compose-bundled.yaml](../../docker-compose/docker-compose-bundled.yaml) for the bundled `af` container. Use [docker-compose/docker-compose-free5gc-build.yaml](../../docker-compose/docker-compose-free5gc-build.yaml) for separate `af_core` and `pcf_handler` services in microservice mode. The rest of the tutorial is unchanged.
+Use [docker-compose/compose.yaml](../../docker-compose/compose.yaml) with `AF_PROFILE=af` for the bundled `af` container, or `AF_PROFILE=afs` for separate `af_core` and `pcf_handler` services. The rest of the tutorial is unchanged.
 
 ## Step 1: Deploy the Setup
 
@@ -128,14 +134,18 @@ Ensure submodules are up to date
 Build and start all containers:
 
 ```bash {"name":"deploy-stack","interactive":"false"}
-docker compose -f $COMPOSE_FILE up -d --build
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES up -d --build
+
+sleep 10
+
+docker compose -f $COMPOSE_FILE up -d $RAN_SERVICES
 ```
 
 Wait for all services to become healthy. The retry loop ensures we don't proceed until the stack is ready:
 
 ```bash {"name":"wait-for-healthy","interactive":"false"}
 sleep 30
-docker compose -f $COMPOSE_FILE ps
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES ps
 ```
 
 Verify the UE has registered and obtained an IP address:
@@ -503,13 +513,15 @@ ls -la $LOGS_DIR
 To stop and remove all containers:
 
 ```bash {"name":"cleanup","interactive":"false"}
-docker compose -f $COMPOSE_FILE down
+docker compose -f $COMPOSE_FILE down $RAN_SERVICES
+
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES down
 ```
 
 To also remove built images:
 
 ```bash {"name":"cleanup-all","excludeFromRunAll":"true","interactive":"false"}
-docker compose -f $COMPOSE_FILE down --rmi all
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES down --rmi all
 ```
 
 ## Next Steps

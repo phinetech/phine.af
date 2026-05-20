@@ -1,14 +1,13 @@
 # Quickstart
 
-## Option A: Run using Docker Compose (build environment)
+## Option A: Run using Docker Compose
 
 ```bash
-# Start setup (OAI build environment)
-docker compose -f docker-compose/docker-compose-oai-build.yaml up -d
-
-# Or using Free5GC build environment
-docker compose -f docker-compose/docker-compose-free5gc-build.yaml up -d
+# Start the simple getting-started stack
+docker compose up -d --build
 ```
+
+For advanced topologies such as split AF, standalone QoD, or OAI-core variants, use [docker-compose/compose.yaml](../../docker-compose/compose.yaml) with profiles.
 
 ## Send a test request to AF Core
 

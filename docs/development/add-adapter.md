@@ -244,13 +244,13 @@ For the demo adapter, the bundled image also sets:
 
 ## Compose packaging
 
-If bundled deployment is intended to be easy to run, provide a dedicated Compose file.
+If bundled deployment is intended to be easy to run, provide a documented profile or service entry in the unified Compose file.
 
 The demo reference is:
 
-- `docker-compose/docker-compose-demo-qod-bundled.yaml`
+- `docker-compose/compose.yaml` with the `demo-qod` profile
 
-This keeps the adapter-specific shipping path separate from the generic bundled AF deployment.
+This keeps adapter-specific packaging selectable without introducing another top-level Compose file.
 
 ## Adapter development checklist
 
@@ -289,7 +289,7 @@ Relevant reference files:
 - `adapters/demo-qod-adapter/src/bundled_entry.cpp`
 - `adapters/demo-qod-adapter/Dockerfile`
 - `adapters/demo-qod-adapter/Dockerfile.bundle`
-- `docker-compose/docker-compose-demo-qod-bundled.yaml`
+- `docker-compose/compose.yaml`
 
 ## Notes
 
