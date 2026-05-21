@@ -136,7 +136,7 @@ Build and start all containers:
 ```bash {"name":"deploy-stack","interactive":"false"}
 docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES up -d --build
 
-sleep 10
+sleep 30
 
 docker compose -f $COMPOSE_FILE up -d $RAN_SERVICES
 ```

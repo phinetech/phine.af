@@ -9,7 +9,9 @@
 
 #pragma once
 
+#include <condition_variable>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include "request_router.h"
@@ -59,6 +61,11 @@ public:
      * @brief Stop the orchestrator and its services
      */
     void stop() override;
+
+    /**
+     * @brief Block until the orchestrator has been stopped.
+     */
+    void wait();
 
     /**
      * @brief Process a message from any source
@@ -142,6 +149,10 @@ private:
 
     // Logger
     std::shared_ptr<spdlog::logger> logger_;
+
+    // Wait support
+    mutable std::mutex wait_mutex_;
+    std::condition_variable wait_cv_;
 
     /**
      * @brief Load configuration from file

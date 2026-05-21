@@ -124,17 +124,25 @@ void AfOrchestrator::load_config() {
     const auto& core_comm = app_config_.af_core.communication;
     const auto& pcf_comm = app_config_.pcf_handler.communication;
 
-    pcf_destination_ = af::config::resolve_destination(
-        pcf_comm.kind,
-        pcf_comm.listen,
-        "pcf_handler");
+    if (app_config_.pcf_handler.enabled) {
+        pcf_destination_ = af::config::resolve_destination(
+            pcf_comm.kind,
+            pcf_comm.listen,
+            "pcf_handler");
+    } else {
+        pcf_destination_.clear();
+    }
 
     logger_->info("AF Core communication kind: {} on {}",
                   af::config::to_string(core_comm.kind),
                   af::config::endpoint_to_string(core_comm.listen));
-    logger_->info("PCF handler communication kind: {} destination: {}",
-                  af::config::to_string(pcf_comm.kind),
-                  pcf_destination_);
+    if (app_config_.pcf_handler.enabled) {
+        logger_->info("PCF handler communication kind: {} destination: {}",
+                      af::config::to_string(pcf_comm.kind),
+                      pcf_destination_);
+    } else {
+        logger_->info("PCF handler disabled in configuration");
+    }
     logger_->info("Configuration loaded successfully");
 }
 
@@ -160,19 +168,21 @@ void AfOrchestrator::initialize_communication() {
         // Initialize communication with various southbound interfaces
         // (These would be more specific in a complete implementation)
 
-        // PCF interface
-        std::unordered_map<std::string, std::string> pcf_comm_config;
-        if (pcf_comm.kind == af::config::CommunicationKind::Grpc) {
-            pcf_comm_config = make_client_config(pcf_comm.listen);
-        }
+        if (app_config_.pcf_handler.enabled) {
+            // PCF interface
+            std::unordered_map<std::string, std::string> pcf_comm_config;
+            if (pcf_comm.kind == af::config::CommunicationKind::Grpc) {
+                pcf_comm_config = make_client_config(pcf_comm.listen);
+            }
 
-        auto pcf_service = af::communication::CommunicationFactory::create_service(
-            af::config::to_string(pcf_comm.kind),
-            "af_core_pcf",
-            pcf_comm_config);
+            auto pcf_service = af::communication::CommunicationFactory::create_service(
+                af::config::to_string(pcf_comm.kind),
+                "af_core_pcf",
+                pcf_comm_config);
 
-        if (pcf_service) {
-            communication_services_["pcf"] = pcf_service;
+            if (pcf_service) {
+                communication_services_["pcf"] = pcf_service;
+            }
         }
 
         logger_->info("Communication interfaces initialized");
@@ -327,6 +337,14 @@ void AfOrchestrator::register_qod_handlers() {
 }
 
 void AfOrchestrator::start() {
+    {
+        std::lock_guard<std::mutex> lock(wait_mutex_);
+        if (isRunning()) {
+            logger_->warn("AF Core services already running");
+            return;
+        }
+    }
+
     logger_->info("Starting AF Core services");
 
     // Start all communication services
@@ -355,10 +373,24 @@ void AfOrchestrator::start() {
     // Note: Most components don't need explicit start/stop,
     // they just need to be initialized and will operate based on messages
 
+    {
+        std::lock_guard<std::mutex> lock(wait_mutex_);
+        setRunning(true);
+    }
+
     logger_->info("AF Core services started");
 }
 
 void AfOrchestrator::stop() {
+    {
+        std::lock_guard<std::mutex> lock(wait_mutex_);
+        if (!isRunning()) {
+            logger_->info("AF Core services already stopped");
+            wait_cv_.notify_all();
+            return;
+        }
+    }
+
     logger_->info("Stopping AF Core services");
 
     // Stop QoD components first
@@ -380,7 +412,20 @@ void AfOrchestrator::stop() {
         }
     }
 
+    {
+        std::lock_guard<std::mutex> lock(wait_mutex_);
+        setRunning(false);
+    }
+    wait_cv_.notify_all();
+
     logger_->info("AF Core services stopped");
+}
+
+void AfOrchestrator::wait() {
+    std::unique_lock<std::mutex> lock(wait_mutex_);
+    wait_cv_.wait(lock, [this]() {
+        return !isRunning();
+    });
 }
 
 af::communication::MessagePtr AfOrchestrator::process_message(

@@ -152,12 +152,20 @@ COPY northbound/ /app/northbound/
 COPY southbound/ /app/southbound/
 COPY config/ /app/config/
 
+# Compile-time handler selection
+ARG ENABLE_PCF_HANDLER=ON
+ARG ENABLE_NEF_HANDLER=OFF
+ARG ENABLE_UDR_HANDLER=OFF
+
 # Build the bundled application
 RUN cd /app && \
     mkdir -p build-output && \
     cd build-output && \
     cmake .. -DCMAKE_BUILD_TYPE=Release \
              -DBUILD_BUNDLED=ON \
+             -DENABLE_PCF_HANDLER=${ENABLE_PCF_HANDLER} \
+             -DENABLE_NEF_HANDLER=${ENABLE_NEF_HANDLER} \
+             -DENABLE_UDR_HANDLER=${ENABLE_UDR_HANDLER} \
              -DUSE_SYSTEM_GRPC=ON \
              -DUSE_SYSTEM_PROTOBUF=ON \
              -DUSE_SYSTEM_NGHTTP2=ON \

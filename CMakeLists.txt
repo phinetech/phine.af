@@ -127,6 +127,9 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/af_core)
 endif()
 
 # Add southbound components (if directory exists)
+option(ENABLE_PCF_HANDLER "Build the PCF southbound handler" ON)
+option(ENABLE_NEF_HANDLER "Build the NEF southbound handler" OFF)
+option(ENABLE_UDR_HANDLER "Build the UDR southbound handler" OFF)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/southbound)
     add_subdirectory(southbound)
 endif()
@@ -146,13 +149,28 @@ option(BUILD_BUNDLED "Build single bundled AF application" OFF)
 if(BUILD_BUNDLED)
   message(STATUS "Building bundled AF application")
 
-  add_executable(af src/main.cpp)
+    add_executable(af
+        src/bundled_af_runtime.cpp
+        src/main.cpp
+        src/southbound_handler_factory.cpp
+    )
+
+    if(ENABLE_PCF_HANDLER)
+        target_compile_definitions(af PRIVATE AF_ENABLE_PCF_HANDLER=1)
+    endif()
+
+    if(ENABLE_NEF_HANDLER)
+        target_compile_definitions(af PRIVATE AF_ENABLE_NEF_HANDLER=1)
+    endif()
+
+    if(ENABLE_UDR_HANDLER)
+        target_compile_definitions(af PRIVATE AF_ENABLE_UDR_HANDLER=1)
+    endif()
 
   target_include_directories(af
     PRIVATE
       ${CMAKE_SOURCE_DIR}
       ${CMAKE_SOURCE_DIR}/af_core/include
-      ${CMAKE_SOURCE_DIR}/southbound/pcf_handler/include
       ${CMAKE_SOURCE_DIR}/common
       ${CMAKE_SOURCE_DIR}/common/component/include
       ${CMAKE_SOURCE_DIR}/common/communication/include
@@ -166,17 +184,30 @@ if(BUILD_BUNDLED)
       ${CMAKE_SOURCE_DIR}/common/communication/adapters/include
   )
 
+    if(ENABLE_PCF_HANDLER)
+        target_include_directories(af
+            PRIVATE
+                ${CMAKE_SOURCE_DIR}/southbound/pcf_handler/include
+        )
+    endif()
+
     # Link bundled core + southbound libraries + common
-  # Note: pcf_handler_lib depends on OAI static libraries. We use whole-archive
-  # to ensure all symbols from static libs are included in the final binary.
   target_link_libraries(af
     PRIVATE
       af_core_lib
-      -Wl,--whole-archive
-      pcf_handler_lib
-      -Wl,--no-whole-archive
       af_common
   )
+
+    # Note: pcf_handler_lib depends on OAI static libraries. We use whole-archive
+    # to ensure all symbols from static libs are included in the final binary.
+    if(ENABLE_PCF_HANDLER)
+        target_link_libraries(af
+            PRIVATE
+                -Wl,--whole-archive
+                pcf_handler_lib
+                -Wl,--no-whole-archive
+        )
+    endif()
 
   # Ensure proper static library resolution (needed for transitive deps from static libs)
   target_link_options(af PRIVATE
@@ -194,3 +225,6 @@ message(STATUS "Configuration Summary:")
 message(STATUS "  Project version: ${PROJECT_VERSION}")
 message(STATUS "  C++ Compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
 message(STATUS "  Build tests: ${BUILD_TESTS}")
+message(STATUS "  PCF handler enabled: ${ENABLE_PCF_HANDLER}")
+message(STATUS "  NEF handler enabled: ${ENABLE_NEF_HANDLER}")
+message(STATUS "  UDR handler enabled: ${ENABLE_UDR_HANDLER}")

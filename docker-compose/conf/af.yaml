@@ -20,6 +20,8 @@ af_core:
 
 # Southbound PCF Handler
 pcf_handler:
+  enabled: true
+
   pcf_base_url: "http://192.168.70.139:8000/npcf-policyauthorization/v1"
   use_tls: false
   api_version: "v1"
@@ -32,6 +34,13 @@ pcf_handler:
 
   communication:
     type: "direct"
+
+# Future southbound handlers
+nef_handler:
+  enabled: false
+
+udr_handler:
+  enabled: false
 
 # Global settings
 logging:
