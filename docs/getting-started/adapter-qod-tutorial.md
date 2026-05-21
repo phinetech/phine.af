@@ -91,12 +91,12 @@ The adapter connects to af_core via gRPC and sends QoD session requests using th
 Set up environment variables for this tutorial:
 
 ```bash {"name":"setup-variables","interactive":"false"}
-export CORE_PROFILE="free5gc"
-export COMPOSE_FILE="docker-compose/compose.yaml"
-export COMPOSE_PROFILES="--profile $CORE_PROFILE --profile afs --profile standalone-qod"
-export RAN_SERVICES="ueransim-gnb ueransim-ue"
+export CORE_PROFILE="${CORE_PROFILE:-free5gc}"
+export COMPOSE_FILE="${COMPOSE_FILE:-docker-compose/compose.yaml}"
+export COMPOSE_PROFILES="${COMPOSE_PROFILES:---profile $CORE_PROFILE --profile afs --profile standalone-qod}"
+export RAN_SERVICES="${RAN_SERVICES:-ueransim-gnb ueransim-ue}"
 
-export LOGS_DIR="/tmp/phine.af/adapter-qod-tutorial/logs"
+export LOGS_DIR="${LOGS_DIR:-/tmp/phine.af/adapter-qod-tutorial/logs}"
 mkdir -p "$LOGS_DIR"
 sudo mkdir -p "$LOGS_DIR"
 sudo chmod 777 "$LOGS_DIR"

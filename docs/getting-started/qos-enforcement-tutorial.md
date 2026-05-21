@@ -91,19 +91,19 @@ Set up environment variables for this tutorial. Modify these values if you need 
 # Choose one deployment mode:
 #   bundled AF:     AF_PROFILE=af
 #   microservice:   AF_PROFILE=afs
-export COMPOSE_FILE="docker-compose/compose.yaml"
-export AF_PROFILE="af"
-export COMPOSE_PROFILES="--profile free5gc --profile $AF_PROFILE"
-export RAN_SERVICES="ueransim-gnb ueransim-ue"
-export LOGS_DIR="/tmp/phine.af/qos-enforcement-tutorial/logs"
+export COMPOSE_FILE="${COMPOSE_FILE:-docker-compose/compose.yaml}"
+export AF_PROFILE="${AF_PROFILE:-af}"
+export COMPOSE_PROFILES="${COMPOSE_PROFILES:---profile free5gc --profile $AF_PROFILE}"
+export RAN_SERVICES="${RAN_SERVICES:-ueransim-gnb ueransim-ue}"
+export LOGS_DIR="${LOGS_DIR:-/tmp/phine.af/qos-enforcement-tutorial/logs}"
 mkdir -p "$LOGS_DIR"
 sudo mkdir -p "$LOGS_DIR"
 sudo chmod 777 "$LOGS_DIR"
 
-export UE_IP="10.60.0.1"
-export EXT_DN_IP="192.168.72.135"
-export MIN_MBPS=3
-export MAX_MBPS=12
+export UE_IP="${UE_IP:-10.60.0.1}"
+export EXT_DN_IP="${EXT_DN_IP:-192.168.72.135}"
+export MIN_MBPS="${MIN_MBPS:-3}"
+export MAX_MBPS="${MAX_MBPS:-12}"
 echo "Configuration set:"
 echo "  COMPOSE_FILE: $COMPOSE_FILE"
 echo "  AF_PROFILE: $AF_PROFILE"
