@@ -177,6 +177,7 @@ RUN cd /app && \
     mkdir -p build-output && \
     cd build-output && \
     cmake .. -DCMAKE_BUILD_TYPE=Release \
+<<<<<<< HEAD
     -DBUILD_BUNDLED=ON \
     -DENABLE_PCF_HANDLER=${ENABLE_PCF_HANDLER} \
     -DENABLE_NEF_HANDLER=${ENABLE_NEF_HANDLER} \
@@ -191,6 +192,21 @@ RUN cd /app && \
     -DBoost_NO_BOOST_CMAKE=ON \
     -DCMAKE_PREFIX_PATH=/usr/local \
     -DCMAKE_INSTALL_PREFIX=/usr/local && \
+=======
+             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+             -DBUILD_BUNDLED=ON \
+             -DENABLE_PCF_HANDLER=${ENABLE_PCF_HANDLER} \
+             -DENABLE_NEF_HANDLER=${ENABLE_NEF_HANDLER} \
+             -DENABLE_UDR_HANDLER=${ENABLE_UDR_HANDLER} \
+             -DUSE_SYSTEM_GRPC=ON \
+             -DUSE_SYSTEM_PROTOBUF=ON \
+             -DUSE_SYSTEM_NGHTTP2=ON \
+             -DUSE_SYSTEM_NGHTTP2_ASIO=ON \
+             -DUSE_SYSTEM_OPENSSL=ON \
+             -DUSE_SYSTEM_BOOST=ON \
+             -DCMAKE_PREFIX_PATH=/usr/local \
+             -DCMAKE_INSTALL_PREFIX=/usr/local && \
+>>>>>>> b41fada (ci: add clang-tidy static analysis for af_core, pcf-handler, demo-qod-adapter, and bundled AF)
     make -j$(nproc) af && \
     make install && \
     ldconfig
@@ -257,3 +273,24 @@ USER afuser
 EXPOSE 50051
 
 CMD ["/usr/local/bin/af", "--config", "/etc/oai/af/af.yaml"]
+
+# ─────────────────────────────────────────────────────────────────────────
+# Static analysis (clang-tidy) — not part of the default build.
+# Build explicitly with: docker build --target static-analysis ...
+# Run against a diff on stdin: docker run --rm -i <image> < component.diff
+# ─────────────────────────────────────────────────────────────────────────
+FROM builder AS static-analysis
+
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends \
+      wget gnupg lsb-release software-properties-common ca-certificates python3 \
+    && wget -qO- https://apt.llvm.org/llvm.sh | bash -s -- 18 \
+    && apt-get install --yes --no-install-recommends clang-tidy-18 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY .clang-tidy /app/.clang-tidy
+COPY .github/scripts/check_tidy.sh /usr/local/bin/check_tidy.sh
+RUN chmod +x /usr/local/bin/check_tidy.sh
+
+WORKDIR /app
+ENTRYPOINT ["check_tidy.sh", "--build-dir", "build-output"]

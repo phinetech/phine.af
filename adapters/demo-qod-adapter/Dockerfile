@@ -62,7 +62,8 @@ COPY adapters/demo-qod-adapter/  /app/adapters/demo-qod-adapter/
 RUN cd /app/adapters/demo-qod-adapter && \
     mkdir -p build && \
     cd build && \
-    cmake .. -DCMAKE_BUILD_TYPE=Release && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release \
+             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON && \
     make -j$(nproc)
 
 # ── Stage 5: Runtime ─────────────────────────────────────────────────────────
@@ -109,3 +110,24 @@ USER adapter
 WORKDIR /app
 
 CMD ["/usr/local/bin/demo_qod_adapter", "/app/config.yaml"]
+
+# ─────────────────────────────────────────────────────────────────────────
+# Static analysis (clang-tidy) — not part of the default build.
+# Build explicitly with: docker build --target static-analysis ...
+# Run against a diff on stdin: docker run --rm -i <image> < component.diff
+# ─────────────────────────────────────────────────────────────────────────
+FROM builder AS static-analysis
+
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends \
+      wget gnupg lsb-release software-properties-common ca-certificates python3 \
+    && wget -qO- https://apt.llvm.org/llvm.sh | bash -s -- 18 \
+    && apt-get install --yes --no-install-recommends clang-tidy-18 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY .clang-tidy /app/.clang-tidy
+COPY .github/scripts/check_tidy.sh /usr/local/bin/check_tidy.sh
+RUN chmod +x /usr/local/bin/check_tidy.sh
+
+WORKDIR /app
+ENTRYPOINT ["check_tidy.sh", "--build-dir", "adapters/demo-qod-adapter/build"]

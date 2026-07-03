@@ -13,6 +13,9 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Export compile_commands.json for tooling (e.g. clang-tidy)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # Add custom cmake module path
 # In Docker builds, common is copied to /app/common/ while we're in /app/southbound/pcf_handler/
 # Otherwise, it's at ../common (one level up in the southbound directory)

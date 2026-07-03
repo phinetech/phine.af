@@ -18,6 +18,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Enable position independent code for all targets
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+# Export compile_commands.json for tooling (e.g. clang-tidy)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # Add CMake modules path
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/build/cmake)
 

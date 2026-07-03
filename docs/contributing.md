@@ -62,3 +62,68 @@ on top of a feature branch rather than `main`).
 The script auto-detects a `clang-format-18` binary on `PATH` in preference
 to a plain `clang-format`; override with `CLANG_FORMAT_BIN=...` if your
 setup differs.
+
+## Static Analysis
+
+Pull requests are checked by the `Static Analysis (clang-tidy)` GitHub
+Actions workflow ([`.github/workflows/static-analysis.yml`](https://github.com/phinetech/phine.af/blob/main/.github/workflows/static-analysis.yml)),
+using [clang-tidy](https://clang.llvm.org/extra/clang-tidy/) 18 with the
+checks configured in [`.clang-tidy`](https://github.com/phinetech/phine.af/blob/main/.clang-tidy)
+(`bugprone-*`, `performance-*`, `clang-analyzer-core.*` for now — see the
+`TODO` in that file for how the check set is expected to grow over time).
+Deliberately scoped to the analyzer's `core` package rather than the full
+`clang-analyzer-*` wildcard — the full set runs expensive path-sensitive
+analysis across every reachable header and is unusably slow/noisy on this
+project's gRPC/protobuf/OAI/Boost dependency graph.
+
+Like the format check, this only looks at **changed lines**, not whole
+files — a finding on a line you didn't touch never fails your PR, even in a
+file you otherwise edited. Only new findings in code you actually wrote are
+enforced.
+
+Covered components: `af_core`, `southbound/pcf_handler`,
+`adapters/demo-qod-adapter`, and the bundled AF runtime (`src/`).
+`northbound/api_component` is excluded — its Docker build isn't wired into
+CI yet (see the commented-out matrix entry in
+[`build.yml`](https://github.com/phinetech/phine.af/blob/main/.github/workflows/build.yml)).
+
+### Why this doesn't run like the format check
+
+Unlike `clang-format`, `clang-tidy` needs a real compile database
+(`compile_commands.json`) with correct include paths and defines — and this
+project's headers (gRPC, OAI models, nghttp2, ...) only exist inside the
+project's Docker build images. There's no lightweight "install a couple of
+apt packages and run" path here; each check has to build the relevant
+component's Docker image first.
+
+### Running it locally
+
+Pick the Dockerfile for the component you changed, build its
+`static-analysis` target (this runs a full build, so it can take a while
+the first time), then pipe a diff into the resulting image:
+
+```bash
+# af_core
+docker build --target static-analysis -f af_core/Dockerfile -t af-core:tidy .
+git diff --no-prefix -U0 origin/main -- af_core | docker run --rm -i af-core:tidy
+
+# southbound/pcf_handler
+docker build --target static-analysis -f southbound/pcf_handler/Dockerfile -t pcf-handler:tidy .
+git diff --no-prefix -U0 origin/main -- southbound/pcf_handler | docker run --rm -i pcf-handler:tidy
+
+# adapters/demo-qod-adapter
+docker build --target static-analysis -f adapters/demo-qod-adapter/Dockerfile -t demo-qod-adapter:tidy .
+git diff --no-prefix -U0 origin/main -- adapters/demo-qod-adapter | docker run --rm -i demo-qod-adapter:tidy
+
+# bundled AF runtime (src/)
+docker build --target static-analysis -f Dockerfile -t bundled-af:tidy .
+git diff --no-prefix -U0 origin/main -- src | docker run --rm -i bundled-af:tidy
+```
+
+Swap `origin/main` for whatever branch your changes will actually be merged
+into (e.g. `origin/feat-http-injection` if you're stacked on a feature
+branch). If the diff for a given path is empty, the container has nothing
+to check and exits cleanly.
+
+No output means no new findings. Findings are printed with file/line
+locations, same as running `clang-tidy` directly.
