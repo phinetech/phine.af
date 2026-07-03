@@ -1,0 +1,35 @@
+name: Code Format Check
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+      - 'feat-*'
+
+jobs:
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format-18
+
+      - name: Install shfmt
+        run: |
+          go install mvdan.cc/sh/v3/cmd/shfmt@v3.9.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Install ruff
+        run: pip install ruff==0.6.9
+
+      - name: Run format check
+        run: ./.github/scripts/check_format.sh --base "origin/${{ github.base_ref }}"

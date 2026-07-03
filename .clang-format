@@ -1,0 +1,26 @@
+# Inferred from the existing first-party C++ style (af_core, northbound,
+# southbound/pcf_handler, src) to minimize reformatting churn on adoption.
+# Submodules (common/, southbound/oai-cn5g-common-src/,
+# af_core/tests/integration/common/) are excluded via .clang-format-ignore.
+
+BasedOnStyle: Google
+Language: Cpp
+Standard: c++17
+
+IndentWidth: 4
+UseTab: Never
+ColumnLimit: 120
+
+BreakBeforeBraces: Attach
+AlignAfterOpenBracket: Align
+
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+NamespaceIndentation: None
+AccessModifierOffset: -4
+
+SortIncludes: false
+
+SpacesBeforeTrailingComments: 1
+AllowShortFunctionsOnASingleLine: Empty

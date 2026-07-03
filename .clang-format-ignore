@@ -1,0 +1,10 @@
+# Vendored/external code this project doesn't own the style of.
+common/
+southbound/oai-cn5g-common-src/
+af_core/tests/integration/common/
+
+# Build output
+build/
+build-*/
+**/build/
+**/build-*/
