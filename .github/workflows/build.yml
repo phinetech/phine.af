@@ -16,16 +16,31 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Check for trailing whitespace
         run: |
-          if git diff --check HEAD^ HEAD; then
+          BASE_REF="${{ github.base_ref }}"
+          if [ -n "$BASE_REF" ]; then
+            git fetch origin "$BASE_REF"
+            BASE="origin/$BASE_REF"
+          else
+            BASE="HEAD^"
+          fi
+
+          echo "Checking files changed against $BASE..."
+
+          if OUTPUT="$(git diff --check "$BASE...HEAD")"; then
             echo "No trailing whitespace found"
           else
+            echo "$OUTPUT"
+            echo
+            echo "Files with trailing whitespace:"
+            echo "$OUTPUT" | grep -vE '^\+' | grep -oE '^[^:]+' | sort -u | sed 's/^/  - /'
             echo "::error::Trailing whitespace found"
             exit 1
           fi
-        continue-on-error: true
 
       - name: Check file permissions
         run: |
