@@ -196,9 +196,16 @@ FROM builder AS static-analysis
 RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
       wget gnupg lsb-release software-properties-common ca-certificates python3 \
+      libgtest-dev libgmock-dev \
     && wget -qO- https://apt.llvm.org/llvm.sh | bash -s -- 18 \
     && apt-get install --yes --no-install-recommends clang-tidy-18 \
     && rm -rf /var/lib/apt/lists/*
+
+# Reconfigure (no need to build) so compile_commands.json includes the
+# tests/unit target — the main builder configure above uses
+# -DBUILD_TESTING=OFF, so without this, clang-tidy has no compile-command
+# entry at all for test source files and can't resolve <gtest/gtest.h>.
+RUN cd /app/build-output && cmake -DBUILD_TESTING=ON .
 
 COPY .clang-tidy /app/.clang-tidy
 COPY .github/scripts/check_tidy.sh /usr/local/bin/check_tidy.sh
