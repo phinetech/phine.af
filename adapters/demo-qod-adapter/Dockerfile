@@ -104,6 +104,47 @@ RUN cd /app/adapters/demo-qod-adapter/build && \
     make -j$(nproc) adapter_tests && \
     ctest -L unit --output-on-failure --output-junit results.xml
 
+# ─────────────────────────────────────────────────────────────────────────
+# Coverage (gcov via gcovr) — not part of the default build.
+# Build explicitly with: docker build --target coverage ...
+# ─────────────────────────────────────────────────────────────────────────
+FROM builder AS coverage
+
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends \
+      libgtest-dev libgmock-dev python3-pip \
+    && pip install --break-system-packages gcovr==8.6 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN cd /app/adapters/demo-qod-adapter/build && \
+    cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DENABLE_COVERAGE=ON . && \
+    make -j$(nproc) adapter_tests && \
+    ctest -L unit --output-on-failure && \
+    gcovr --root /app/adapters/demo-qod-adapter \
+          --exclude '/app/adapters/demo-qod-adapter/tests/.*' \
+          --exclude '/app/adapters/demo-qod-adapter/build/generated/.*' \
+          --exclude '.*/nlohmann/.*' \
+          --print-summary \
+          --html-details coverage.html \
+          .
+
+# TODO: coverage is report-only for now (see docs/contributing.md#coverage)
+# — the adapter's suite only covers QodClient/SessionManager, not the HTTP
+# transport code, so a hard threshold would block unrelated PRs. Re-enable
+# gating once coverage here is more established by uncommenting below
+# (adjust thresholds per current coverage; gcovr fails the build, and
+# therefore the CI job, if any threshold isn't met):
+# RUN cd /app/adapters/demo-qod-adapter/build && \
+#     gcovr --root /app/adapters/demo-qod-adapter \
+#           --exclude '/app/adapters/demo-qod-adapter/tests/.*' \
+#           --exclude '/app/adapters/demo-qod-adapter/build/generated/.*' \
+#           --exclude '.*/nlohmann/.*' \
+#           --fail-under-line 50 \
+#           --fail-under-function 50 \
+#           --fail-under-branch 30 \
+#           --print-summary \
+#           .
+
 # ── Stage 5: Runtime ─────────────────────────────────────────────────────────
 FROM base AS runtime
 

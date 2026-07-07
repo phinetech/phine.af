@@ -47,6 +47,14 @@ target_link_libraries(test_flow_descriptions PRIVATE
     GTest::gtest_main
 )
 
+# flow_description_utils.h is header-only and included directly here rather
+# than through pcf_handler_lib, so instrumenting the lib alone captures no
+# coverage for it — the test binary itself needs the flags.
+if(ENABLE_COVERAGE)
+    target_compile_options(test_flow_descriptions PRIVATE --coverage -O0 -g)
+    target_link_options(test_flow_descriptions PRIVATE --coverage)
+endif()
+
 include(GoogleTest)
 gtest_discover_tests(test_flow_descriptions
     PROPERTIES LABELS "unit"

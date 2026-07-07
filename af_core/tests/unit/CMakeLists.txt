@@ -30,6 +30,13 @@ target_link_libraries(af_core_unit_tests PRIVATE
     GTest::gtest_main
 )
 
+# Covers any header-only code a test might include directly rather than
+# through af_core_lib (that code compiles into this binary, not the lib).
+if(ENABLE_COVERAGE)
+    target_compile_options(af_core_unit_tests PRIVATE --coverage -O0 -g)
+    target_link_options(af_core_unit_tests PRIVATE --coverage)
+endif()
+
 include(GoogleTest)
 gtest_discover_tests(af_core_unit_tests
     PROPERTIES LABELS "unit"

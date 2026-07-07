@@ -5,6 +5,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# gcov instrumentation for coverage reporting — off by default; requires
+# -O0 for accurate line mapping, so this should be paired with a Debug
+# build (see the Docker `coverage` stage, which sets both explicitly).
+option(ENABLE_COVERAGE "Instrument af_core_lib with gcov coverage flags" OFF)
+
 # Output directories
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -171,6 +176,11 @@ target_link_libraries(af_core_lib
         OpenSSL::Crypto
         Boost::url
 )
+
+if(ENABLE_COVERAGE)
+    target_compile_options(af_core_lib PRIVATE --coverage -O0 -g)
+    target_link_options(af_core_lib PRIVATE --coverage)
+endif()
 
 # Create standalone executable
 add_executable(af_core src/main.cpp)

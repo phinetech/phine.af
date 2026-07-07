@@ -193,3 +193,61 @@ directory (or a new source file, added to that directory's `CMakeLists.txt`)
 and tag it via the suite's `gtest_discover_tests(... PROPERTIES LABELS
 "unit")` call — no CI changes needed, `unit-tests.yml` picks up anything
 under `-L unit` automatically.
+
+## Coverage
+
+Pull requests get a `gcov`-based coverage report (via
+[`gcovr`](https://gcovr.com/)) for the same 3 components as the unit-test
+job — [`.github/workflows/coverage.yml`](https://github.com/phinetech/phine.af/blob/main/.github/workflows/coverage.yml)
+uploads an HTML report per component as a build artifact. This is
+**report-only** — coverage never fails a PR. Given today's suites are
+light/narrow (see the Testing section above), a hard threshold would block
+unrelated PRs; this can be revisited once coverage is more established.
+Each Dockerfile's `coverage` stage has a `TODO` with the commented-out
+`gcovr --fail-under-*` flags ready to re-enable gating later.
+
+Coverage requires `-O0 --coverage`, which is incompatible with the
+`-O3` used everywhere else — so unlike the `tests` stage, `coverage` isn't
+a quick incremental add-on. It's a genuine (if bounded — a couple of
+minutes, not a from-scratch rebuild) recompile of the component's own
+library with different flags, on its own `FROM builder AS coverage`
+Docker stage.
+
+### Running it locally
+
+```bash
+# af_core
+docker build --target coverage -f af_core/Dockerfile -t af-core:coverage .
+
+# southbound/pcf_handler
+docker build --target coverage -f southbound/pcf_handler/Dockerfile -t pcf-handler:coverage .
+
+# adapters/demo-qod-adapter
+docker build --target coverage -f adapters/demo-qod-adapter/Dockerfile -t demo-qod-adapter:coverage .
+```
+
+Like `tests`, coverage runs during the build itself (`gcovr --print-summary`
+prints the headline numbers to the build log). To view the HTML report,
+extract it after building:
+
+```bash
+docker create --name extract-cov af-core:coverage
+docker cp extract-cov:/app/build-output/coverage.html ./coverage.html
+docker rm extract-cov
+```
+
+(swap the container path for `/app/southbound/pcf_handler/build-output/coverage.html`
+or `/app/adapters/demo-qod-adapter/build/coverage.html` for the other two).
+
+### A `gcovr` gotcha worth knowing if you touch the filters
+
+`gcovr`'s `--exclude`/`--filter` patterns behave differently depending on
+whether they start with `/`: a pattern *without* a leading `/` gets
+resolved relative to gcovr's **current working directory** (not `--root`,
+and not the file being tested) — if the candidate file isn't under that
+directory, the pattern silently never matches it, no error. Source files
+that live outside the build directory (e.g. `tests/`, which sits next to
+`build/`, not inside it) need a **fully-qualified absolute pattern**
+(e.g. `/app/adapters/demo-qod-adapter/tests/.*`) to match reliably — this
+is why the Dockerfiles' `gcovr` invocations mix styles rather than using
+one consistent regex shape.

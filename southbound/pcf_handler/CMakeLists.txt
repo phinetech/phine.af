@@ -33,6 +33,11 @@ elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../common/cmake")
     list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../common/cmake")
 endif()
 
+# gcov instrumentation for coverage reporting — off by default; requires
+# -O0 for accurate line mapping, so this should be paired with a Debug
+# build (see the Docker `coverage` stage, which sets both explicitly).
+option(ENABLE_COVERAGE "Instrument pcf_handler_lib with gcov coverage flags" OFF)
+
 # Use system libraries by default
 option(USE_SYSTEM_OPENSSL "Use system installed OpenSSL" ON)
 option(USE_SYSTEM_NGHTTP2 "Use system installed nghttp2" ON)
@@ -385,6 +390,11 @@ target_link_options(pcf_handler_lib PUBLIC
     -Wl,--no-as-needed
     -L/usr/local/lib
 )
+
+if(ENABLE_COVERAGE)
+    target_compile_options(pcf_handler_lib PRIVATE --coverage -O0 -g)
+    target_link_options(pcf_handler_lib PRIVATE --coverage)
+endif()
 
 # --- Configure the standalone executable ---
 target_include_directories(pcf_server

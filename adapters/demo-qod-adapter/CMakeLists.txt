@@ -34,6 +34,11 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
 option(BUILD_DEMO_QOD_STANDALONE "Build the standalone demo QoD adapter executable" ${DEMO_QOD_ADAPTER_TOP_LEVEL})
 option(BUILD_DEMO_QOD_BUNDLE "Build demo QoD adapter bundle support into the AF executable" ${BUILD_BUNDLED})
 
+# gcov instrumentation for coverage reporting — off by default; requires
+# -O0 for accurate line mapping, so this should be paired with a Debug
+# build (see the Docker `coverage` stage, which sets both explicitly).
+option(ENABLE_COVERAGE "Instrument adapter_lib with gcov coverage flags" OFF)
+
 function(demo_qod_adapter_finalize_bundle)
     if(NOT TARGET af)
         message(FATAL_ERROR
@@ -311,6 +316,11 @@ target_link_libraries(adapter_lib
         Threads::Threads
 )
 
+if(ENABLE_COVERAGE)
+    target_compile_options(adapter_lib PRIVATE --coverage -O0 -g)
+    target_link_options(adapter_lib PRIVATE --coverage)
+endif()
+
 set_target_properties(adapter_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     CXX_STANDARD 17
@@ -394,6 +404,13 @@ if(BUILD_TESTING)
             GTest::gtest_main
             GTest::gmock
     )
+
+    # Covers any header-only code a test might include directly rather than
+    # through adapter_lib (that code compiles into this binary, not the lib).
+    if(ENABLE_COVERAGE)
+        target_compile_options(adapter_tests PRIVATE --coverage -O0 -g)
+        target_link_options(adapter_tests PRIVATE --coverage)
+    endif()
 
     include(GoogleTest)
     gtest_discover_tests(adapter_tests

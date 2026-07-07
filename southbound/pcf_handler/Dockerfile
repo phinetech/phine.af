@@ -276,6 +276,50 @@ RUN cd /app/southbound/pcf_handler/build-output && \
     make -j$(nproc) test_flow_descriptions && \
     ctest -L unit --output-on-failure --output-junit results.xml
 
+# ─────────────────────────────────────────────────────────────────────────
+# Coverage (gcov via gcovr) — not part of the default build.
+# Build explicitly with: docker build --target coverage ...
+# ─────────────────────────────────────────────────────────────────────────
+FROM builder AS coverage
+
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends \
+      libgtest-dev libgmock-dev python3-pip \
+    && pip install --break-system-packages gcovr==8.6 \
+    && rm -rf /var/lib/apt/lists/*
+
+# The builder stage copies src/include/CMakeLists.txt granularly (not the
+# whole pcf_handler/ dir), so tests/ was never present — add it here (same
+# gap as the `tests` stage above).
+COPY ./southbound/pcf_handler/tests /app/southbound/pcf_handler/tests/
+
+RUN cd /app/southbound/pcf_handler/build-output && \
+    cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DENABLE_COVERAGE=ON . && \
+    make -j$(nproc) test_flow_descriptions && \
+    ctest -L unit --output-on-failure && \
+    gcovr --root /app/southbound/pcf_handler \
+          --exclude '.*/tests/.*' \
+          --exclude '.*/generated/.*' \
+          --print-summary \
+          --html-details coverage.html \
+          .
+
+# TODO: coverage is report-only for now (see docs/contributing.md#coverage)
+# — pcf_handler's suite only covers flow_description_utils.h, so a hard
+# threshold would block unrelated PRs. Re-enable gating once coverage here
+# is more established by uncommenting below (adjust thresholds per current
+# coverage; gcovr fails the build, and therefore the CI job, if any
+# threshold isn't met):
+# RUN cd /app/southbound/pcf_handler/build-output && \
+#     gcovr --root /app/southbound/pcf_handler \
+#           --exclude '.*/tests/.*' \
+#           --exclude '.*/generated/.*' \
+#           --fail-under-line 50 \
+#           --fail-under-function 50 \
+#           --fail-under-branch 30 \
+#           --print-summary \
+#           .
+
 # Final runtime stage
 FROM base AS runtime
 
