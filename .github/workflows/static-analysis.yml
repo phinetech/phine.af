@@ -1,22 +1,7 @@
 name: Static Analysis (clang-tidy)
 
 on:
-  pull_request:
-    branches:
-      - main
-      - develop
-      - 'feat-*'
-    paths:
-      - 'af_core/**'
-      - 'southbound/pcf_handler/**'
-      - 'adapters/demo-qod-adapter/**'
-      - 'src/**'
-      - 'common/**'
-      - '.clang-tidy'
-      - '.github/scripts/check_tidy.sh'
-      - '.github/workflows/static-analysis.yml'
-      - 'CMakeLists.txt'
-      - 'Dockerfile'
+  workflow_call:
 
 env:
   DOCKER_BUILDKIT: 1

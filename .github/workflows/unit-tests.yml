@@ -1,21 +1,7 @@
 name: Unit Tests
 
 on:
-  pull_request:
-    branches:
-      - main
-      - develop
-      - 'feat-*'
-    paths:
-      - 'af_core/**'
-      - 'southbound/pcf_handler/**'
-      - 'adapters/demo-qod-adapter/**'
-      - 'common/**'
-      - '.github/workflows/unit-tests.yml'
-      - 'CMakeLists.txt'
-      - 'af_core/Dockerfile'
-      - 'southbound/pcf_handler/Dockerfile'
-      - 'adapters/demo-qod-adapter/Dockerfile'
+  workflow_call:
 
 env:
   DOCKER_BUILDKIT: 1

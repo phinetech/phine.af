@@ -14,6 +14,31 @@ Source: [README.md](../README.md).
 TODO: Decide contribution workflow (branching) and add it here.
 -->
 
+## CI Pipeline
+
+[`.github/workflows/ci.yml`](https://github.com/phinetech/phine.af/blob/main/.github/workflows/ci.yml)
+is the single entry point for pull requests — it orchestrates every check
+below as a staged pipeline rather than running everything in parallel, so
+a fast lint failure means the 20-45 minute E2E suites never even start:
+
+1. **Format Check** — fast lint, no Docker.
+2. **Build and Test**, **Static Analysis**, **Unit Tests** — run in
+   parallel with each other, gated on Format Check. Each needs the full
+   dependency build, but no extra recompiles.
+3. **Coverage** — gated on Unit Tests specifically (no point generating a
+   report for a suite that's already failing).
+4. **Integration Tests**, **Tutorials Validation** — the heaviest, full
+   E2E checks. Gated on everything above.
+
+Each of those is defined in its own workflow file for readability, but
+they're all [reusable workflows](https://docs.github.com/en/actions/using-workflows/reusing-workflows)
+(`on: workflow_call`) rather than being triggered directly — `ci.yml` is
+what actually invokes them, via `needs:` to enforce the ordering. If a
+`needs:` job fails, GitHub Actions skips (not fails-then-continues) every
+job depending on it — that's the mechanism this relies on, not custom
+scripting. If you're debugging why a workflow file didn't run on your PR,
+check `ci.yml` rather than the file itself.
+
 ## Code Formatting
 
 Pull requests are checked for formatting by the `Code Format Check` GitHub

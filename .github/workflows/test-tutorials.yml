@@ -1,29 +1,7 @@
 name: Tutorials Validation
 
 on:
-  pull_request:
-    branches:
-      - main
-      - develop
-      - 'feat-*'
-    paths:
-      - 'docs/getting-started/qos-enforcement-tutorial.md'
-      - 'docs/getting-started/adapter-qod-tutorial.md'
-      - 'src/**'
-      - 'af_core/**'
-      - 'northbound/**'
-      - 'southbound/**'
-      - 'adapters/**'
-      - 'common/**'
-      - 'config/**'
-      - 'docker-compose/**'
-      - 'CMakeLists.txt'
-      - 'Dockerfile'
-      - '.github/workflows/test-tutorials.yml'
-  push:
-    branches:
-      - main
-      - develop
+  workflow_call:
   workflow_dispatch:
 
 env:

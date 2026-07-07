@@ -1,0 +1,91 @@
+name: CI
+
+# Single entry point that orchestrates every other workflow as a staged
+# pipeline: fast lint first, then the moderate Docker-based checks, then
+# coverage/security (each gated on the specific job it depends on), and
+# finally the heaviest full-network E2E suites — which only run if
+# everything above passed. The individual workflows below are reusable
+# (triggered via `workflow_call`) and are no longer triggered directly.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+      - 'feat-*'
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+jobs:
+  # ── Tier 1: fast lint, no Docker ──────────────────────────────────────────
+  format-check:
+    name: Format Check
+    uses: ./.github/workflows/code-format.yml
+    secrets: inherit
+
+  # ── Tier 2: full dependency build, no extra recompiles (parallel) ────────
+  build:
+    name: Build and Test
+    needs: [format-check]
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+
+  static-analysis:
+    name: Static Analysis
+    needs: [format-check]
+    uses: ./.github/workflows/static-analysis.yml
+    secrets: inherit
+
+  unit-tests:
+    name: Unit Tests
+    needs: [format-check]
+    uses: ./.github/workflows/unit-tests.yml
+    secrets: inherit
+
+  # ── Tier 3: gated on the specific Tier 2 job each depends on ──────────────
+  coverage:
+    name: Coverage
+    needs: [unit-tests]
+    uses: ./.github/workflows/coverage.yml
+    secrets: inherit
+
+  # ── Tier 4: heaviest, full E2E — only runs if everything above passed ────
+  integration-tests:
+    name: Integration Tests
+    needs: [build, static-analysis, unit-tests, coverage]
+    uses: ./.github/workflows/integration-tests.yml
+    secrets: inherit
+
+  tutorials:
+    name: Tutorials Validation
+    needs: [build, static-analysis, unit-tests, coverage]
+    uses: ./.github/workflows/test-tutorials.yml
+    secrets: inherit
+
+  # Single aggregate status check to use for branch protection, instead of
+  # requiring every individual job above.
+  ci-status:
+    name: CI Status
+    runs-on: ubuntu-latest
+    needs: [format-check, build, static-analysis, unit-tests, coverage, integration-tests, tutorials]
+    if: always()
+    steps:
+      - name: Check overall pipeline status
+        run: |
+          for result in \
+            "${{ needs.format-check.result }}" \
+            "${{ needs.build.result }}" \
+            "${{ needs.static-analysis.result }}" \
+            "${{ needs.unit-tests.result }}" \
+            "${{ needs.coverage.result }}" \
+            "${{ needs.integration-tests.result }}" \
+            "${{ needs.tutorials.result }}"; do
+            if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+              echo "::error::CI pipeline failed (found result: $result)"
+              exit 1
+            fi
+          done
+          echo "✅ CI pipeline passed"

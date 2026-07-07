@@ -1,11 +1,7 @@
 name: Code Format Check
 
 on:
-  pull_request:
-    branches:
-      - main
-      - develop
-      - 'feat-*'
+  workflow_call:
 
 jobs:
   format-check:

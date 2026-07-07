@@ -1,15 +1,7 @@
 name: Build and Test
 
 on:
-  pull_request:
-    branches:
-      - main
-      - develop
-      - 'feat-*'
-  push:
-    branches:
-      - main
-      - develop
+  workflow_call:
   workflow_dispatch:
 
 env:
