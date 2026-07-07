@@ -129,6 +129,7 @@ RUN cd /app && \
     mkdir -p build-output && \
     cd build-output && \
     cmake .. -DCMAKE_BUILD_TYPE=Release \
+             -DBUILD_TESTING=OFF \
              -DBUILD_BUNDLED=ON \
              -DCMAKE_PROJECT_phine.af_INCLUDE=/app/adapters/demo-qod-adapter/BundleInject.cmake \
              -DUSE_SYSTEM_GRPC=ON \

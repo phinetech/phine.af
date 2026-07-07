@@ -45,7 +45,7 @@ The bundled binary is placed in `build-demo-qod-bundle/bin/af`.
 ### Build with tests
 
 ```bash
-cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_ADAPTER_TESTS=ON
+cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
 make -j$(nproc)
 ctest --output-on-failure
 ```

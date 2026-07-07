@@ -186,3 +186,10 @@ target_link_libraries(af_core
     PRIVATE
         af_core_lib
 )
+
+# BUILD_TESTING is defined by the root project's include(CTest); af_core is
+# always configured as part of that root build (never standalone), so it's
+# already set by the time this file is processed.
+if(BUILD_TESTING)
+    add_subdirectory(tests/unit)
+endif()

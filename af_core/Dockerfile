@@ -177,6 +177,7 @@ RUN cd /app && \
     -DCMAKE_INSTALL_PREFIX=/usr/local && \
 =======
              -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+             -DBUILD_TESTING=OFF \
              -DUSE_SYSTEM_GRPC=ON \
              -DUSE_SYSTEM_PROTOBUF=ON \
              -DCMAKE_INSTALL_PREFIX=/usr/local && \
@@ -185,6 +186,42 @@ RUN cd /app && \
     make install && \
     ldconfig
 
+# ─────────────────────────────────────────────────────────────────────────
+# Static analysis (clang-tidy) — not part of the default build.
+# Build explicitly with: docker build --target static-analysis ...
+# Run against a diff on stdin: docker run --rm -i <image> < component.diff
+# ─────────────────────────────────────────────────────────────────────────
+FROM builder AS static-analysis
+
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends \
+      wget gnupg lsb-release software-properties-common ca-certificates python3 \
+    && wget -qO- https://apt.llvm.org/llvm.sh | bash -s -- 18 \
+    && apt-get install --yes --no-install-recommends clang-tidy-18 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY .clang-tidy /app/.clang-tidy
+COPY .github/scripts/check_tidy.sh /usr/local/bin/check_tidy.sh
+RUN chmod +x /usr/local/bin/check_tidy.sh
+
+WORKDIR /app
+ENTRYPOINT ["check_tidy.sh", "--build-dir", "build-output"]
+
+# ─────────────────────────────────────────────────────────────────────────
+# Unit tests (ctest) — not part of the default build.
+# Build explicitly with: docker build --target tests ...
+# ─────────────────────────────────────────────────────────────────────────
+FROM builder AS tests
+
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends \
+      libgtest-dev libgmock-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN cd /app/build-output && \
+    cmake -DBUILD_TESTING=ON . && \
+    make -j$(nproc) af_core_unit_tests && \
+    ctest -L unit --output-on-failure --output-junit results.xml
 # Final runtime stage
 FROM base AS runtime
 
@@ -249,23 +286,3 @@ EXPOSE 8080
 # Command to run
 CMD ["/usr/local/bin/af_core", "--config", "/etc/oai/af/af_core.yaml"]
 
-# ─────────────────────────────────────────────────────────────────────────
-# Static analysis (clang-tidy) — not part of the default build.
-# Build explicitly with: docker build --target static-analysis ...
-# Run against a diff on stdin: docker run --rm -i <image> < component.diff
-# ─────────────────────────────────────────────────────────────────────────
-FROM builder AS static-analysis
-
-RUN apt-get update && \
-    apt-get install --yes --no-install-recommends \
-      wget gnupg lsb-release software-properties-common ca-certificates python3 \
-    && wget -qO- https://apt.llvm.org/llvm.sh | bash -s -- 18 \
-    && apt-get install --yes --no-install-recommends clang-tidy-18 \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY .clang-tidy /app/.clang-tidy
-COPY .github/scripts/check_tidy.sh /usr/local/bin/check_tidy.sh
-RUN chmod +x /usr/local/bin/check_tidy.sh
-
-WORKDIR /app
-ENTRYPOINT ["check_tidy.sh", "--build-dir", "build-output"]

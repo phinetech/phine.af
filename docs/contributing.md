@@ -127,3 +127,69 @@ to check and exits cleanly.
 
 No output means no new findings. Findings are printed with file/line
 locations, same as running `clang-tidy` directly.
+
+## Testing
+
+Pull requests run a fast unit-test job (`Unit Tests` — [`.github/workflows/unit-tests.yml`](https://github.com/phinetech/phine.af/blob/main/.github/workflows/unit-tests.yml))
+across the components that have unit suites. Tests are written with
+[GoogleTest](https://google.github.io/googletest/) and run through
+[CTest](https://cmake.org/cmake/help/latest/manual/ctest.1.html) —
+`BUILD_TESTING` (the standard CTest convention) gates whether each
+component's `tests/` subdirectory is even configured, and every suite is
+tagged with a CTest **label** so CI can select "fast" vs. "heavy":
+
+| Component | Suite | Label | Runs in CI via |
+|---|---|---|---|
+| `af_core` | `tests/unit` — light scaffold, one real class covered so far; more coverage to come | `unit` | `unit-tests.yml`, every PR |
+| `af_core` | `tests/integration` — full 5G network (free5gc, gNB, UE) | `integration` | `integration-tests.yml` (unchanged, heavy, separate) |
+| `southbound/pcf_handler` | `tests/` — flow-description utilities | `unit` | `unit-tests.yml`, every PR |
+| `adapters/demo-qod-adapter` | `tests/` — QoD client + session manager (gmock) | `unit` | `unit-tests.yml`, every PR |
+
+`northbound/api_component` has no unit suite and is excluded, matching its
+exclusion from `build.yml`'s component matrix.
+
+### Why Docker again
+
+Same reason as static analysis: each component's unit tests link against
+that component's real library (`af_core_lib`, etc.), which pulls in gRPC,
+OAI models, or other dependencies that only exist inside that component's
+Docker build. Each Dockerfile has a `tests` stage (`FROM builder AS tests`)
+that installs `libgtest-dev`/`libgmock-dev` from apt (not `FetchContent` —
+avoids a build-time network clone and the `build/_deps` committed-gitlink
+problem that broke checkout once already), reconfigures with
+`-DBUILD_TESTING=ON`, and runs `ctest -L unit --output-on-failure` as part
+of the image build itself — a failing test fails the `docker build`.
+
+### Running it locally
+
+```bash
+# af_core
+docker build --target tests -f af_core/Dockerfile -t af-core:tests .
+
+# southbound/pcf_handler
+docker build --target tests -f southbound/pcf_handler/Dockerfile -t pcf-handler:tests .
+
+# adapters/demo-qod-adapter
+docker build --target tests -f adapters/demo-qod-adapter/Dockerfile -t demo-qod-adapter:tests .
+```
+
+Unlike the format/clang-tidy checks, there's no separate `docker run` step —
+the tests execute during the build, and the build fails if any test does.
+
+If you already have a component's full native dependency stack installed
+(the same libraries its Dockerfile installs — gRPC, protobuf, OAI models,
+etc.), you can skip Docker entirely:
+
+```bash
+cmake -S southbound/pcf_handler -B build -DBUILD_TESTING=ON
+cmake --build build -j
+ctest --test-dir build -L unit --output-on-failure
+```
+
+### Adding a new test
+
+Add a `TEST()`/`TEST_F()` case to the relevant component's `tests/`
+directory (or a new source file, added to that directory's `CMakeLists.txt`)
+and tag it via the suite's `gtest_discover_tests(... PROPERTIES LABELS
+"unit")` call — no CI changes needed, `unit-tests.yml` picks up anything
+under `-L unit` automatically.

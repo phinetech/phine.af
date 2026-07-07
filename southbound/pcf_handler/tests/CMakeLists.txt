@@ -1,17 +1,19 @@
 cmake_minimum_required(VERSION 3.14)
 
-# Download and configure GoogleTest
-include(FetchContent)
-FetchContent_Declare(
-    googletest
-    GIT_REPOSITORY https://github.com/google/googletest.git
-    GIT_TAG        v1.14.0
-)
-# Prevent GoogleTest from overriding parent project compiler/linker settings
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
-
-enable_testing()
+# Prefer the system-installed GoogleTest package (apt libgtest-dev in the
+# Docker tests stage); fall back to fetching it only if unavailable.
+find_package(GTest QUIET)
+if(NOT GTest_FOUND)
+    include(FetchContent)
+    FetchContent_Declare(
+        googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG        v1.14.0
+    )
+    # Prevent GoogleTest from overriding parent project compiler/linker settings
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
+endif()
 
 # Flow description utility tests (header-only, no heavy dependencies)
 add_executable(test_flow_descriptions
@@ -46,4 +48,6 @@ target_link_libraries(test_flow_descriptions PRIVATE
 )
 
 include(GoogleTest)
-gtest_discover_tests(test_flow_descriptions)
+gtest_discover_tests(test_flow_descriptions
+    PROPERTIES LABELS "unit"
+)

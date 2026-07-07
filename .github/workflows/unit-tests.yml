@@ -1,0 +1,96 @@
+name: Unit Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+      - 'feat-*'
+    paths:
+      - 'af_core/**'
+      - 'southbound/pcf_handler/**'
+      - 'adapters/demo-qod-adapter/**'
+      - 'common/**'
+      - '.github/workflows/unit-tests.yml'
+      - 'CMakeLists.txt'
+      - 'af_core/Dockerfile'
+      - 'southbound/pcf_handler/Dockerfile'
+      - 'adapters/demo-qod-adapter/Dockerfile'
+
+env:
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  unit-tests:
+    name: Unit Tests (${{ matrix.component.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        component:
+          # northbound/api_component is intentionally excluded — its build
+          # is not wired into CI yet (see build.yml). af_core's only other
+          # suite (tests/integration) needs a full 5G network and stays in
+          # integration-tests.yml, not here.
+          - name: af-core
+            dockerfile: af_core/Dockerfile
+            diff-path: af_core
+            results-path: /app/build-output/results.xml
+          - name: pcf-handler
+            dockerfile: southbound/pcf_handler/Dockerfile
+            diff-path: southbound/pcf_handler
+            results-path: /app/southbound/pcf_handler/build-output/results.xml
+          - name: demo-qod-adapter
+            dockerfile: adapters/demo-qod-adapter/Dockerfile
+            diff-path: adapters/demo-qod-adapter
+            results-path: /app/adapters/demo-qod-adapter/build/results.xml
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.CI_GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Check for relevant changes
+        id: diff
+        run: |
+          git fetch origin "${{ github.base_ref }}"
+          if git diff --quiet "origin/${{ github.base_ref }}...HEAD" -- "${{ matrix.component.diff-path }}"; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.diff.outputs.has_changes == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and run unit tests
+        if: steps.diff.outputs.has_changes == 'true'
+        run: |
+          docker build --target tests \
+            -f ${{ matrix.component.dockerfile }} \
+            -t ${{ matrix.component.name }}:tests .
+
+      - name: Extract JUnit results
+        if: always() && steps.diff.outputs.has_changes == 'true'
+        run: |
+          docker create --name extract-results ${{ matrix.component.name }}:tests
+          docker cp extract-results:${{ matrix.component.results-path }} ./results.xml
+          docker rm extract-results
+
+      - name: Upload JUnit results
+        if: always() && steps.diff.outputs.has_changes == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results-${{ matrix.component.name }}
+          path: results.xml
+          retention-days: 30
+
+      - name: No changes to test
+        if: steps.diff.outputs.has_changes == 'false'
+        run: echo "No changes under ${{ matrix.component.diff-path }} — skipping."

@@ -21,6 +21,11 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Export compile_commands.json for tooling (e.g. clang-tidy)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Defines BUILD_TESTING (default ON) and calls enable_testing() when set.
+# Must come before add_subdirectory() calls for components below so their
+# own if(BUILD_TESTING) guards see the correct value.
+include(CTest)
+
 # Add CMake modules path
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/build/cmake)
 
@@ -137,13 +142,6 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/southbound)
     add_subdirectory(southbound)
 endif()
 
-# Testing configuration
-option(BUILD_TESTS "Build test programs" OFF)
-if(BUILD_TESTS)
-  enable_testing()
-  add_subdirectory(tests)
-endif()
-
 # Bundled application configuration
 # Build a single executable that bundles AF Core and southbound handlers.
 # Northbound applications remain standalone services and connect to AF Core
@@ -227,7 +225,7 @@ endif()
 message(STATUS "Configuration Summary:")
 message(STATUS "  Project version: ${PROJECT_VERSION}")
 message(STATUS "  C++ Compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
-message(STATUS "  Build tests: ${BUILD_TESTS}")
+message(STATUS "  Build tests: ${BUILD_TESTING}")
 message(STATUS "  PCF handler enabled: ${ENABLE_PCF_HANDLER}")
 message(STATUS "  NEF handler enabled: ${ENABLE_NEF_HANDLER}")
 message(STATUS "  UDR handler enabled: ${ENABLE_UDR_HANDLER}")

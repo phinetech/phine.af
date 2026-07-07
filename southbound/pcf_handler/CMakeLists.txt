@@ -16,6 +16,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Export compile_commands.json for tooling (e.g. clang-tidy)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# pcf_handler is always built standalone (own Dockerfile, own project()
+# above) — it needs its own include(CTest) to define BUILD_TESTING;
+# nothing upstream provides it in that build path.
+include(CTest)
+
 # Add custom cmake module path
 # In Docker builds, common is copied to /app/common/ while we're in /app/southbound/pcf_handler/
 # Otherwise, it's at ../common (one level up in the southbound directory)

@@ -194,6 +194,7 @@ RUN cd /app && \
     -DCMAKE_INSTALL_PREFIX=/usr/local && \
 =======
              -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+             -DBUILD_TESTING=OFF \
              -DBUILD_BUNDLED=ON \
              -DENABLE_PCF_HANDLER=${ENABLE_PCF_HANDLER} \
              -DENABLE_NEF_HANDLER=${ENABLE_NEF_HANDLER} \
@@ -210,6 +211,27 @@ RUN cd /app && \
     make -j$(nproc) af && \
     make install && \
     ldconfig
+
+# ─────────────────────────────────────────────────────────────────────────
+# Static analysis (clang-tidy) — not part of the default build.
+# Build explicitly with: docker build --target static-analysis ...
+# Run against a diff on stdin: docker run --rm -i <image> < component.diff
+# ─────────────────────────────────────────────────────────────────────────
+FROM builder AS static-analysis
+
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends \
+      wget gnupg lsb-release software-properties-common ca-certificates python3 \
+    && wget -qO- https://apt.llvm.org/llvm.sh | bash -s -- 18 \
+    && apt-get install --yes --no-install-recommends clang-tidy-18 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY .clang-tidy /app/.clang-tidy
+COPY .github/scripts/check_tidy.sh /usr/local/bin/check_tidy.sh
+RUN chmod +x /usr/local/bin/check_tidy.sh
+
+WORKDIR /app
+ENTRYPOINT ["check_tidy.sh", "--build-dir", "build-output"]
 
 # =============================================================================
 # Runtime stage - minimal image with just the binary
@@ -274,23 +296,3 @@ EXPOSE 50051
 
 CMD ["/usr/local/bin/af", "--config", "/etc/oai/af/af.yaml"]
 
-# ─────────────────────────────────────────────────────────────────────────
-# Static analysis (clang-tidy) — not part of the default build.
-# Build explicitly with: docker build --target static-analysis ...
-# Run against a diff on stdin: docker run --rm -i <image> < component.diff
-# ─────────────────────────────────────────────────────────────────────────
-FROM builder AS static-analysis
-
-RUN apt-get update && \
-    apt-get install --yes --no-install-recommends \
-      wget gnupg lsb-release software-properties-common ca-certificates python3 \
-    && wget -qO- https://apt.llvm.org/llvm.sh | bash -s -- 18 \
-    && apt-get install --yes --no-install-recommends clang-tidy-18 \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY .clang-tidy /app/.clang-tidy
-COPY .github/scripts/check_tidy.sh /usr/local/bin/check_tidy.sh
-RUN chmod +x /usr/local/bin/check_tidy.sh
-
-WORKDIR /app
-ENTRYPOINT ["check_tidy.sh", "--build-dir", "build-output"]

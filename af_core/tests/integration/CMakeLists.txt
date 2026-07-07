@@ -151,5 +151,6 @@ endif()
 # Enable testing
 enable_testing()
 add_test(NAME IntegrationTests COMMAND af_integration_tests)
+set_tests_properties(IntegrationTests PROPERTIES LABELS "integration")
 
 message(STATUS "Integration tests configured")

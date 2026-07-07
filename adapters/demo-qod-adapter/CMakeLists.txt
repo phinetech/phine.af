@@ -366,11 +366,11 @@ endif()
 
 # ─── Tests (optional) ────────────────────────────────────────────────────────
 
-option(BUILD_ADAPTER_TESTS "Build adapter unit tests" OFF)
+# include(CTest) defines BUILD_TESTING (default ON) and calls
+# enable_testing() — standard CTest convention, matches af_core/pcf_handler.
+include(CTest)
 
-if(BUILD_ADAPTER_TESTS)
-    enable_testing()
-
+if(BUILD_TESTING)
     find_package(GTest QUIET)
     if(NOT GTest_FOUND)
         include(FetchContent)
@@ -396,7 +396,9 @@ if(BUILD_ADAPTER_TESTS)
     )
 
     include(GoogleTest)
-    gtest_discover_tests(adapter_tests)
+    gtest_discover_tests(adapter_tests
+        PROPERTIES LABELS "unit"
+    )
 endif()
 
 # ─── Summary ─────────────────────────────────────────────────────────────────
@@ -408,5 +410,5 @@ message(STATUS "  Proto file: ${PROTO_FILE}")
 message(STATUS "  Gen dir:    ${PROTO_GEN_DIR}")
 message(STATUS "  Standalone: ${BUILD_DEMO_QOD_STANDALONE}")
 message(STATUS "  Bundle:     ${BUILD_DEMO_QOD_BUNDLE}")
-message(STATUS "  Tests:      ${BUILD_ADAPTER_TESTS}")
+message(STATUS "  Tests:      ${BUILD_TESTING}")
 message(STATUS "")
