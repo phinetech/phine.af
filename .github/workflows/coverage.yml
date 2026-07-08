@@ -56,10 +56,16 @@ jobs:
 
       - name: Build coverage report
         if: steps.diff.outputs.has_changes == 'true'
-        run: |
-          docker build --target coverage \
-            -f ${{ matrix.component.dockerfile }} \
-            -t ${{ matrix.component.name }}:coverage .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.component.dockerfile }}
+          target: coverage
+          push: false
+          load: true
+          tags: ${{ matrix.component.name }}:coverage
+          cache-from: type=gha,scope=${{ matrix.component.name }}
+          cache-to: type=gha,scope=${{ matrix.component.name }},mode=max
 
       - name: Extract coverage report
         if: always() && steps.diff.outputs.has_changes == 'true'

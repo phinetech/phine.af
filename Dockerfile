@@ -177,7 +177,8 @@ RUN cd /app && \
     mkdir -p build-output && \
     cd build-output && \
     cmake .. -DCMAKE_BUILD_TYPE=Release \
-<<<<<<< HEAD
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+    -DBUILD_TESTING=OFF \
     -DBUILD_BUNDLED=ON \
     -DENABLE_PCF_HANDLER=${ENABLE_PCF_HANDLER} \
     -DENABLE_NEF_HANDLER=${ENABLE_NEF_HANDLER} \
@@ -192,36 +193,23 @@ RUN cd /app && \
     -DBoost_NO_BOOST_CMAKE=ON \
     -DCMAKE_PREFIX_PATH=/usr/local \
     -DCMAKE_INSTALL_PREFIX=/usr/local && \
-=======
-             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-             -DBUILD_TESTING=OFF \
-             -DBUILD_BUNDLED=ON \
-             -DENABLE_PCF_HANDLER=${ENABLE_PCF_HANDLER} \
-             -DENABLE_NEF_HANDLER=${ENABLE_NEF_HANDLER} \
-             -DENABLE_UDR_HANDLER=${ENABLE_UDR_HANDLER} \
-             -DUSE_SYSTEM_GRPC=ON \
-             -DUSE_SYSTEM_PROTOBUF=ON \
-             -DUSE_SYSTEM_NGHTTP2=ON \
-             -DUSE_SYSTEM_NGHTTP2_ASIO=ON \
-             -DUSE_SYSTEM_OPENSSL=ON \
-             -DUSE_SYSTEM_BOOST=ON \
-             -DCMAKE_PREFIX_PATH=/usr/local \
-             -DCMAKE_INSTALL_PREFIX=/usr/local && \
->>>>>>> b41fada (ci: add clang-tidy static analysis for af_core, pcf-handler, demo-qod-adapter, and bundled AF)
     make -j$(nproc) af && \
     make install && \
     ldconfig
 
 # ─────────────────────────────────────────────────────────────────────────
-# Static analysis (clang-tidy) — not part of the default build.
-# Build explicitly with: docker build --target static-analysis ...
+# Checks (clang-tidy) — not part of the default build.
+# Build explicitly with: docker build --target checks ...
 # Run against a diff on stdin: docker run --rm -i <image> < component.diff
+# Note: bundled-af has no unit-test suite, so this stage is tidy-only
+# (unlike the checks stage in af_core/pcf_handler/demo-qod-adapter, which
+# also runs ctest).
 # ─────────────────────────────────────────────────────────────────────────
-FROM builder AS static-analysis
+FROM builder AS checks
 
 RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
-      wget gnupg lsb-release software-properties-common ca-certificates python3 \
+    wget gnupg lsb-release software-properties-common ca-certificates python3 \
     && wget -qO- https://apt.llvm.org/llvm.sh | bash -s -- 18 \
     && apt-get install --yes --no-install-recommends clang-tidy-18 \
     && rm -rf /var/lib/apt/lists/*

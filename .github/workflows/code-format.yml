@@ -14,6 +14,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check trailing whitespace and file permissions
+        run: |
+          BASE_REF="${{ github.base_ref }}"
+          if [ -n "$BASE_REF" ]; then
+            git fetch origin "$BASE_REF"
+            BASE="origin/$BASE_REF"
+          else
+            BASE="HEAD^"
+          fi
+
+          .github/scripts/check_whitespace.sh --base "$BASE"
+
       - name: Install clang-format
         run: |
           sudo apt-get update

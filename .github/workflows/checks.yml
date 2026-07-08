@@ -1,0 +1,102 @@
+name: Checks (clang-tidy + unit tests)
+
+on:
+  workflow_call:
+
+env:
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  checks:
+    name: Checks (${{ matrix.component.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        component:
+          # northbound/api_component is intentionally excluded — its build
+          # is not wired into CI yet (see build.yml). af_core's only other
+          # suite (tests/integration) needs a full 5G network and stays in
+          # integration-tests.yml, not here.
+          - name: af-core
+            dockerfile: af_core/Dockerfile
+            diff_path: af_core
+            has_tests: true
+            results_path: /app/build-output/results.xml
+          - name: pcf-handler
+            dockerfile: southbound/pcf_handler/Dockerfile
+            diff_path: southbound/pcf_handler
+            has_tests: true
+            results_path: /app/southbound/pcf_handler/build-output/results.xml
+          - name: demo-qod-adapter
+            dockerfile: adapters/demo-qod-adapter/Dockerfile
+            diff_path: adapters/demo-qod-adapter
+            has_tests: true
+            results_path: /app/adapters/demo-qod-adapter/build/results.xml
+          - name: bundled-af
+            dockerfile: Dockerfile
+            diff_path: src
+            has_tests: false
+            results_path: ""
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.CI_GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Compute changed lines
+        id: diff
+        run: |
+          git fetch origin "${{ github.base_ref }}"
+          git diff --no-prefix -U0 "origin/${{ github.base_ref }}...HEAD" -- "${{ matrix.component.diff_path }}" > component.diff
+          if [[ -s component.diff ]]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.diff.outputs.has_changes == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build checks image
+        id: build-checks
+        if: steps.diff.outputs.has_changes == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.component.dockerfile }}
+          target: checks
+          push: false
+          load: true
+          tags: ${{ matrix.component.name }}:checks
+          cache-from: type=gha,scope=${{ matrix.component.name }}
+          cache-to: type=gha,scope=${{ matrix.component.name }},mode=max
+
+      - name: Extract JUnit results
+        if: always() && steps.build-checks.outcome == 'success' && steps.diff.outputs.has_changes == 'true' && matrix.component.has_tests
+        run: |
+          docker create --name extract-results ${{ matrix.component.name }}:checks
+          docker cp extract-results:${{ matrix.component.results_path }} ./results.xml
+          docker rm extract-results
+
+      - name: Upload JUnit results
+        if: always() && steps.build-checks.outcome == 'success' && steps.diff.outputs.has_changes == 'true' && matrix.component.has_tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results-${{ matrix.component.name }}
+          path: results.xml
+          retention-days: 30
+
+      - name: Run clang-tidy on changed lines
+        if: steps.diff.outputs.has_changes == 'true'
+        run: docker run --rm -i ${{ matrix.component.name }}:checks < component.diff
+
+      - name: No changes to analyze
+        if: steps.diff.outputs.has_changes == 'false'
+        run: echo "No changes under ${{ matrix.component.diff_path }} — skipping."

@@ -10,14 +10,14 @@ WORKDIR /app
 FROM base AS dependencies
 RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
-      build-essential \
-      cmake \
-      git \
-      libspdlog-dev \
-      libyaml-cpp-dev \
-      libfmt-dev \
-      nlohmann-json3-dev \
-      libssl-dev \
+    build-essential \
+    cmake \
+    git \
+    libspdlog-dev \
+    libyaml-cpp-dev \
+    libfmt-dev \
+    nlohmann-json3-dev \
+    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN ldconfig
@@ -41,14 +41,14 @@ COPY --from=dependencies /usr/lib/x86_64-linux-gnu/libyaml-cpp.so*  /usr/lib/x86
 # Install minimal build tools
 RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
-      build-essential \
-      cmake \
-      libboost-system-dev \
-      libssl-dev \
-      libspdlog-dev \
-      libyaml-cpp-dev \
-      libfmt-dev \
-      nlohmann-json3-dev \
+    build-essential \
+    cmake \
+    libboost-system-dev \
+    libssl-dev \
+    libspdlog-dev \
+    libyaml-cpp-dev \
+    libfmt-dev \
+    nlohmann-json3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN ldconfig
@@ -63,30 +63,30 @@ RUN cd /app/adapters/demo-qod-adapter && \
     mkdir -p build && \
     cd build && \
     cmake .. -DCMAKE_BUILD_TYPE=Release \
-             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-             -DBUILD_TESTING=OFF && \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+    -DBUILD_TESTING=OFF && \
     make -j$(nproc)
 
 # ─────────────────────────────────────────────────────────────────────────
-# Static analysis (clang-tidy) — not part of the default build.
-# Build explicitly with: docker build --target static-analysis ...
-# Run against a diff on stdin: docker run --rm -i <image> < component.diff
+# Checks (clang-tidy + unit tests) — not part of the default build.
+# Build explicitly with: docker build --target checks ...
+# Tests run at build time (docker build fails immediately on test failure).
+# Run clang-tidy against a diff on stdin: docker run --rm -i <image> < component.diff
 # ─────────────────────────────────────────────────────────────────────────
-FROM builder AS static-analysis
+FROM builder AS checks
 
 RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
-      wget gnupg lsb-release software-properties-common ca-certificates python3 \
-      libgtest-dev libgmock-dev \
+    wget gnupg lsb-release software-properties-common ca-certificates python3 \
+    libgtest-dev libgmock-dev \
     && wget -qO- https://apt.llvm.org/llvm.sh | bash -s -- 18 \
     && apt-get install --yes --no-install-recommends clang-tidy-18 \
     && rm -rf /var/lib/apt/lists/*
 
-# Reconfigure (no need to build) so compile_commands.json includes the
-# tests target — the main builder configure above uses
-# -DBUILD_TESTING=OFF, so without this, clang-tidy has no compile-command
-# entry at all for test source files and can't resolve <gtest/gtest.h>.
-RUN cd /app/adapters/demo-qod-adapter/build && cmake -DBUILD_TESTING=ON .
+RUN cd /app/adapters/demo-qod-adapter/build && \
+    cmake -DBUILD_TESTING=ON . && \
+    make -j$(nproc) adapter_tests && \
+    ctest -L unit --output-on-failure --output-junit results.xml
 
 COPY .clang-tidy /app/.clang-tidy
 COPY .github/scripts/check_tidy.sh /usr/local/bin/check_tidy.sh
@@ -96,22 +96,6 @@ WORKDIR /app
 ENTRYPOINT ["check_tidy.sh", "--build-dir", "adapters/demo-qod-adapter/build"]
 
 # ─────────────────────────────────────────────────────────────────────────
-# Unit tests (ctest) — not part of the default build.
-# Build explicitly with: docker build --target tests ...
-# ─────────────────────────────────────────────────────────────────────────
-FROM builder AS tests
-
-RUN apt-get update && \
-    apt-get install --yes --no-install-recommends \
-      libgtest-dev libgmock-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN cd /app/adapters/demo-qod-adapter/build && \
-    cmake -DBUILD_TESTING=ON . && \
-    make -j$(nproc) adapter_tests && \
-    ctest -L unit --output-on-failure --output-junit results.xml
-
-# ─────────────────────────────────────────────────────────────────────────
 # Coverage (gcov via gcovr) — not part of the default build.
 # Build explicitly with: docker build --target coverage ...
 # ─────────────────────────────────────────────────────────────────────────
@@ -119,7 +103,7 @@ FROM builder AS coverage
 
 RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
-      libgtest-dev libgmock-dev python3-pip \
+    libgtest-dev libgmock-dev python3-pip \
     && pip install --break-system-packages gcovr==8.6 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -128,12 +112,12 @@ RUN cd /app/adapters/demo-qod-adapter/build && \
     make -j$(nproc) adapter_tests && \
     ctest -L unit --output-on-failure && \
     gcovr --root /app/adapters/demo-qod-adapter \
-          --exclude '/app/adapters/demo-qod-adapter/tests/.*' \
-          --exclude '/app/adapters/demo-qod-adapter/build/generated/.*' \
-          --exclude '.*/nlohmann/.*' \
-          --print-summary \
-          --html-details coverage.html \
-          .
+    --exclude '/app/adapters/demo-qod-adapter/tests/.*' \
+    --exclude '/app/adapters/demo-qod-adapter/build/generated/.*' \
+    --exclude '.*/nlohmann/.*' \
+    --print-summary \
+    --html-details coverage.html \
+    .
 
 # TODO: coverage is report-only for now (see docs/contributing.md#coverage)
 # — the adapter's suite only covers QodClient/SessionManager, not the HTTP
@@ -158,7 +142,7 @@ FROM base AS runtime
 # Install runtime dependencies (ca-certificates for SSL)
 RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
-      ca-certificates \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy runtime shared libraries

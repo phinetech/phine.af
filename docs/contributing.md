@@ -21,16 +21,24 @@ is the single entry point for pull requests — it orchestrates every check
 below as a staged pipeline rather than running everything in parallel, so
 a fast lint failure means the 20-45 minute E2E suites never even start:
 
-1. **Format Check** — fast lint, no Docker.
-2. **Build and Test**, **Static Analysis**, **Unit Tests** — run in
-   parallel with each other, gated on Format Check. Each needs the full
-   dependency build, but no extra recompiles.
-3. **Coverage** — gated on Unit Tests specifically (no point generating a
-   report for a suite that's already failing).
+1. **Format Check** — fast lint, no Docker. Runs on every push including
+   draft PRs.
+2. **Build**, **Checks** (clang-tidy + unit tests) — run in parallel,
+   gated on Format Check. Each uses the shared GHA layer cache so
+   `builder` layers built by one job are reused by the other.
+   **Checks runs on draft PRs; Build does not.**
+3. **Coverage** — gated on Checks. Skipped on draft PRs.
 4. **Integration Tests**, **Tutorials Validation** — the heaviest, full
-   E2E checks. Gated on everything above.
+   E2E checks. Gated on everything above. Skipped on draft PRs.
+5. **Publish** — pushes images to `phinetech/` on merges to `main`/`develop`
+   only (never on PRs).
 
-Each of those is defined in its own workflow file for readability, but
+In short: **draft PRs run format check + unit tests + clang-tidy only**.
+Mark a PR ready for review to trigger the full pipeline (GitHub Actions
+re-triggers the workflow on the `ready_for_review` event — no new commit
+need).
+
+Each tier is defined in its own workflow file for readability, but
 they're all [reusable workflows](https://docs.github.com/en/actions/using-workflows/reusing-workflows)
 (`on: workflow_call`) rather than being triggered directly — `ci.yml` is
 what actually invokes them, via `needs:` to enforce the ordering. If a
@@ -47,7 +55,7 @@ trailing whitespace/permissions, static analysis, unit tests, and a build
 — without needing to invoke GitHub Actions itself:
 
 ```bash
-# Default: format + whitespace/permissions + static analysis + unit tests
+# Default: format + whitespace/permissions + checks (clang-tidy + unit tests)
 # + build, for whichever components changed vs origin/main
 .github/scripts/pre-push.sh
 
@@ -145,8 +153,8 @@ setup differs.
 
 ## Static Analysis
 
-Pull requests are checked by the `Static Analysis (clang-tidy)` GitHub
-Actions workflow ([`.github/workflows/static-analysis.yml`](https://github.com/phinetech/phine.af/blob/main/.github/workflows/static-analysis.yml)),
+Pull requests are checked by the `Checks` GitHub Actions workflow
+([`.github/workflows/checks.yml`](https://github.com/phinetech/phine.af/blob/main/.github/workflows/checks.yml)),
 using [clang-tidy](https://clang.llvm.org/extra/clang-tidy/) 18 with the
 checks configured in [`.clang-tidy`](https://github.com/phinetech/phine.af/blob/main/.clang-tidy)
 (`bugprone-*`, `performance-*`, `clang-analyzer-core.*` for now — see the
@@ -179,25 +187,25 @@ component's Docker image first.
 ### Running it locally
 
 Pick the Dockerfile for the component you changed, build its
-`static-analysis` target (this runs a full build, so it can take a while
-the first time), then pipe a diff into the resulting image:
+`checks` target (this runs a full build plus the unit tests, so it can
+take a while the first time), then pipe a diff into the resulting image:
 
 ```bash
 # af_core
-docker build --target static-analysis -f af_core/Dockerfile -t af-core:tidy .
-git diff --no-prefix -U0 origin/main -- af_core | docker run --rm -i af-core:tidy
+docker build --target checks -f af_core/Dockerfile -t af-core:checks .
+git diff --no-prefix -U0 origin/main -- af_core | docker run --rm -i af-core:checks
 
 # southbound/pcf_handler
-docker build --target static-analysis -f southbound/pcf_handler/Dockerfile -t pcf-handler:tidy .
-git diff --no-prefix -U0 origin/main -- southbound/pcf_handler | docker run --rm -i pcf-handler:tidy
+docker build --target checks -f southbound/pcf_handler/Dockerfile -t pcf-handler:checks .
+git diff --no-prefix -U0 origin/main -- southbound/pcf_handler | docker run --rm -i pcf-handler:checks
 
 # adapters/demo-qod-adapter
-docker build --target static-analysis -f adapters/demo-qod-adapter/Dockerfile -t demo-qod-adapter:tidy .
-git diff --no-prefix -U0 origin/main -- adapters/demo-qod-adapter | docker run --rm -i demo-qod-adapter:tidy
+docker build --target checks -f adapters/demo-qod-adapter/Dockerfile -t demo-qod-adapter:checks .
+git diff --no-prefix -U0 origin/main -- adapters/demo-qod-adapter | docker run --rm -i demo-qod-adapter:checks
 
-# bundled AF runtime (src/)
-docker build --target static-analysis -f Dockerfile -t bundled-af:tidy .
-git diff --no-prefix -U0 origin/main -- src | docker run --rm -i bundled-af:tidy
+# bundled AF runtime (src/) — tidy only, no unit suite
+docker build --target checks -f Dockerfile -t bundled-af:checks .
+git diff --no-prefix -U0 origin/main -- src | docker run --rm -i bundled-af:checks
 ```
 
 Swap `origin/main` for whatever branch your changes will actually be merged
@@ -210,7 +218,7 @@ locations, same as running `clang-tidy` directly.
 
 ## Testing
 
-Pull requests run a fast unit-test job (`Unit Tests` — [`.github/workflows/unit-tests.yml`](https://github.com/phinetech/phine.af/blob/main/.github/workflows/unit-tests.yml))
+Pull requests run a fast checks job (`Checks` — [`.github/workflows/checks.yml`](https://github.com/phinetech/phine.af/blob/main/.github/workflows/checks.yml))
 across the components that have unit suites. Tests are written with
 [GoogleTest](https://google.github.io/googletest/) and run through
 [CTest](https://cmake.org/cmake/help/latest/manual/ctest.1.html) —
@@ -220,10 +228,10 @@ tagged with a CTest **label** so CI can select "fast" vs. "heavy":
 
 | Component | Suite | Label | Runs in CI via |
 |---|---|---|---|
-| `af_core` | `tests/unit` — light scaffold, one real class covered so far; more coverage to come | `unit` | `unit-tests.yml`, every PR |
+| `af_core` | `tests/unit` — light scaffold, one real class covered so far; more coverage to come | `unit` | `checks.yml`, every PR (including drafts) |
 | `af_core` | `tests/integration` — full 5G network (free5gc, gNB, UE) | `integration` | `integration-tests.yml` (unchanged, heavy, separate) |
-| `southbound/pcf_handler` | `tests/` — flow-description utilities | `unit` | `unit-tests.yml`, every PR |
-| `adapters/demo-qod-adapter` | `tests/` — QoD client + session manager (gmock) | `unit` | `unit-tests.yml`, every PR |
+| `southbound/pcf_handler` | `tests/` — flow-description utilities | `unit` | `checks.yml`, every PR (including drafts) |
+| `adapters/demo-qod-adapter` | `tests/` — QoD client + session manager (gmock) | `unit` | `checks.yml`, every PR (including drafts) |
 
 `northbound/api_component` has no unit suite and is excluded, matching its
 exclusion from `build.yml`'s component matrix.
@@ -233,24 +241,24 @@ exclusion from `build.yml`'s component matrix.
 Same reason as static analysis: each component's unit tests link against
 that component's real library (`af_core_lib`, etc.), which pulls in gRPC,
 OAI models, or other dependencies that only exist inside that component's
-Docker build. Each Dockerfile has a `tests` stage (`FROM builder AS tests`)
-that installs `libgtest-dev`/`libgmock-dev` from apt (not `FetchContent` —
-avoids a build-time network clone and the `build/_deps` committed-gitlink
-problem that broke checkout once already), reconfigures with
-`-DBUILD_TESTING=ON`, and runs `ctest -L unit --output-on-failure` as part
-of the image build itself — a failing test fails the `docker build`.
+Docker build. Each Dockerfile has a `checks` stage (`FROM builder AS checks`)
+that installs `libgtest-dev`/`libgmock-dev` and `clang-tidy-18` from apt
+in a single layer, reconfigures with `-DBUILD_TESTING=ON`, runs
+`ctest -L unit --output-on-failure` as part of the image build — a failing
+test fails the `docker build` — and sets `ENTRYPOINT check_tidy.sh` so
+the same image handles the clang-tidy pass too.
 
 ### Running it locally
 
 ```bash
 # af_core
-docker build --target tests -f af_core/Dockerfile -t af-core:tests .
+docker build --target checks -f af_core/Dockerfile -t af-core:checks .
 
 # southbound/pcf_handler
-docker build --target tests -f southbound/pcf_handler/Dockerfile -t pcf-handler:tests .
+docker build --target checks -f southbound/pcf_handler/Dockerfile -t pcf-handler:checks .
 
 # adapters/demo-qod-adapter
-docker build --target tests -f adapters/demo-qod-adapter/Dockerfile -t demo-qod-adapter:tests .
+docker build --target checks -f adapters/demo-qod-adapter/Dockerfile -t demo-qod-adapter:checks .
 ```
 
 Unlike the format/clang-tidy checks, there's no separate `docker run` step —
@@ -280,11 +288,12 @@ Pull requests get a `gcov`-based coverage report (via
 [`gcovr`](https://gcovr.com/)) for the same 3 components as the unit-test
 job — [`.github/workflows/coverage.yml`](https://github.com/phinetech/phine.af/blob/main/.github/workflows/coverage.yml)
 uploads an HTML report per component as a build artifact. This is
-**report-only** — coverage never fails a PR. Given today's suites are
-light/narrow (see the Testing section above), a hard threshold would block
-unrelated PRs; this can be revisited once coverage is more established.
-Each Dockerfile's `coverage` stage has a `TODO` with the commented-out
-`gcovr --fail-under-*` flags ready to re-enable gating later.
+**report-only** — coverage never fails a PR. Coverage is skipped on draft
+PRs. Given today's suites are light/narrow (see the Testing section
+above), a hard threshold would block unrelated PRs; this can be revisited
+once coverage is more established. Each Dockerfile's `coverage` stage has
+a `TODO` with the commented-out `gcovr --fail-under-*` flags ready to
+re-enable gating later.
 
 Coverage requires `-O0 --coverage`, which is incompatible with the
 `-O3` used everywhere else — so unlike the `tests` stage, `coverage` isn't
