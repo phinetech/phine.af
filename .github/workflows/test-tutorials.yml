@@ -17,16 +17,30 @@ jobs:
       fail-fast: false
       matrix:
         tutorial:
-          - name: QoS Enforcement Tutorial (bundled AF)
+          - name: QoS Enforcement Tutorial (bundled AF, HTTP)
             file: docs/getting-started/qos-enforcement-tutorial.md
-            artifact-name: qos-tutorial-bundled-af-logs
+            artifact-name: qos-tutorial-bundled-af-http-logs
             log-path: /tmp/phine.af/qos-enforcement-tutorial/logs
             af_profile: af
-          - name: QoS Enforcement Tutorial (split AFs)
+            compose_override_file: docker-compose/compose.http.yaml
+          - name: QoS Enforcement Tutorial (bundled AF, gRPC)
             file: docs/getting-started/qos-enforcement-tutorial.md
-            artifact-name: qos-tutorial-split-afs-logs
+            artifact-name: qos-tutorial-bundled-af-grpc-logs
+            log-path: /tmp/phine.af/qos-enforcement-tutorial/logs
+            af_profile: af
+            compose_override_file: docker-compose/compose.grpc.yaml
+          - name: QoS Enforcement Tutorial (split AFs, HTTP)
+            file: docs/getting-started/qos-enforcement-tutorial.md
+            artifact-name: qos-tutorial-split-afs-http-logs
             log-path: /tmp/phine.af/qos-enforcement-tutorial/logs
             af_profile: afs
+            compose_override_file: docker-compose/compose.http.yaml
+          - name: QoS Enforcement Tutorial (split AFs, gRPC)
+            file: docs/getting-started/qos-enforcement-tutorial.md
+            artifact-name: qos-tutorial-split-afs-grpc-logs
+            log-path: /tmp/phine.af/qos-enforcement-tutorial/logs
+            af_profile: afs
+            compose_override_file: docker-compose/compose.grpc.yaml
           - name: Demo Adapter Tutorial
             file: docs/getting-started/adapter-qod-tutorial.md
             artifact-name: demo-adapter-tutorial-logs
@@ -95,13 +109,24 @@ jobs:
         env:
           AF_PROFILE: ${{ matrix.tutorial.af_profile }}
           CORE_PROFILE: ${{ matrix.tutorial.core_profile }}
+          COMPOSE_OVERRIDE_FILE: ${{ matrix.tutorial.compose_override_file }}
         run: runme run --all --skip-prompts --filename ${{ matrix.tutorial.file }}
+
+      - name: Collect logs for ${{ matrix.tutorial.name }}
+        if: always()
+        env:
+          AF_PROFILE: ${{ matrix.tutorial.af_profile }}
+          CORE_PROFILE: ${{ matrix.tutorial.core_profile }}
+          COMPOSE_OVERRIDE_FILE: ${{ matrix.tutorial.compose_override_file }}
+        run: runme run collect-logs --filename ${{ matrix.tutorial.file }}
+        continue-on-error: true
 
       - name: Cleanup ${{ matrix.tutorial.name }}
         if: always()
         env:
           AF_PROFILE: ${{ matrix.tutorial.af_profile }}
           CORE_PROFILE: ${{ matrix.tutorial.core_profile }}
+          COMPOSE_OVERRIDE_FILE: ${{ matrix.tutorial.compose_override_file }}
         run: runme run cleanup --filename ${{ matrix.tutorial.file }}
         continue-on-error: true
 
