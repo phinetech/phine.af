@@ -332,4 +332,3 @@ EXPOSE 8080
 
 # Command to run
 CMD ["/usr/local/bin/af_core", "--config", "/etc/oai/af/af_core.yaml"]
-

@@ -405,4 +405,3 @@ EXPOSE 8080
 
 # Command to run
 CMD ["/usr/local/bin/pcf_server", "--config", "/etc/oai/af/pcf_handler.yaml"]
-

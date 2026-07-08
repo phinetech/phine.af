@@ -39,6 +39,61 @@ job depending on it — that's the mechanism this relies on, not custom
 scripting. If you're debugging why a workflow file didn't run on your PR,
 check `ci.yml` rather than the file itself.
 
+### Running it locally before you push
+
+[`.github/scripts/pre-push.sh`](https://github.com/phinetech/phine.af/blob/main/.github/scripts/pre-push.sh)
+covers the same ground as tiers 1-2 of the pipeline above — format,
+trailing whitespace/permissions, static analysis, unit tests, and a build
+— without needing to invoke GitHub Actions itself:
+
+```bash
+# Default: format + whitespace/permissions + static analysis + unit tests
+# + build, for whichever components changed vs origin/main
+.github/scripts/pre-push.sh
+
+# Fast-only: format + whitespace/permissions, skip the Docker-based tier
+.github/scripts/pre-push.sh --quick
+
+# Also build the coverage stage (off by default — report-only in CI, and
+# the slowest check since it needs a fresh -O0 recompile)
+.github/scripts/pre-push.sh --coverage
+
+# Restrict the Docker tier to one component instead of auto-detecting
+# from the diff — useful when you know exactly what you touched
+.github/scripts/pre-push.sh --component af-core
+
+# Diff against a different base (e.g. stacked on a feature branch)
+.github/scripts/pre-push.sh --base origin/feat-http-injection
+
+# Auto-fix formatting and whitespace issues along the way
+.github/scripts/pre-push.sh --fix
+```
+
+Docker-based checks are skipped per-component when that component has no
+relevant changes, same skip logic the CI matrices use — so this doesn't
+cost you 3 components' worth of build time when you only touched one.
+Ends with a summary of every check that ran, skipped, passed, or failed,
+and exits non-zero if anything failed.
+
+`--fix` (and `check_format.sh`/`check_whitespace.sh`'s own `--fix` flags)
+only ever touch lines that are actually part of your diff against
+`--base` — for whitespace specifically, that means stripping trailing
+whitespace exactly on the lines `git diff --check` flagged (or trimming
+one-or-more trailing blank lines at EOF down to exactly one newline),
+never a whole-file reformat that could touch pre-existing, unrelated
+lines. One nuance: the checks compare **committed** refs
+(`base...HEAD`), not your working tree, so after `--fix` changes files
+on disk you need to `git add`/commit (or amend) before re-running the
+check to see it reflect as clean — this is the same "why doesn't my fix
+show up" gotcha as any `base...HEAD`-style diff, not something specific
+to this script.
+
+**Not covered**: Integration Tests and Tutorials Validation (tier 4) —
+20-45 minute E2E suites needing a full 5G network stack and the `gtp5g`
+kernel module. Not realistic to run before every push — see
+[`af_core/tests/integration/README.md`](https://github.com/phinetech/phine.af/blob/main/af_core/tests/integration/README.md)
+if you need to run those manually.
+
 ## Code Formatting
 
 Pull requests are checked for formatting by the `Code Format Check` GitHub

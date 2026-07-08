@@ -196,4 +196,3 @@ USER adapter
 WORKDIR /app
 
 CMD ["/usr/local/bin/demo_qod_adapter", "/app/config.yaml"]
-

@@ -295,4 +295,3 @@ USER afuser
 EXPOSE 50051
 
 CMD ["/usr/local/bin/af", "--config", "/etc/oai/af/af.yaml"]
-

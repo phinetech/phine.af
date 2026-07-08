@@ -19,7 +19,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check for trailing whitespace
+      - name: Check trailing whitespace and file permissions
         run: |
           BASE_REF="${{ github.base_ref }}"
           if [ -n "$BASE_REF" ]; then
@@ -29,24 +29,7 @@ jobs:
             BASE="HEAD^"
           fi
 
-          echo "Checking files changed against $BASE..."
-
-          if OUTPUT="$(git diff --check "$BASE...HEAD")"; then
-            echo "No trailing whitespace found"
-          else
-            echo "$OUTPUT"
-            echo
-            echo "Files with trailing whitespace:"
-            echo "$OUTPUT" | grep -vE '^\+' | grep -oE '^[^:]+' | sort -u | sed 's/^/  - /'
-            echo "::error::Trailing whitespace found"
-            exit 1
-          fi
-
-      - name: Check file permissions
-        run: |
-          find . -type f -name "*.sh" -not -executable | while read file; do
-            echo "::warning file=$file::Shell script is not executable"
-          done
+          .github/scripts/check_whitespace.sh --base "$BASE"
 
   build-components:
     name: Build All Components
