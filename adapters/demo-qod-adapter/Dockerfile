@@ -43,6 +43,7 @@ RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
       build-essential \
       cmake \
+      libboost-system-dev \
       libssl-dev \
       libspdlog-dev \
       libyaml-cpp-dev \
@@ -87,6 +88,7 @@ COPY --from=grpc-builder /usr/local/lib/libprotobuf* /usr/local/lib/
 COPY --from=builder /usr/lib/x86_64-linux-gnu/libfmt.so*       /usr/lib/x86_64-linux-gnu/
 COPY --from=builder /usr/lib/x86_64-linux-gnu/libspdlog.so*    /usr/lib/x86_64-linux-gnu/
 COPY --from=builder /usr/lib/x86_64-linux-gnu/libyaml-cpp.so*  /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libboost_system.so* /usr/lib/x86_64-linux-gnu/
 COPY --from=builder /usr/lib/x86_64-linux-gnu/libssl.so*       /usr/lib/x86_64-linux-gnu/
 COPY --from=builder /usr/lib/x86_64-linux-gnu/libcrypto.so*    /usr/lib/x86_64-linux-gnu/
 

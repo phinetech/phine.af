@@ -1,0 +1,57 @@
+# HTTP-transport variant of the standalone AF Core config (afs deployment).
+#
+# Same as af_core.yaml but the northbound entrypoint and the af_core ->
+# pcf_handler hop run over HTTP/2 cleartext (h2c). Selected by
+# docker-compose/compose.http.yaml, which mounts this file and points the
+# af_core binary at it.
+
+# AF Core (Orchestrator) — northbound HTTP/2 entrypoint on 8080
+af_core:
+  logging:
+    level: "info"
+    console_output: true
+    file_output: false
+    file_path: "/app/logs/af_core.log"
+
+  communication:
+    kind: "http"
+    listen:
+      host: "0.0.0.0"
+      port: 8080
+    timeout_ms: 5000
+
+  qod:
+    max_session_duration: 86400
+    min_session_duration: 60
+    session_cleanup_interval: 60
+    unavailable_session_ttl: 360
+    enable_notifications: true
+    api_base_url: "https://api.example.com/quality-on-demand/v1"
+
+# PCF handler link over HTTP/2. af_core dials the handler at `remote`
+# (pcf_handler:8085). `pcf.base_url` is unused by af_core in afs mode (the
+# handler makes the SBI call) but set correctly to avoid a stale default.
+pcf_handler:
+  enabled: true
+
+  pcf:
+    base_url: "http://192.168.70.139:8000/npcf-policyauthorization/v1"
+    use_tls: false
+    api_version: "v1"
+
+  communication:
+    kind: "http"
+    listen:
+      host: "0.0.0.0"
+      port: 8085
+    remote:
+      host: "pcf_handler"
+      port: 8085
+    client_only: false
+    timeout_ms: 5000
+
+nef_handler:
+  enabled: false
+
+udr_handler:
+  enabled: false

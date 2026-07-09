@@ -7,17 +7,14 @@ cwd: ../..
 
 # Demo QoD Adapter Tutorial
 
-This tutorial walks you through deploying the demo QoD adapter alongside the full 5G testbed. The adapter acts as an **Application Management** component for a ROS2-over-5G deployment, automatically requesting and managing CAMARA Quality-on-Demand sessions for different traffic types through phine.af.
+This tutorial deploys the demo QoD adapter alongside the full 5G testbed. The adapter acts as an **Application Management** component for a ROS2-over-5G deployment, automatically requesting and managing CAMARA QoD sessions for different traffic types through phine.af.
 
-> **Runme compatible**: This tutorial is designed to run with [Runme](https://runme.dev/) — both interactively in VS Code and non-interactively in CI via the Runme CLI. See the [Runme Guide](../development/runme-guide.md) for details.
+By the end of the run you will:
 
-By the end of this tutorial you will have:
-
-1. Deployed a complete 5G core (free5GC), RAN simulator (UERANSIM), and the phine.af Application Function
-2. Built and run the demo QoD adapter as a containerised application
-3. Observed the adapter automatically creating QoD sessions for two traffic streams (video and WebRTC)
-4. Monitored session status transitions from `REQUESTED` → `AVAILABLE`
-5. Watched the adapter gracefully clean up all sessions on shutdown
+1. Start free5GC, UERANSIM, and the phine.af Application Function
+2. Run the demo QoD adapter and watch it create sessions for two traffic streams (video and WebRTC)
+3. Observe session status transitions from `REQUESTED` → `AVAILABLE`
+4. Watch the adapter clean up all sessions on shutdown
 
 ## Prerequisites
 
@@ -26,8 +23,8 @@ By the end of this tutorial you will have:
 | Docker Engine ≥ 24.0 | With Docker Compose v2 plugin |
 | Linux host | Network interface creation requires Linux kernel capabilities |
 | `gtp5g` kernel module | Required by the UPF — see [prerequisites](prerequisites.md) |
-| ~8 GB free RAM | The full 5G core + RAN + AF + adapter stack runs ~16 containers |
-| Ports available | No services bound to `192.168.70.128/26`, `192.168.71.128/26`, or `192.168.72.128/26` subnets |
+| ~8 GB free RAM | The full stack runs roughly 16 containers |
+| Free local subnets | Nothing else should be bound to `192.168.70.128/26`, `192.168.71.128/26`, or `192.168.72.128/26` |
 
 ## Architecture
 
@@ -74,7 +71,8 @@ The adapter connects to af_core via gRPC and sends QoD session requests using th
                    └──────────┘     └──────────┘     └──────────┘     └──────────┘
 ```
 
-**Key containers**:
+<details>
+<summary><b>Container reference</b></summary>
 
 | Container | IP Address | Role |
 |---|---|---|
@@ -86,9 +84,15 @@ The adapter connects to af_core via gRPC and sends QoD session requests using th
 | `upf` | host network | OAI UPF — user plane enforcement |
 | `ue` | 192.168.70.181 (ctrl) / 10.60.0.1 (data) | UERANSIM UE |
 
+</details>
+
 ## Configuration
 
-Set up environment variables for this tutorial:
+Set up environment variables for this tutorial. `COMPOSE_PROFILES` combines a core network profile with the AF and adapter profiles used in this tutorial:
+
+- `$CORE_PROFILE` (`free5gc` by default): the 5G core, UPF, external DN, and UERANSIM
+- `afs`: the split-microservice AF — `af_core` + `pcf_handler`
+- `standalone-qod`: the standalone `demo-qod-adapter` container
 
 ```bash {"name":"setup-variables","interactive":"false"}
 export CORE_PROFILE="${CORE_PROFILE:-free5gc}"
@@ -111,14 +115,15 @@ echo "  CAPTURE_DIR: $LOGS_DIR"
 
 ## Step 1: Deploy the 5G Core and AF Stack
 
-Install required dependencies and build the gtp5g kernel module:
+Install dependencies and build the `gtp5g` kernel module:
 
 ```bash {"name":"install-deps","interactive":"false"}
 ./build/scripts/ci_helper.sh install_dependencies
 ./build/scripts/ci_helper.sh install_gtp5g
 ```
 
-Ensure submodules are up to date
+Ensure submodules are up to date:
+
 ```bash {"name":"check-submodules","interactive":"false"}
 ./build/scripts/ci_helper.sh check_submodules
 ```
@@ -153,9 +158,9 @@ echo "Waiting for UE to establish connection (20s)..."
 sleep 20
 ```
 
-The Compose service names are profile-specific. For the `free5gc` profile the RAN services are `free5gc-gnb` and `free5gc-ue`. For the `oai-core` profile they are `oai-gnb` and `oai-ue`. In both cases the containers still run with the familiar names `gnb` and `ue`.
+The Compose service names are profile-specific: the `free5gc` profile uses `free5gc-gnb`/`free5gc-ue`, and the `oai-core` profile uses `oai-gnb`/`oai-ue`. Both are still reachable via the container aliases `gnb` and `ue`.
 
-Verify the UE has registered and obtained an IP address:
+Verify that the UE has registered and received its tunnel IP:
 
 ```bash {"name":"verify-ue","interactive":"false"}
 docker exec ue ip addr show uesimtun0 | grep "10.60.0.1"
@@ -174,11 +179,11 @@ Wait for the AF Core gRPC server to become ready:
 sleep 15
 ```
 
-At this point the full stack is running and ready for the adapter.
+The stack is now running and ready for the adapter.
 
 ## Step 2: Start Traffic Capture
 
-Start capturing control-plane traffic to observe the QoD signalling flow:
+Start a control-plane capture before running the adapter:
 
 ```bash {"name":"start-capture","interactive":"false"}
 PCAP_FILE="$LOGS_DIR/adapter_capture.pcapng"
@@ -195,10 +200,7 @@ echo "Traffic capture started in background (PID: $(cat "$PID_FILE" 2>/dev/null 
 sleep 2
 ```
 
-This captures:
-- **gRPC/HTTP2** traffic between adapter (.143) and af_core (.141)
-- **HTTP** traffic between PCF handler (.140) and PCF (.139)
-- **PFCP** traffic between SMF (.133) and UPF
+This filter captures gRPC/HTTP2 traffic between the adapter and `af_core`, HTTP traffic between the PCF handler and PCF, and PFCP traffic between the SMF and UPF.
 
 ## Step 3: Review the Adapter Configuration
 
@@ -238,15 +240,14 @@ monitor:
 
 ## Step 4: Run the Adapter
 
-Start the adapter container. It connects to af_core, creates QoD sessions, monitors them, and exits after the configured number of iterations:
+Start the adapter. It connects to af_core, creates QoD sessions, monitors them, and exits after the configured number of iterations:
 
 ```bash {"name":"run-adapter","interactive":"false"}
 docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES up --exit-code-from demo-qod-adapter demo-qod-adapter
 ```
 
-### Expected Output
-
-You should see output similar to this:
+<details>
+<summary><b>Example output</b></summary>
 
 ```text
 demo-qod-adapter  | [2026-02-16 17:01:45.569] [] [info] Demo QoD Adapter starting — config: /app/config.yaml
@@ -274,6 +275,8 @@ demo-qod-adapter  | [2026-02-16 17:02:00.673] [] [info] [SessionManager] Cleanup
 demo-qod-adapter  | [2026-02-16 17:02:00.673] [] [info] Demo QoD Adapter finished.
 demo-qod-adapter exited with code 0
 ```
+
+</details>
 
 ### Understanding the Output
 
@@ -310,7 +313,7 @@ echo "Capture stopped"
 
 ## Step 5: Analyze the Signalling Path
 
-Review the captured traffic to trace the QoD signalling flow:
+This step is optional, but useful if you want to confirm how the QoD requests moved through the control plane.
 
 ```bash {"name":"view-capture","interactive":"false","excludeFromRunAll":"true"}
 PCAP_FILE="$LOGS_DIR/adapter_capture.pcapng"
@@ -318,7 +321,8 @@ PCAP_FILE="$LOGS_DIR/adapter_capture.pcapng"
 wireshark $PCAP_FILE
 ```
 
-### Expected Signalling Sequence
+<details>
+<summary><b>What you should see in the capture</b></summary>
 
 When the adapter creates a session, the following chain of events occurs:
 
@@ -355,17 +359,17 @@ demo-qod-adapter (.143)
 
 This sequence repeats for each stream defined in the configuration. When the adapter cleans up, the same chain runs in reverse with `qod_delete_session` messages.
 
-### What to Look For in the Capture
-
-Key indicators:
+Key indicators to look for:
 - **gRPC messages** with `qod_create_session` / `qod_get_session` / `qod_delete_session`
 - **HTTP POST** to `/npcf-policyauthorization/v1/app-sessions`
 - **HTTP POST** to SM Policy Update Notification Callback `/<callback_url>/update` i.e., for free5gc `/nsmf-callback/sm-policies/<xxxx>/update`
 - **PFCP Session Modification** requests/responses
 
+</details>
+
 ## Step 6: Collect Logs
 
-After the adapter run, collect logs from all containers for analysis:
+Collect logs from all containers after the adapter run:
 
 ```bash {"name":"collect-logs","interactive":"false"}
 ./build/scripts/ci_helper.sh collect_logs $LOGS_DIR
@@ -385,7 +389,43 @@ View the AF Core log to see how it processed the adapter's requests:
 cat $LOGS_DIR/af_core.log | tail -50
 ```
 
-## Step 7: Run with Indefinite Monitoring
+## Cleanup
+
+Ensure traffic capture is stopped:
+
+```bash {"name":"ensure-capture-stopped","interactive":"false"}
+PCAP_FILE="$LOGS_DIR/adapter_capture.pcapng"
+PID_FILE="$LOGS_DIR/adapter_capture.pid"
+
+if [ -f "$PID_FILE" ]; then
+  PID="$(cat "$PID_FILE" 2>/dev/null || true)"
+  if [ -n "$PID" ]; then
+    sudo kill -TERM "$PID" 2>/dev/null || true
+    sleep 1
+    sudo kill -KILL "$PID" 2>/dev/null || true
+  fi
+  rm -f "$PID_FILE"
+fi
+sudo chmod a+r "$PCAP_FILE" 2>/dev/null || true
+echo "All tshark processes stopped"
+```
+
+Stop and remove all containers:
+
+```bash {"name":"cleanup","interactive":"false"}
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES down
+```
+
+To also remove built images:
+
+```bash {"name":"cleanup-all","excludeFromRunAll":"true","interactive":"false"}
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES down --rmi all
+```
+
+## Reference: Continuous Operation
+
+<details>
+<summary><b>Run the adapter indefinitely</b></summary>
 
 To keep the adapter running continuously (e.g., for a long-running demo or integration with real ROS2 nodes), update the config to use indefinite monitoring:
 
@@ -440,7 +480,7 @@ docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES run --rm \
   demo-qod-adapter
 ```
 
-The adapter will keep monitoring sessions until you stop it:
+The adapter keeps monitoring sessions until you stop it:
 
 ```bash {"name":"stop-adapter","excludeFromRunAll":"true","interactive":"false"}
 docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES stop demo-qod-adapter
@@ -448,38 +488,7 @@ docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES stop demo-qod-adapter
 
 When stopped, the adapter catches SIGTERM, cleans up all sessions, and exits gracefully.
 
-## Cleanup
-
-Ensure traffic capture is stopped:
-
-```bash {"name":"ensure-capture-stopped","interactive":"false"}
-PCAP_FILE="$LOGS_DIR/adapter_capture.pcapng"
-PID_FILE="$LOGS_DIR/adapter_capture.pid"
-
-if [ -f "$PID_FILE" ]; then
-  PID="$(cat "$PID_FILE" 2>/dev/null || true)"
-  if [ -n "$PID" ]; then
-    sudo kill -TERM "$PID" 2>/dev/null || true
-    sleep 1
-    sudo kill -KILL "$PID" 2>/dev/null || true
-  fi
-  rm -f "$PID_FILE"
-fi
-sudo chmod a+r "$PCAP_FILE" 2>/dev/null || true
-echo "All tshark processes stopped"
-```
-
-Stop and remove all containers:
-
-```bash {"name":"cleanup","interactive":"false"}
-docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES down
-```
-
-To also remove built images:
-
-```bash {"name":"cleanup-all","excludeFromRunAll":"true","interactive":"false"}
-docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES down --rmi all
-```
+</details>
 
 ## CI Quick Run
 
@@ -493,7 +502,8 @@ This builds all required images, deploys the full stack, runs the adapter, colle
 
 ## Troubleshooting
 
-### Adapter exits immediately with "af_core not reachable"
+<details>
+<summary><b>Adapter exits immediately with "af_core not reachable"</b></summary>
 
 The af_core gRPC server isn't ready yet. Ensure the `wait-for-af` step completed successfully and that the `af-core` container is running:
 
@@ -502,7 +512,10 @@ docker ps --filter name=af-core --format "table {{.Names}}\t{{.Status}}"
 grpcurl -plaintext 192.168.70.141:50051 list
 ```
 
-### Sessions stay in REQUESTED state
+</details>
+
+<details>
+<summary><b>Sessions stay in REQUESTED state</b></summary>
 
 This is expected if the PCF backend has not fully processed the policy. Check the PCF handler and PCF logs:
 
@@ -511,7 +524,10 @@ docker logs af-pcf-handler --tail 20
 docker logs pcf --tail 20
 ```
 
-### Port conflict on Docker network
+</details>
+
+<details>
+<summary><b>Port conflict on Docker network</b></summary>
 
 If containers fail to start with address-already-in-use errors, ensure no other Docker networks are using the `192.168.70.128/26` subnet:
 
@@ -520,9 +536,11 @@ docker network ls
 docker network inspect demo-oai-public-net 2>/dev/null || echo "Network not found"
 ```
 
+</details>
+
 ## Next Steps
 
-- Explore the adapter source code and design: [DESIGN.md](../../adapters/demo-qod-adapter/DESIGN.md)
-- Try the end-to-end QoS enforcement tutorial with iperf3 verification: [QoS Enforcement Tutorial](qos-enforcement-tutorial.md)
+- Explore the adapter source and design: [DESIGN.md](../../adapters/demo-qod-adapter/DESIGN.md)
+- Try the end-to-end QoS enforcement tutorial with `iperf3` verification: [QoS Enforcement Tutorial](qos-enforcement-tutorial.md)
 - Learn how to add new CAMARA APIs: [Add a CAMARA API](../development/add-camara-api.md)
 - Review the architecture: [Architecture Overview](../architecture/overview.md)

@@ -5,6 +5,7 @@
 /// traffic streams, monitors them, then cleans up on exit.
 
 #include "adapter_config.hpp"
+#include "http_qod_client.hpp"
 #include "qod_client.hpp"
 #include "session_manager.hpp"
 
@@ -66,8 +67,15 @@ int main(int argc, char* argv[]) {
     }
     spdlog::info("Loaded {} stream definition(s)", streams.size());
 
-    // ── Create QodClient ────────────────────────────────────────────────────
-    auto client = std::make_shared<QodClient>(client_config);
+    // ── Create QodClient (transport-switchable) ─────────────────────────────
+    std::shared_ptr<IQodClient> client;
+    if (client_config.transport == "http" || client_config.transport == "http2") {
+        spdlog::info("Using HTTP/2 transport to af_core");
+        client = std::make_shared<HttpQodClient>(client_config);
+    } else {
+        spdlog::info("Using gRPC transport to af_core");
+        client = std::make_shared<QodClient>(client_config);
+    }
     if (!client->wait_for_ready(client_config.timeout_seconds)) {
         spdlog::error("af_core not reachable — aborting.");
         return 1;

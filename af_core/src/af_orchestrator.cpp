@@ -13,19 +13,33 @@ namespace {
 
 std::unordered_map<std::string, std::string> make_server_config(
     const af::config::CommunicationConfig& config) {
-    return {
+    std::unordered_map<std::string, std::string> result = {
         {"server_address", config.listen.host},
         {"server_port", af::config::port_to_string(config.listen.port)}
     };
+    if (config.kind == af::config::CommunicationKind::Http) {
+        result["base_path"] = config.base_path;
+        result["use_tls"] = config.use_tls ? "true" : "false";
+        result["timeout_ms"] = std::to_string(config.timeout_ms);
+    }
+    return result;
 }
 
 std::unordered_map<std::string, std::string> make_client_config(
+    const af::config::CommunicationConfig& config,
     const af::config::EndpointConfig& endpoint) {
-    return {
+    std::unordered_map<std::string, std::string> result = {
         {"client_only", "true"},
         {"server_address", endpoint.host},
         {"server_port", af::config::port_to_string(endpoint.port)}
     };
+    if (config.kind == af::config::CommunicationKind::Http) {
+        result["base_url"] = "http" + std::string(config.use_tls ? "s" : "") + "://" + endpoint.host + ":" + af::config::port_to_string(endpoint.port);
+        result["base_path"] = config.base_path;
+        result["use_tls"] = config.use_tls ? "true" : "false";
+        result["timeout_ms"] = std::to_string(config.timeout_ms);
+    }
+    return result;
 }
 
 } // namespace
@@ -125,9 +139,14 @@ void AfOrchestrator::load_config() {
     const auto& pcf_comm = app_config_.pcf_handler.communication;
 
     if (app_config_.pcf_handler.enabled) {
+        // af_core is the *client* of the PCF handler, so it must dial the
+        // handler's address (remote), not its own bind address (listen).
+        // For direct/bundled comm, remote is absent and resolve_destination
+        // ignores the endpoint anyway, returning the service name.
+        const auto& pcf_endpoint = pcf_comm.remote.value_or(pcf_comm.listen);
         pcf_destination_ = af::config::resolve_destination(
             pcf_comm.kind,
-            pcf_comm.listen,
+            pcf_endpoint,
             "pcf_handler");
     } else {
         pcf_destination_.clear();
@@ -171,8 +190,13 @@ void AfOrchestrator::initialize_communication() {
         if (app_config_.pcf_handler.enabled) {
             // PCF interface
             std::unordered_map<std::string, std::string> pcf_comm_config;
-            if (pcf_comm.kind == af::config::CommunicationKind::Grpc) {
-                pcf_comm_config = make_client_config(pcf_comm.listen);
+            if (pcf_comm.kind == af::config::CommunicationKind::Grpc ||
+                pcf_comm.kind == af::config::CommunicationKind::Http) {
+                // Connect to the handler's address (remote), not af_core's own
+                // listen address. validate() guarantees remote is set here;
+                // value_or keeps us safe since load_config does not rethrow.
+                const auto& pcf_endpoint = pcf_comm.remote.value_or(pcf_comm.listen);
+                pcf_comm_config = make_client_config(pcf_comm, pcf_endpoint);
             }
 
             auto pcf_service = af::communication::CommunicationFactory::create_service(
@@ -183,6 +207,11 @@ void AfOrchestrator::initialize_communication() {
             if (pcf_service) {
                 communication_services_["pcf"] = pcf_service;
             }
+        }
+
+        // Initialize REST endpoints if using HTTP transport
+        if (core_comm.kind == af::config::CommunicationKind::Http) {
+            initialize_rest_endpoints();
         }
 
         logger_->info("Communication interfaces initialized");
@@ -278,7 +307,7 @@ void AfOrchestrator::initialize_qod_components() {
     logger_->info("Initializing QoD components");
 
     // Configure QoD session manager
-    qod::QodSessionConfig qod_config;
+    af::qod::QodSessionConfig qod_config;
     qod_config.max_session_duration = app_config_.af_core.qod.max_session_duration;
     qod_config.min_session_duration = app_config_.af_core.qod.min_session_duration;
     qod_config.session_cleanup_interval = app_config_.af_core.qod.session_cleanup_interval;
@@ -287,16 +316,16 @@ void AfOrchestrator::initialize_qod_components() {
     qod_config.api_base_url = app_config_.af_core.qod.api_base_url;
 
     // Create QoD state manager
-    qod_state_manager_ = std::make_shared<qod::QodStateManager>();
+    qod_state_manager_ = std::make_shared<af::qod::QodStateManager>();
     // Create QoD session manager
-    qod_session_manager_ = std::make_shared<qod::QodSessionManager>(
+    qod_session_manager_ = std::make_shared<af::qod::QodSessionManager>(
         ue_state_manager_, qod_state_manager_, qod_config);
 
     // Create QoD handler
-    qod_handler_ = std::make_shared<qod::QodHandler>(qod_session_manager_);
+    qod_handler_ = std::make_shared<af::qod::QodHandler>(qod_session_manager_);
 
     // Create QoD notification manager
-    qod_notification_manager_ = std::make_shared<qod::QodNotificationManager>();
+    qod_notification_manager_ = std::make_shared<af::qod::QodNotificationManager>();
 
     // Wire up notification delivery to session manager
     qod_session_manager_->set_notification_handler(qod_notification_manager_);
@@ -334,6 +363,27 @@ void AfOrchestrator::register_qod_handlers() {
         });
 
     logger_->info("QoD message handlers registered");
+}
+
+void AfOrchestrator::initialize_rest_endpoints() {
+    logger_->info("Initializing REST endpoints for HTTP transport");
+
+    // Create REST router
+    rest_router_ = std::make_shared<rest::RestRouter>();
+
+    // Create QoD REST adapter
+    qod_rest_adapter_ = std::make_shared<qod::QodRestAdapter>(
+        rest_router_,
+        request_router_);
+
+    // Register CAMARA QoD endpoints with the main HTTP service
+    auto main_comm = communication_services_["main"];
+    if (main_comm) {
+        qod_rest_adapter_->register_endpoints(main_comm);
+        logger_->info("REST endpoints registered successfully");
+    } else {
+        logger_->warn("Main communication service not available for REST endpoint registration");
+    }
 }
 
 void AfOrchestrator::start() {

@@ -162,6 +162,25 @@ if(NOT TARGET yaml-cpp)
     endif()
 endif()
 
+# Boost (for Boost.Asio in HTTP client)
+find_package(Boost REQUIRED COMPONENTS system)
+
+# nghttp2 (for HTTP/2 support in HTTP client)
+find_path(NGHTTP2_INCLUDE_DIR nghttp2/nghttp2.h)
+find_library(NGHTTP2_LIBRARY NAMES nghttp2)
+if(NGHTTP2_INCLUDE_DIR AND NGHTTP2_LIBRARY)
+    if(NOT TARGET nghttp2::nghttp2)
+        add_library(nghttp2::nghttp2 UNKNOWN IMPORTED)
+        set_target_properties(nghttp2::nghttp2 PROPERTIES
+            IMPORTED_LOCATION "${NGHTTP2_LIBRARY}"
+            INTERFACE_INCLUDE_DIRECTORIES "${NGHTTP2_INCLUDE_DIR}"
+        )
+    endif()
+    message(STATUS "Found nghttp2: ${NGHTTP2_LIBRARY}")
+else()
+    message(STATUS "nghttp2 not found - HTTP/2 framing not available")
+endif()
+
 # ─── Generate protobuf/gRPC stubs from message.proto ─────────────────────────
 
 set(PROTO_GEN_DIR ${CMAKE_BINARY_DIR}/generated)
@@ -267,6 +286,7 @@ endif()
 add_library(adapter_lib STATIC
     src/adapter_config.cpp
     src/qod_client.cpp
+    src/http_qod_client.cpp
     src/session_manager.cpp
 )
 
@@ -284,6 +304,7 @@ target_link_libraries(adapter_lib
         nlohmann_json::nlohmann_json
         spdlog::spdlog
         yaml-cpp
+        Boost::system
         Threads::Threads
 )
 

@@ -18,7 +18,7 @@
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
 #include <af_typed_config.hpp>
-#include "pcf_client_wrapper.h"
+#include "pcf_gateway.h"
 #include <models/qod/qod_session.h>
 #include <message.h>
 
@@ -313,7 +313,7 @@ private:
     // Configuration
     af::config::PcfHandlerConfig config_;
 
-    std::shared_ptr<PcfClientWrapper> pcf_client_;
+    std::shared_ptr<PcfGateway> pcf_gateway_;
 
 
 

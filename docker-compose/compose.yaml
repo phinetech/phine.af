@@ -48,7 +48,7 @@ x-af-build: &af-build
 services:
   oai-ext-dn:
     <<: *defaults
-    profiles: [free5gc, oai-core]
+    profiles: [ free5gc, oai-core ]
     container_name: oai-ext-dn
     image: ${OAI_EXT_DN_IMAGE:-oaisoftwarealliance/trf-gen-cn5g:latest}
     privileged: true
@@ -75,27 +75,26 @@ services:
       n6_net:
         ipv4_address: 192.168.72.135
 
-  af_client:
+  af-client:
     <<: *defaults
-    profiles: [af-client]
+    profiles: [ af-client ]
     container_name: af-client
     image: ${AF_CLIENT_IMAGE:-ubuntu:22.04}
+    environment:
+      - AF_HOST=af-core
+      - PAYLOAD_FILE=/requests/qod_create_session.json
     expose:
       - 80/tcp
       - 8080/tcp
-    command:
-      - /bin/bash
-      - -c
-      - |
-        apt update -y && apt install curl -y
-        tail -f /dev/null
+    volumes:
+      - ../af_core/tests/requests/qod:/requests:ro
     networks:
       public_net:
         ipv4_address: 192.168.70.143
 
   pcf_handler:
     <<: *af-build
-    profiles: [afs]
+    profiles: [ afs ]
     container_name: af-pcf-handler
     image: phinetech/pcf-handler:${TAG:-latest}
     build:
@@ -109,12 +108,14 @@ services:
 
   af_core:
     <<: *af-build
-    profiles: [afs]
+    profiles: [ afs ]
     container_name: af-core
     image: phinetech/af-core:${TAG:-latest}
     build:
       context: ..
       dockerfile: af_core/Dockerfile
+    volumes:
+      - ./conf/af_core.yaml:/etc/oai/af/af_core.yaml
     networks:
       public_net:
         ipv4_address: 192.168.70.141
@@ -123,7 +124,7 @@ services:
 
   af:
     <<: *af-build
-    profiles: [af]
+    profiles: [ af ]
     container_name: af
     image: phinetech/af:${TAG:-latest}
     build:
@@ -144,7 +145,7 @@ services:
 
   af_demo_qod:
     <<: *af-build
-    profiles: [demo-qod]
+    profiles: [ demo-qod ]
     container_name: af-demo-qod
     image: phinetech/af-demo-qod:${TAG:-latest}
     build:
@@ -170,7 +171,7 @@ services:
 
   demo-qod-adapter:
     <<: *af-build
-    profiles: [standalone-qod]
+    profiles: [ standalone-qod ]
     container_name: demo-qod-adapter
     image: phinetech/demo-qod-adapter:${TAG:-latest}
     build:
@@ -186,7 +187,7 @@ services:
 
   api_component:
     <<: *af-build
-    profiles: [afs, af, demo-qod]
+    profiles: [ afs, af, demo-qod ]
     container_name: af-north-api
     image: phinetech/af-api:${TAG:-latest}
     build:

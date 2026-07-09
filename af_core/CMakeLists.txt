@@ -136,6 +136,8 @@ set(LIB_SOURCES
     src/qod/qod_session_manager.cpp
     src/qod/qod_state_manager.cpp
     src/qod/qod_handler.cpp
+    src/qod/qod_rest_adapter.cpp
+    src/rest_router.cpp
     src/af_orchestrator.cpp
     src/request_router.cpp
     src/policy_manager.cpp

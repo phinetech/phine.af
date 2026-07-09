@@ -226,7 +226,7 @@ set(LIB_SOURCES
     src/request_router.cpp
     src/pcf_handler.cpp
     src/pcc_rule_manager.cpp
-    src/pcf_client_wrapper.cpp
+    src/http_pcf_gateway.cpp
 )
 
 # Create static library for reuse by bundled build
@@ -244,6 +244,7 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../common")
         ${CMAKE_CURRENT_SOURCE_DIR}/../../common
         ${CMAKE_CURRENT_SOURCE_DIR}/../../common/component/include
         ${CMAKE_CURRENT_SOURCE_DIR}/../../common/communication/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../common/communication/implementations/http/include
         ${CMAKE_CURRENT_SOURCE_DIR}/../../common/models
         ${CMAKE_CURRENT_SOURCE_DIR}/../../common/models/include
         ${CMAKE_CURRENT_SOURCE_DIR}/../../common/config/include
@@ -265,7 +266,7 @@ endif()
 # Check if targets exist (parent build) or find installed libraries (standalone Docker build)
 set(AF_COMMON_LIBS "")
 if(TARGET af_common)
-    list(APPEND AF_COMMON_LIBS af_common af_common_component af_communication af_grpc_communication af_protos)
+    list(APPEND AF_COMMON_LIBS af_common af_common_component af_communication af_grpc_communication af_http_communication af_protos)
 else()
     # Find installed AF common libraries
     find_library(AF_COMMON_LIB NAMES af_common PATHS /usr/local/lib)
@@ -277,6 +278,7 @@ else()
     find_library(AF_PROTOS_LIB NAMES af_protos PATHS /usr/local/lib)
     find_library(AF_RESPONSE_LIB NAMES af_response PATHS /usr/local/lib)
     find_library(AF_TRANSPORT_ADAPTERS_LIB NAMES af_transport_adapters PATHS /usr/local/lib)
+    find_library(AF_HTTP_COMMUNICATION_LIB NAMES af_http_communication PATHS /usr/local/lib)
     find_library(AF_HANDLERS_LIB NAMES af_handlers PATHS /usr/local/lib)
 
     if(AF_COMMON_LIB)
@@ -320,6 +322,10 @@ else()
     if(AF_TRANSPORT_ADAPTERS_LIB)
         list(APPEND AF_COMMON_LIBS ${AF_TRANSPORT_ADAPTERS_LIB})
         message(STATUS "Found af_transport_adapters: ${AF_TRANSPORT_ADAPTERS_LIB}")
+    endif()
+    if(AF_HTTP_COMMUNICATION_LIB)
+        list(APPEND AF_COMMON_LIBS ${AF_HTTP_COMMUNICATION_LIB})
+        message(STATUS "Found af_http_communication: ${AF_HTTP_COMMUNICATION_LIB}")
     endif()
 endif()
 

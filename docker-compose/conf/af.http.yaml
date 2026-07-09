@@ -1,8 +1,13 @@
-# Unified AF configuration for bundled deployment.
-# The bundled `af` process contains AF Core and southbound handlers only.
-# Northbound adapters run as standalone applications and connect to AF Core.
+# HTTP-transport variant of the bundled AF configuration.
+#
+# Same topology as conf/af.yaml, but the northbound entrypoint
+# (external client -> af_core) speaks HTTP/2 cleartext (h2c) on port 8080
+# instead of gRPC on 50051. The southbound PCF SBI call is HTTP in both modes.
+#
+# Used by the QoS enforcement tutorial's "HTTP Transport Variant" via
+# docker-compose/compose.http.yaml.
 
-# AF Core (Orchestrator)
+# AF Core (Orchestrator) — northbound entrypoint over HTTP/2
 af_core:
   logging:
     level: "info"
@@ -10,7 +15,6 @@ af_core:
     file_output: false
     file_path: "/app/logs/af_core.log"
 
-  # AF Core remains externally reachable by standalone northbound apps.
   communication:
     kind: "http"
     listen:
@@ -26,12 +30,13 @@ af_core:
     enable_notifications: true
     api_base_url: "https://api.example.com/quality-on-demand/v1"
 
-# Southbound PCF Handler
+# Southbound PCF Handler — in-process (direct) in bundled mode.
+# The SBI hop to the free5GC PCF (192.168.70.139) is HTTP via HttpPcfGateway.
 pcf_handler:
   enabled: true
 
   pcf:
-    base_url: "http://pcf:80/npcf-policyauthorization/v1"
+    base_url: "http://192.168.70.139:8000/npcf-policyauthorization/v1"
     use_tls: false
     api_version: "v1"
 
@@ -41,15 +46,11 @@ pcf_handler:
     file_output: false
     file_path: "/app/logs/pcf_handler.log"
 
-  # The bundled southbound handler communicates with AF Core in-process.
   communication:
     kind: "direct"
     listen:
       host: "0.0.0.0"
       port: 8085
-    remote:
-      host: "af_core"
-      port: 8080
     timeout_ms: 5000
 
 # Future southbound handlers

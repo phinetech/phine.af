@@ -1,6 +1,7 @@
 # af_core connection
 af_core:
-  address: "192.168.70.141:50051"
+  address: "http://192.168.70.141:8080"
+  transport: http  # "http" for HTTP/2, "grpc" for gRPC (legacy)
   timeout_seconds: 30
 
 # Retry policy for gRPC calls

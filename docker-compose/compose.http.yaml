@@ -1,0 +1,67 @@
+# HTTP-transport override for the bundled `af` service.
+#
+# Layer this on top of compose.yaml to run the QoS enforcement tutorial with
+# the northbound entrypoint switched from gRPC (:50051) to HTTP/2 cleartext
+# (h2c) on :8080.
+#
+# Works for both AF topologies — pick the profile:
+#
+#   bundled `af`:
+#     docker compose -f docker-compose/compose.yaml -f docker-compose/compose.http.yaml \
+#       --profile free5gc --profile af up -d --build
+#
+#   microservice `afs` (af_core + pcf_handler over HTTP/2):
+#     docker compose -f docker-compose/compose.yaml -f docker-compose/compose.http.yaml \
+#       --profile free5gc --profile afs up -d --build
+#
+# In both cases af_core binds its HTTP/2 server on 8080 at 192.168.70.141.
+# Send QoD requests to 192.168.70.141:8080 via CAMARA REST API
+# POST /quality-on-demand/v1/sessions
+# (see the tutorial's "HTTP Transport Variant"). Only services in the active
+# profile start; overrides for inactive services are ignored.
+
+name: phine-af
+
+services:
+  # --- Bundled AF topology (--profile af) ---
+  # Base service mounts conf/af.yaml and publishes 50051, but the overridden
+  # `command` points the binary at the HTTP config, so af_core listens on 8080.
+  af:
+    volumes:
+      - ./conf/af.http.yaml:/etc/oai/af/af.http.yaml
+    command: [ "/usr/local/bin/af", "--config", "/etc/oai/af/af.http.yaml" ]
+    expose:
+      - 8080/tcp
+    ports:
+      - "8080:8080"
+
+  # --- Microservice AF topology (--profile afs) ---
+  # Base service mounts conf/af_core.yaml (gRPC) and runs the image CMD; the
+  # overridden command points the binary at the HTTP config so af_core listens
+  # on 8080 and dials the handler at pcf_handler:8085.
+  af_core:
+    volumes:
+      - ./conf/af_core.http.yaml:/etc/oai/af/af_core.http.yaml
+    command: [ "/usr/local/bin/af_core", "--config", "/etc/oai/af/af_core.http.yaml" ]
+    expose:
+      - 8080/tcp
+    ports:
+      - "8080:8080"
+
+  # The handler switches from its default gRPC config to the HTTP/2 config,
+  # binding an h2c server on 8085 that af_core dials at pcf_handler:8085.
+  pcf_handler:
+    volumes:
+      - ./conf/pcf_handler.http.yaml:/etc/oai/af/pcf_handler.http.yaml
+    command: [ "/usr/local/bin/pcf_server", "--config", "/etc/oai/af/pcf_handler.http.yaml" ]
+    expose:
+      - 8085/tcp
+
+  # The client for sending request to the AF Core. We will use it to test the
+  # CAMARA API http endpoint.
+  af-client:
+    image: curlimages/curl:8.10.1
+    command: >
+      --http2-prior-knowledge -sS -X POST -H "content-type: application/json" --data "@${PAYLOAD_FILE:-/requests/qod_create_session.json}" "http://${AF_HOST:-af-core}:8080/quality-on-demand/v1/sessions"
+    volumes:
+      - ../af_core/tests/requests/qod:/requests:ro

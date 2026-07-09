@@ -28,6 +28,10 @@
 #include "qod/qod_notification_manager.h"
 #include "events/event_dispatcher.h"
 
+// REST routing includes
+#include "rest_router.h"
+#include "qod/qod_rest_adapter.h"
+
 namespace af {
 namespace core {
 
@@ -97,7 +101,7 @@ public:
      * @brief Get the QodSessionManager instance
      * @return Shared pointer to QodSessionManager
      */
-    std::shared_ptr<qod::QodSessionManager> get_qod_session_manager() const { return qod_session_manager_; }
+    std::shared_ptr<af::qod::QodSessionManager> get_qod_session_manager() const { return qod_session_manager_; }
 
     /**
      * @brief Get the communication services map
@@ -135,10 +139,14 @@ private:
     std::shared_ptr<UeStateManager> ue_state_manager_;
 
     // QoD components
-    std::shared_ptr<qod::QodSessionManager> qod_session_manager_;
-    std::shared_ptr<qod::QodHandler> qod_handler_;
-    std::shared_ptr<qod::QodNotificationManager> qod_notification_manager_;
-    std::shared_ptr<qod::QodStateManager> qod_state_manager_;
+    std::shared_ptr<af::qod::QodSessionManager> qod_session_manager_;
+    std::shared_ptr<af::qod::QodHandler> qod_handler_;
+    std::shared_ptr<af::qod::QodNotificationManager> qod_notification_manager_;
+    std::shared_ptr<af::qod::QodStateManager> qod_state_manager_;
+
+    // REST routing components (for HTTP transport)
+    std::shared_ptr<rest::RestRouter> rest_router_;
+    std::shared_ptr<qod::QodRestAdapter> qod_rest_adapter_;
 
     // Communication services for northbound and southbound interfaces
     std::unordered_map<std::string, std::shared_ptr<af::communication::CommunicationService>> communication_services_;
@@ -183,6 +191,11 @@ private:
      * @brief Register QoD message handlers
      */
     void register_qod_handlers();
+
+    /**
+     * @brief Initialize REST endpoints (for HTTP transport only)
+     */
+    void initialize_rest_endpoints();
 };
 
 } // namespace core

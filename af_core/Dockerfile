@@ -57,6 +57,7 @@ RUN apt-get update && \
       cmake \
       git \
       libboost-all-dev \
+      libnghttp2-dev \
   && rm -rf /var/lib/apt/lists/*
 
 # Build common runtime libraries
@@ -112,6 +113,7 @@ RUN apt-get update && \
       cmake \
       libssl-dev \
       libboost-all-dev \
+      libnghttp2-dev \
       libc6-dev \
       linux-libc-dev \
       git \
@@ -151,7 +153,7 @@ RUN cd /app && \
 FROM base AS runtime
 
 # Copy necessary runtime dependencies from the builder image
-COPY --from=builder /usr/local/lib/libnghttp2* /usr/local/lib/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libnghttp2* /usr/lib/x86_64-linux-gnu/
 COPY --from=builder /usr/local/lib/libgrpc* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libprotobuf* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libspdlog* /usr/local/lib/
@@ -182,7 +184,10 @@ COPY --from=grpc-builder /usr/local/lib/libutf8* /usr/local/lib/
 COPY --from=grpc-builder /usr/local/lib/libabsl* /usr/local/lib/
 COPY --from=grpc-builder /usr/local/lib/libprotobuf* /usr/local/lib/
 
-RUN ldconfig
+# Debian-linked libs (Boost etc.) need libssl.so.3; grpc-builder ships libssl.so without the version suffix
+RUN ln -sf /usr/local/lib/libssl.so /usr/local/lib/libssl.so.3 && \
+    ln -sf /usr/local/lib/libcrypto.so /usr/local/lib/libcrypto.so.3 && \
+    ldconfig
 
 # Copy build artifacts
 COPY --from=builder /app/build-output/bin/af_core /usr/local/bin/

@@ -1,0 +1,31 @@
+# HTTP-transport variant of the standalone PCF handler configuration (afs mode).
+#
+# The handler binds an HTTP/2 (h2c) server on 8085 to receive
+# pcf_create_app_session / pcf_update_app_session messages from af_core, and
+# forwards them to the free5GC PCF over the SBI (HttpPcfGateway).
+#
+# Pairs with af_core's pcf_handler.communication.remote = pcf_handler:8085
+# (see af_core/config/af_core.yaml). Used via docker-compose/compose.http.yaml.
+pcf_handler:
+  # PCF SBI connection (the real free5GC PCF in the tutorial)
+  pcf_base_url: "http://192.168.70.139:8000/npcf-policyauthorization/v1"
+  use_tls: false
+  api_version: "v1"
+
+  logging:
+    level: "info"
+    console_output: true
+    file_output: true
+    file_path: "/app/logs/pcf_handler.log"
+
+  communication:
+    kind: "http"
+    # The handler is the server: it binds `listen` and receives from af_core.
+    # `remote` is af_core's address (used for reverse/notification routing).
+    listen:
+      host: "0.0.0.0"
+      port: 8085
+    remote:
+      host: "af-core"
+      port: 8080
+    timeout_ms: 5000

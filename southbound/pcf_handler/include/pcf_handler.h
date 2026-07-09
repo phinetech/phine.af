@@ -20,7 +20,7 @@
 #include <af_typed_config.hpp>
 #include "request_router.h"
 #include "pcc_rule_manager.h"
-#include "pcf_client_wrapper.h"
+#include "pcf_gateway.h"
 #include "qod_pcf_handler.h"
 
 #include <oai/model/pcf/AppSessionContext.h>
@@ -128,7 +128,7 @@ private:
     std::string core_destination_{"af_core:50051"};
 
     // Components
-    std::shared_ptr<PcfClientWrapper> pcf_client_;
+    std::shared_ptr<PcfGateway> pcf_gateway_;
     std::shared_ptr<PccRuleManager> pcc_rule_manager_;
 
     // Communication service for talking to the AF Core
