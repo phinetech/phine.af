@@ -5,10 +5,30 @@
 
 #include "af_orchestrator.h"
 #include "events/event_dispatcher.h"
-#include <yaml-cpp/yaml.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include "common/communication/include/communication_factory.h"
+
+namespace {
+
+std::unordered_map<std::string, std::string> make_server_config(
+    const af::config::CommunicationConfig& config) {
+    return {
+        {"server_address", config.listen.host},
+        {"server_port", af::config::port_to_string(config.listen.port)}
+    };
+}
+
+std::unordered_map<std::string, std::string> make_client_config(
+    const af::config::EndpointConfig& endpoint) {
+    return {
+        {"client_only", "true"},
+        {"server_address", endpoint.host},
+        {"server_port", af::config::port_to_string(endpoint.port)}
+    };
+}
+
+} // namespace
 
 namespace af {
 namespace core {
@@ -43,9 +63,6 @@ AfOrchestrator::AfOrchestrator(const std::string& config_path)
     subscription_manager_ = std::make_shared<SubscriptionManager>(ue_state_manager_);
 
 
-    // Create QoD components
-    initialize_qod_components();
-
     // Create message handler
     message_handler_ = std::make_shared<OrchestratorMessageHandler>(this);
 }
@@ -60,6 +77,9 @@ void AfOrchestrator::initialize() {
     // Load configuration
     load_config();
 
+    // Create QoD components after configuration is available
+    initialize_qod_components();
+
     // Initialize components
     request_router_->initialize(this);
     policy_manager_->initialize(this);
@@ -70,10 +90,10 @@ void AfOrchestrator::initialize() {
 
     // Initialize QoD components (after communication is ready)
     if (communication_services_.find("pcf") != communication_services_.end()) {
-        qod_session_manager_->initialize(communication_services_["pcf"]);
+        qod_session_manager_->initialize(communication_services_["pcf"], pcf_destination_);
     } else {
         logger_->warn("PCF service not available, QoD session manager initialized without PCF");
-        qod_session_manager_->initialize(nullptr);
+        qod_session_manager_->initialize(nullptr, "");
     }
     qod_notification_manager_->initialize(this);
 
@@ -92,30 +112,52 @@ void AfOrchestrator::initialize() {
 void AfOrchestrator::load_config() {
     try {
         logger_->info("Loading configuration from {}", config_path_);
-        YAML::Node config = YAML::LoadFile(config_path_);
-
-        // TODO: Load specific configuration values
-
-        logger_->info("Configuration loaded successfully");
+        app_config_ = af::config::load_app_config(config_path_);
+        af::config::validate(app_config_);
     }
     catch (const std::exception& e) {
         logger_->error("Failed to load configuration: {}", e.what());
-        // Use default configuration
     }
+
+    logger_->set_level(app_config_.af_core.logging.level);
+
+    const auto& core_comm = app_config_.af_core.communication;
+    const auto& pcf_comm = app_config_.pcf_handler.communication;
+
+    if (app_config_.pcf_handler.enabled) {
+        pcf_destination_ = af::config::resolve_destination(
+            pcf_comm.kind,
+            pcf_comm.listen,
+            "pcf_handler");
+    } else {
+        pcf_destination_.clear();
+    }
+
+    logger_->info("AF Core communication kind: {} on {}",
+                  af::config::to_string(core_comm.kind),
+                  af::config::endpoint_to_string(core_comm.listen));
+    if (app_config_.pcf_handler.enabled) {
+        logger_->info("PCF handler communication kind: {} destination: {}",
+                      af::config::to_string(pcf_comm.kind),
+                      pcf_destination_);
+    } else {
+        logger_->info("PCF handler disabled in configuration");
+    }
+    logger_->info("Configuration loaded successfully");
 }
 
 void AfOrchestrator::initialize_communication() {
     try {
         logger_->info("Initializing communication interfaces");
 
-        // Create main communication service for inbound communication
-        std::unordered_map<std::string, std::string> main_comm_config;
-        // TODO: Load specific configuration values for main communication service
-        main_comm_config["server_address"] = "0.0.0.0";
-        main_comm_config["server_port"] = "50051";  // Use a fixed port for the core
+        const auto& core_comm = app_config_.af_core.communication;
+        const auto& pcf_comm = app_config_.pcf_handler.communication;
 
+        // Create main communication service for inbound communication
         auto main_comm = af::communication::CommunicationFactory::create_service(
-            "grpc", "af_core", main_comm_config);
+            af::config::to_string(core_comm.kind),
+            "af_core",
+            make_server_config(core_comm));
 
         if (!main_comm) {
             throw std::runtime_error("Failed to create main communication service");
@@ -126,25 +168,21 @@ void AfOrchestrator::initialize_communication() {
         // Initialize communication with various southbound interfaces
         // (These would be more specific in a complete implementation)
 
-        // PCF interface
-        std::unordered_map<std::string, std::string> pcf_comm_config;
-        pcf_comm_config["client_only"] = "true";
-        pcf_comm_config["server_address"] = "192.168.70.140";  // Example address
-        pcf_comm_config["server_port"] = "50052";  // Example port for PCF
-        auto pcf_comm = af::communication::CommunicationFactory::create_service(
-            "grpc", "af_core_pcf", pcf_comm_config);
+        if (app_config_.pcf_handler.enabled) {
+            // PCF interface
+            std::unordered_map<std::string, std::string> pcf_comm_config;
+            if (pcf_comm.kind == af::config::CommunicationKind::Grpc) {
+                pcf_comm_config = make_client_config(pcf_comm.listen);
+            }
 
-        if (pcf_comm) {
-            communication_services_["pcf"] = pcf_comm;
-        }
+            auto pcf_service = af::communication::CommunicationFactory::create_service(
+                af::config::to_string(pcf_comm.kind),
+                "af_core_pcf",
+                pcf_comm_config);
 
-        // NEF interface
-        std::unordered_map<std::string, std::string> nef_comm_config;
-        auto nef_comm = af::communication::CommunicationFactory::create_service(
-            "grpc", "af_core_nef", nef_comm_config);
-
-        if (nef_comm) {
-            communication_services_["nef"] = nef_comm;
+            if (pcf_service) {
+                communication_services_["pcf"] = pcf_service;
+            }
         }
 
         logger_->info("Communication interfaces initialized");
@@ -241,15 +279,12 @@ void AfOrchestrator::initialize_qod_components() {
 
     // Configure QoD session manager
     qod::QodSessionConfig qod_config;
-    qod_config.max_session_duration = std::chrono::seconds(86400); // 24 hours
-    qod_config.min_session_duration = std::chrono::seconds(60);     // 1 minute
-    qod_config.session_cleanup_interval = std::chrono::seconds(60);
-    qod_config.unavailable_session_ttl = std::chrono::seconds(360);
-    qod_config.enable_notifications = true;
-    qod_config.api_base_url = "https://api.example.com/quality-on-demand/v1";
-
-    // TODO: Load QoD configuration from config file
-    // load_qod_config(qod_config);
+    qod_config.max_session_duration = app_config_.af_core.qod.max_session_duration;
+    qod_config.min_session_duration = app_config_.af_core.qod.min_session_duration;
+    qod_config.session_cleanup_interval = app_config_.af_core.qod.session_cleanup_interval;
+    qod_config.unavailable_session_ttl = app_config_.af_core.qod.unavailable_session_ttl;
+    qod_config.enable_notifications = app_config_.af_core.qod.enable_notifications;
+    qod_config.api_base_url = app_config_.af_core.qod.api_base_url;
 
     // Create QoD state manager
     qod_state_manager_ = std::make_shared<qod::QodStateManager>();
@@ -302,6 +337,14 @@ void AfOrchestrator::register_qod_handlers() {
 }
 
 void AfOrchestrator::start() {
+    {
+        std::lock_guard<std::mutex> lock(wait_mutex_);
+        if (isRunning()) {
+            logger_->warn("AF Core services already running");
+            return;
+        }
+    }
+
     logger_->info("Starting AF Core services");
 
     // Start all communication services
@@ -330,10 +373,24 @@ void AfOrchestrator::start() {
     // Note: Most components don't need explicit start/stop,
     // they just need to be initialized and will operate based on messages
 
+    {
+        std::lock_guard<std::mutex> lock(wait_mutex_);
+        setRunning(true);
+    }
+
     logger_->info("AF Core services started");
 }
 
 void AfOrchestrator::stop() {
+    {
+        std::lock_guard<std::mutex> lock(wait_mutex_);
+        if (!isRunning()) {
+            logger_->info("AF Core services already stopped");
+            wait_cv_.notify_all();
+            return;
+        }
+    }
+
     logger_->info("Stopping AF Core services");
 
     // Stop QoD components first
@@ -355,7 +412,20 @@ void AfOrchestrator::stop() {
         }
     }
 
+    {
+        std::lock_guard<std::mutex> lock(wait_mutex_);
+        setRunning(false);
+    }
+    wait_cv_.notify_all();
+
     logger_->info("AF Core services stopped");
+}
+
+void AfOrchestrator::wait() {
+    std::unique_lock<std::mutex> lock(wait_mutex_);
+    wait_cv_.wait(lock, [this]() {
+        return !isRunning();
+    });
 }
 
 af::communication::MessagePtr AfOrchestrator::process_message(

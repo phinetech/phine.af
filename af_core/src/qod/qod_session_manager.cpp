@@ -48,10 +48,13 @@ QodSessionManager::~QodSessionManager() {
     stop();
 }
 
-void QodSessionManager::initialize(std::shared_ptr<af::communication::CommunicationService> pcf_service) {
+void QodSessionManager::initialize(std::shared_ptr<af::communication::CommunicationService> pcf_service,
+                                   const std::string& pcf_destination) {
     pcf_service_ = pcf_service;
+    pcf_destination_ = pcf_destination;
     if (pcf_service_) {
-        logger_->info("QoD Session Manager initialized with PCF service");
+        logger_->info("QoD Session Manager initialized with PCF service destination: {}",
+                      pcf_destination_.empty() ? "<unset>" : pcf_destination_);
     } else {
         logger_->warn("QoD Session Manager initialized without PCF service");
     }
@@ -922,6 +925,11 @@ bool QodSessionManager::apply_session_to_pcf(af::common::qod::QodSession& sessio
         return false;
     }
 
+    if (pcf_destination_.empty()) {
+        logger_->error("PCF destination not configured");
+        return false;
+    }
+
     try {
         // Build PCF request
         auto pcf_request = build_pcf_request(session); // TODO: pass QodSession instead??
@@ -943,7 +951,7 @@ bool QodSessionManager::apply_session_to_pcf(af::common::qod::QodSession& sessio
         // Send async request to PCF
         // The response will come back via handle_pcf_session_response
         // TODO: Use actual PCF address from config
-        auto response = pcf_service_->send_request("192.168.70.140:50055", msg);
+        auto response = pcf_service_->send_request(pcf_destination_, msg);
 
         if (!response) {
             logger_->error("Failed to send request to PCF");
@@ -1001,6 +1009,11 @@ bool QodSessionManager::remove_session_from_pcf(const af::common::qod::QodSessio
         return false;
     }
 
+    if (pcf_destination_.empty()) {
+        logger_->error("PCF destination not configured");
+        return false;
+    }
+
     try {
         // Create delete request
         nlohmann::json delete_request = {
@@ -1019,7 +1032,7 @@ bool QodSessionManager::remove_session_from_pcf(const af::common::qod::QodSessio
         logger_->debug("Sending delete request to PCF for session: {}", *session.pcf_session_id);
 
         // TODO: Use actual PCF address from config
-        auto response = pcf_service_->send_request("192.168.70.140:50055", msg);
+        auto response = pcf_service_->send_request(pcf_destination_, msg);
 
         if (response && response->message_type == "pcf_delete_app_session") {
 

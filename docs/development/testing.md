@@ -15,7 +15,7 @@ The script:
 
 ## Integration tests (CI)
 
-CI runs integration tests using the `docker-compose/docker-compose-test.yaml` environment.
+The documented integration environment uses [docker-compose/compose.yaml](../../docker-compose/compose.yaml) with the relevant profiles for the scenario under test.
 
 <!---
 TODO: Document how to run unit tests (if any) outside the integration test container.

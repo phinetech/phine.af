@@ -43,16 +43,24 @@ include_directories(
 # Find dependencies
 find_package(Boost REQUIRED COMPONENTS system thread)
 find_package(OpenSSL REQUIRED)
-find_package(spdlog REQUIRED)
-find_package(nlohmann_json REQUIRED)
-find_package(yaml-cpp REQUIRED)
+if(NOT TARGET spdlog::spdlog)
+    find_package(spdlog REQUIRED)
+endif()
+if(NOT TARGET nlohmann_json::nlohmann_json)
+    find_package(nlohmann_json REQUIRED)
+endif()
+if(NOT TARGET yaml-cpp)
+    find_package(yaml-cpp REQUIRED)
+endif()
 find_package(NGHTTP2 REQUIRED)
 # Find nghttp2_asio
 # find_package(nghttp2_asio REQUIRED)
 # Find gRPC
 find_package(gRPC REQUIRED)
-# FInd protobuf
-find_package(Protobuf REQUIRED)
+# Find protobuf (guard against re-importing when already defined by a parent CMake scope)
+if(NOT TARGET protobuf::libprotobuf)
+    find_package(Protobuf REQUIRED)
+endif()
 
 
 # Include the nghttp2_asio headers
@@ -239,49 +247,35 @@ install(DIRECTORY include/
 add_executable(api_server src/main.cpp)
 
 # For static library af_grpc_communication, we need to use whole-archive to include all symbols
+# This is required in both installed (AF_GRPC_COMMUNICATION_LIB) and source-build (target) modes
+# because af_communication_factory.so has unresolved references to GrpcCommunicationService symbols.
 if(AF_GRPC_COMMUNICATION_LIB)
-    target_link_libraries(api_server
-        PRIVATE
-            api_component
-            af_communication_factory
-            -Wl,--whole-archive
-            ${AF_GRPC_COMMUNICATION_LIB}
-            -Wl,--no-whole-archive
-            af_protos
-            af_direct_communication
-            gRPC::grpc++
-            gRPC::grpc++_reflection
-            gRPC::grpc
-            gRPC::gpr
-            protobuf::libprotobuf
-            ${NGHTTP2_LIBRARIES}
-            Boost::system
-            Boost::thread
-            nghttp2_asio
-            OpenSSL::SSL
-            OpenSSL::Crypto
-    )
+    set(_GRPC_COMM_LIB ${AF_GRPC_COMMUNICATION_LIB})
 else()
-    target_link_libraries(api_server
-        PRIVATE
-            api_component
-            af_communication_factory
-            af_grpc_communication
-            af_protos
-            af_direct_communication
-            gRPC::grpc++
-            gRPC::grpc++_reflection
-            gRPC::grpc
-            gRPC::gpr
-            protobuf::libprotobuf
-            ${NGHTTP2_LIBRARIES}
-            Boost::system
-            Boost::thread
-            nghttp2_asio
-            OpenSSL::SSL
-            OpenSSL::Crypto
-    )
+    set(_GRPC_COMM_LIB af_grpc_communication)
 endif()
+
+target_link_libraries(api_server
+    PRIVATE
+        api_component
+        af_communication_factory
+        -Wl,--whole-archive
+        ${_GRPC_COMM_LIB}
+        -Wl,--no-whole-archive
+        af_protos
+        af_direct_communication
+        gRPC::grpc++
+        gRPC::grpc++_reflection
+        gRPC::grpc
+        gRPC::gpr
+        protobuf::libprotobuf
+        ${NGHTTP2_LIBRARIES}
+        Boost::system
+        Boost::thread
+        nghttp2_asio
+        OpenSSL::SSL
+        OpenSSL::Crypto
+)
 
 # Installation for the executable
 install(TARGETS api_server

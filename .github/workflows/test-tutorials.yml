@@ -9,11 +9,16 @@ on:
     paths:
       - 'docs/getting-started/qos-enforcement-tutorial.md'
       - 'docs/getting-started/adapter-qod-tutorial.md'
+      - 'src/**'
       - 'af_core/**'
       - 'northbound/**'
       - 'southbound/**'
+      - 'adapters/**'
       - 'common/**'
+      - 'config/**'
       - 'docker-compose/**'
+      - 'CMakeLists.txt'
+      - 'Dockerfile'
       - '.github/workflows/test-tutorials.yml'
   push:
     branches:
@@ -34,14 +39,21 @@ jobs:
       fail-fast: false
       matrix:
         tutorial:
-          - name: QoS Enforcement Tutorial
+          - name: QoS Enforcement Tutorial (bundled AF)
             file: docs/getting-started/qos-enforcement-tutorial.md
-            artifact-name: qos-tutorial-logs
+            artifact-name: qos-tutorial-bundled-af-logs
             log-path: /tmp/phine.af/qos-enforcement-tutorial/logs
+            af_profile: af
+          - name: QoS Enforcement Tutorial (split AFs)
+            file: docs/getting-started/qos-enforcement-tutorial.md
+            artifact-name: qos-tutorial-split-afs-logs
+            log-path: /tmp/phine.af/qos-enforcement-tutorial/logs
+            af_profile: afs
           - name: Demo Adapter Tutorial
             file: docs/getting-started/adapter-qod-tutorial.md
             artifact-name: demo-adapter-tutorial-logs
             log-path: /tmp/phine.af/adapter-qod-tutorial/logs
+            core_profile: free5gc
 
     steps:
       - name: Checkout code
@@ -53,7 +65,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        if: steps.buildx.outputs.driver == ''
 
       - name: Cache Docker layers
         uses: actions/cache@v3
@@ -94,10 +105,16 @@ jobs:
           runme --version
 
       - name: Run ${{ matrix.tutorial.name }}
+        env:
+          AF_PROFILE: ${{ matrix.tutorial.af_profile }}
+          CORE_PROFILE: ${{ matrix.tutorial.core_profile }}
         run: runme run --all --skip-prompts --filename ${{ matrix.tutorial.file }}
 
       - name: Cleanup ${{ matrix.tutorial.name }}
         if: always()
+        env:
+          AF_PROFILE: ${{ matrix.tutorial.af_profile }}
+          CORE_PROFILE: ${{ matrix.tutorial.core_profile }}
         run: runme run cleanup --filename ${{ matrix.tutorial.file }}
         continue-on-error: true
 

@@ -1,0 +1,68 @@
+# Unified AF configuration for bundled deployment.
+# The bundled `af` process contains AF Core and southbound handlers only.
+# Northbound adapters run as standalone applications and connect to AF Core.
+
+# AF Core (Orchestrator)
+af_core:
+  logging:
+    level: "info"
+    console_output: true
+    file_output: false
+    file_path: "/app/logs/af_core.log"
+
+  # AF Core remains externally reachable by standalone northbound apps.
+  communication:
+    kind: "grpc"
+    listen:
+      host: "0.0.0.0"
+      port: 50051
+
+  qod:
+    max_session_duration: 86400
+    min_session_duration: 60
+    session_cleanup_interval: 60
+    unavailable_session_ttl: 360
+    enable_notifications: true
+    api_base_url: "https://api.example.com/quality-on-demand/v1"
+
+# Southbound PCF Handler
+pcf_handler:
+  enabled: true
+
+  pcf:
+    base_url: "http://pcf:80/npcf-policyauthorization/v1"
+    use_tls: false
+    api_version: "v1"
+
+  logging:
+    level: "info"
+    console_output: true
+    file_output: false
+    file_path: "/app/logs/pcf_handler.log"
+
+  # The bundled southbound handler communicates with AF Core in-process.
+  communication:
+    kind: "direct"
+    listen:
+      host: "0.0.0.0"
+      port: 50055
+
+# Future southbound handlers
+nef_handler:
+  enabled: false
+
+udr_handler:
+  enabled: false
+
+# Global settings
+logging:
+  level: "info"
+  file: "/var/log/oai/af/af.log"
+  console: true
+  max_size_mb: 10
+  max_files: 5
+
+metrics:
+  enabled: true
+  port: 9090
+  path: "/metrics"

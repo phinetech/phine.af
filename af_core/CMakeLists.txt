@@ -129,8 +129,8 @@ find_package(fmt REQUIRED)
 # Use the root common library (built by parent CMakeLists.txt)
 # No need to add_subdirectory or find installed library - parent handles it
 
-# Define test sources
-set(SOURCES
+# Define library sources (everything except main.cpp)
+set(LIB_SOURCES
     src/models/ue_key.cpp
     src/qod/qod_notification_manager.cpp
     src/qod/qod_session_manager.cpp
@@ -141,23 +141,21 @@ set(SOURCES
     src/policy_manager.cpp
     src/subscription_manager.cpp
     src/ue_state_manager.cpp
-    src/main.cpp
 )
 
-# Create test executable
-add_executable(af_core ${SOURCES})
+# Create static library for reuse by bundled build
+add_library(af_core_lib STATIC ${LIB_SOURCES})
 
-# Set include directories - include project root for "common/..." headers
-target_include_directories(af_core
+target_include_directories(af_core_lib
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
     PRIVATE
-        include
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/common
+        ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/common
 )
 
-# Link libraries - use root common target
-target_link_libraries(af_core
-    PRIVATE
+target_link_libraries(af_core_lib
+    PUBLIC
         af_common
         gRPC::grpc++
         gRPC::grpc++_reflection
@@ -166,4 +164,19 @@ target_link_libraries(af_core
         fmt::fmt
         OpenSSL::SSL
         OpenSSL::Crypto
+)
+
+# Create standalone executable
+add_executable(af_core src/main.cpp)
+
+target_include_directories(af_core
+    PRIVATE
+        include
+        ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/common
+)
+
+target_link_libraries(af_core
+    PRIVATE
+        af_core_lib
 )

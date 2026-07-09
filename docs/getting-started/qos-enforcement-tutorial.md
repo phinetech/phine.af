@@ -9,11 +9,18 @@ cwd: ../..
 
 This tutorial walks you through deploying the full 5G testbed, requesting QoS enforcement via the CAMARA QoD API, observing the signalling across the network, and verifying that bandwidth policies are applied on the data plane.
 
+The same workflow supports both phine.af deployment models:
+
+- **Bundled AF**: `af_core` and the southbound PCF handler run inside a single `af` container
+- **Microservice AF**: `af_core` and `pcf_handler` run as separate services
+
+The steps below stay the same for both modes. You only switch the deployment by changing `COMPOSE_FILE`.
+
 > **Runme compatible**: This tutorial is designed to run with [Runme](https://runme.dev/) — both interactively in VS Code and non-interactively in CI via the Runme CLI. See the [Runme Guide](../development/runme-guide.md) for details.
 
 By the end of this tutorial you will have:
 
-1. Deployed a complete 5G core (free5GC), RAN simulator (UERANSIM), and the phine.af Application Function
+1. Deployed a complete 5G core (free5GC), RAN simulator (UERANSIM), and the phine.af Application Function in bundled or microservice form
 2. Sent a QoD session creation request for the **premium** QoS profile (5 Mbps guaranteed, 10 Mbps max)
 3. Captured and traced the policy signalling path: **AF → PCF → SMF → UPF**
 4. Verified that the UPF enforces the requested bandwidth on downlink traffic using `iperf3`
@@ -30,32 +37,46 @@ By the end of this tutorial you will have:
 
 ## Network Architecture
 
+Both deployment modes expose the same gRPC request entrypoint on `192.168.70.141:50051`. The internal AF path differs depending on which compose file you choose.
+
 ```text
-                 ┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
-                 │    UE    │────▶│   gNB    │────▶│   UPF    │────▶│  Ext DN  │
-                 │ 10.60.0.1│     │ UERANSIM │     │ (OAI)    │     │ iperf3   │
-                 └──────────┘     └──────────┘     └──────────┘     └──────────┘
-                                                        ▲
-                                                        │ N4 (PFCP)
-                                                        │
-┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
-│ AF Core  │────▶│PCF Handler│───▶│   PCF    │────▶│   SMF    │
-│ .70.141  │gRPC │  .70.140  │HTTP│  .70.139 │ N7  │  .70.133 │
-└──────────┘     └──────────┘     └──────────┘     └──────────┘
-      ▲
-      │ gRPC
-      │
-┌──────────┐
-│ grpcurl  │  (your terminal)
-└──────────┘
+                 ┌──────────┐
+                 │ grpcurl  │  same QoD request in both modes
+                 └────┬─────┘
+                      │ gRPC
+                      ▼
+                  ┌──────────────────────────────┐
+                  │        af (.70.141)          |
+                  |                              │
+                  │    AF Core + PCF Handler     |──────────────┐
+                  |                              │              |
+                  └──────────────────────────────┘              |
+                                                                |
+                                                                |
+                                                                │ HTTP / N7
+                                                                ▼
+                                                        ┌──────────────┐
+                                                        │ PCF (.70.139)│
+                                                        └──────┬───────┘
+                                                               │ N7
+                                                               ▼
+                                                        ┌──────────────┐
+                                                        │ SMF (.70.133)│
+                                                        └──────┬───────┘
+                                                               │ N4 / PFCP
+                                                               ▼
+                 ┌──────────┐     ┌──────────┐          ┌──────────────┐     ┌──────────┐
+                 │    UE    │────▶│   gNB    │─────────▶│  UPF (host)  │────▶│  Ext DN  │
+                 │ 10.60.0.1│     │ UERANSIM │          │    (OAI)     │     │  iperf3  │
+                 └──────────┘     └──────────┘          └──────────────┘     └──────────┘
 ```
 
 **Key IP addresses** (from the Docker Compose network `192.168.70.128/26`):
 
 | Container | IP Address | Role |
 |---|---|---|
-| `af-core` | 192.168.70.141 | AF Core — receives CAMARA QoD requests |
-| `af-pcf-handler` | 192.168.70.140 | Southbound handler — translates to PCF API |
+| `af` / `af-core` | 192.168.70.141 | gRPC entrypoint for QoD requests — bundled mode uses `af`, microservice mode uses `af-core` |
+| `af-pcf-handler` | 192.168.70.140 | Southbound handler in microservice mode; bundled mode keeps this hop inside `af` |
 | `pcf` | 192.168.70.139 | free5GC PCF — policy control function |
 | `smf` | 192.168.70.133 | free5GC SMF — session management |
 | `upf` | host network | OAI UPF — user plane enforcement |
@@ -67,23 +88,34 @@ By the end of this tutorial you will have:
 Set up environment variables for this tutorial. Modify these values if you need to test different configurations:
 
 ```bash {"name":"setup-variables","interactive":"false"}
-export COMPOSE_FILE="docker-compose/docker-compose-free5gc-build.yaml"
-export LOGS_DIR="/tmp/phine.af/qos-enforcement-tutorial/logs"
+# Choose one deployment mode:
+#   bundled AF:     AF_PROFILE=af
+#   microservice:   AF_PROFILE=afs
+export COMPOSE_FILE="${COMPOSE_FILE:-docker-compose/compose.yaml}"
+export AF_PROFILE="${AF_PROFILE:-af}"
+export COMPOSE_PROFILES="${COMPOSE_PROFILES:---profile free5gc --profile $AF_PROFILE}"
+export RAN_SERVICES="${RAN_SERVICES:-ueransim-gnb ueransim-ue}"
+export LOGS_DIR="${LOGS_DIR:-/tmp/phine.af/qos-enforcement-tutorial/logs}"
 mkdir -p "$LOGS_DIR"
 sudo mkdir -p "$LOGS_DIR"
 sudo chmod 777 "$LOGS_DIR"
 
-export UE_IP="10.60.0.1"
-export EXT_DN_IP="192.168.72.135"
-export MIN_MBPS=3
-export MAX_MBPS=12
+export UE_IP="${UE_IP:-10.60.0.1}"
+export EXT_DN_IP="${EXT_DN_IP:-192.168.72.135}"
+export MIN_MBPS="${MIN_MBPS:-3}"
+export MAX_MBPS="${MAX_MBPS:-12}"
 echo "Configuration set:"
 echo "  COMPOSE_FILE: $COMPOSE_FILE"
+echo "  AF_PROFILE: $AF_PROFILE"
+echo "  COMPOSE_PROFILES: $COMPOSE_PROFILES"
+echo "  RAN_SERVICES: $RAN_SERVICES"
 echo "  CAPTURE_DIR: $LOGS_DIR"
 echo "  UE_IP: $UE_IP"
 echo "  EXT_DN_IP: $EXT_DN_IP"
 echo "  Bandwidth validation range: ${MIN_MBPS}-${MAX_MBPS} Mbps"
 ```
+
+Use [docker-compose/compose.yaml](../../docker-compose/compose.yaml) with `AF_PROFILE=af` for the bundled `af` container, or `AF_PROFILE=afs` for separate `af_core` and `pcf_handler` services. The rest of the tutorial is unchanged.
 
 ## Step 1: Deploy the Setup
 
@@ -102,14 +134,18 @@ Ensure submodules are up to date
 Build and start all containers:
 
 ```bash {"name":"deploy-stack","interactive":"false"}
-docker compose -f $COMPOSE_FILE up -d --build
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES up -d --build
+
+sleep 30
+
+docker compose -f $COMPOSE_FILE up -d $RAN_SERVICES
 ```
 
 Wait for all services to become healthy. The retry loop ensures we don't proceed until the stack is ready:
 
 ```bash {"name":"wait-for-healthy","interactive":"false"}
 sleep 30
-docker compose -f $COMPOSE_FILE ps
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES ps
 ```
 
 Verify the UE has registered and obtained an IP address:
@@ -135,7 +171,7 @@ PID_FILE="$LOGS_DIR/capture.pid"
 LOG_FILE="$LOGS_DIR/capture.tshark.log"
 
 sudo nohup tshark -i demo-oai \
-  -f "host 192.168.70.143 or host 192.168.70.141 or host 192.168.70.140 or host 192.168.70.139 or host 192.168.70.133" \
+  -f "host 192.168.70.141 or host 192.168.70.140 or host 192.168.70.139 or host 192.168.70.133" \
   -w "$PCAP_FILE" \
   >"$LOG_FILE" 2>&1 &
 echo $! > "$PID_FILE"
@@ -146,7 +182,7 @@ sleep 2
 
 This filter captures:
 
-- **HTTP traffic** between the PCF Handler (`.70.140`) and the PCF (`.70.139`) — the Npcf_PolicyAuthorization API calls
+- **HTTP traffic** from the AF path to the PCF (`.70.139`) — from `.70.141` in bundled mode or `.70.140` in microservice mode
 - **PFCP traffic** between the SMF (`.70.133`) and the UPF — the session modification that installs QoS rules
 - Any additional signalling on the control plane
 
@@ -221,7 +257,7 @@ docker run --rm --network host \
 
 You should receive a gRPC response with the session details. The `qos_status` will initially be `"REQUESTED"` and transition to `"AVAILABLE"` once the PCF confirms the policy is applied.
 
-Wait for the QoS policy to propagate through the signalling chain (AF → PCF → SMF → UPF):
+Wait for the QoS policy to propagate through the signalling chain. In bundled mode this stays inside `af` before reaching the PCF. In microservice mode it passes through `af_core` and `pcf_handler` as separate services:
 
 ```bash {"name":"wait-for-qos-policy","interactive":"false"}
 echo "Waiting for QoS policy to propagate through signalling chain..."
@@ -263,32 +299,30 @@ wireshark $PCAP_FILE
 You should see the following sequence of events:
 
 ```text
-grpcurl ──gRPC──▶ AF Core (.141)
-                     │
-                     │ gRPC (internal)
-                     ▼
-              PCF Handler (.140)
-                     │
-                     │ HTTP POST /npcf-policyauthorization/v1/app-sessions
-                     ▼
-                 PCF (.139)
-                     │
-                     │ HTTP (N7 policy update to SMF)
-                     ▼
-                 SMF (.133)
-                     │
-                     │ PFCP Session Modification Request
-                     ▼
-                 UPF (host)
-                     │
-                     │ PFCP Session Modification Response
-                     ▼
-                 SMF (.133)
+grpcurl ──gRPC──▶ AF entrypoint (.141)
+           │
+           ├─ bundled mode:       HTTP POST /npcf-policyauthorization/v1/app-sessions ──▶ PCF (.139)
+           │
+           └─ microservice mode:  gRPC ──▶ PCF Handler (.140)
+                          │
+                          └─ HTTP POST /npcf-policyauthorization/v1/app-sessions ──▶ PCF (.139)
+                                                         │
+                                                         │ HTTP (N7 policy update to SMF)
+                                                         ▼
+                                                       SMF (.133)
+                                                         │
+                                                         │ PFCP Session Modification Request
+                                                         ▼
+                                                       UPF (host)
+                                                         │
+                                                         │ PFCP Session Modification Response
+                                                         ▼
+                                                       SMF (.133)
 ```
 
 ### What to Look For in the Capture
 
-1. **HTTP POST to PCF** (`.140` → `.139`): Look for `/npcf-policyauthorization/v1/app-sessions` in the request URI. The body should contain:
+1. **HTTP POST to PCF** (`.141` → `.139` in bundled mode, or `.140` → `.139` in microservice mode): Look for `/npcf-policyauthorization/v1/app-sessions` in the request URI. The body should contain:
     - `medComponents` with `MediaSubComponent` entries
     - `fDescs` containing IPFilterRule flow descriptions like:
       ```text
@@ -466,7 +500,7 @@ docker run --rm --network host \
 
 ## Step 6: Collect Logs
 
-After the adapter run, collect logs from all containers for analysis:
+After the run, collect logs from all containers for analysis:
 
 ```bash {"name":"collect-logs","interactive":"false"}
 ./build/scripts/ci_helper.sh collect_logs $LOGS_DIR
@@ -479,13 +513,15 @@ ls -la $LOGS_DIR
 To stop and remove all containers:
 
 ```bash {"name":"cleanup","interactive":"false"}
-docker compose -f docker-compose/docker-compose-free5gc-build.yaml down
+docker compose -f $COMPOSE_FILE down $RAN_SERVICES
+
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES down
 ```
 
 To also remove built images:
 
 ```bash {"name":"cleanup-all","excludeFromRunAll":"true","interactive":"false"}
-docker compose -f $COMPOSE_FILE down --rmi all
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES down --rmi all
 ```
 
 ## Next Steps

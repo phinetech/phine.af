@@ -5,13 +5,12 @@ nci: "0x000000010" # NR Cell Identity (36-bit)
 idLength: 32 # NR gNB ID length in bits [22...32]
 tac: 1 # Tracking Area Code
 
-linkIp: 0.0.0.0 # gNB's local IP address for Radio Link Simulation (Usually same with local IP)
-ngapIp: gnb.free5gc.org # gNB's local IP address for N2 Interface (Usually same with local IP)
-gtpIp: gnb-n3.free5gc.org # gNB's local IP address for N3 Interface (Usually same with local IP)
+linkIp: 192.168.70.180
+ngapIp: 192.168.70.180
+gtpIp: 192.168.71.180
 
-# List of AMF address information
 amfConfigs:
-  - address: amf.free5gc.org
+  - address: 192.168.70.132
     port: 38412
 
 # List of supported S-NSSAIs by this gNB

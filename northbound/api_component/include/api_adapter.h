@@ -42,6 +42,10 @@ private:
     bool tls_enabled_;
     std::string cert_file_;
     std::string key_file_;
+    std::string core_comm_type_;
+    std::string core_address_;
+    std::string core_port_;
+    std::string core_destination_;
 
     // HTTP/2 server and io_context
     std::shared_ptr<boost::asio::io_context> io_context_;

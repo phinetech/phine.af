@@ -1,0 +1,53 @@
+x-ueransim-defaults: &ueransim-defaults
+  restart: "no"
+  image: ${UERANSIM_IMAGE:-phinetech/ueransim:v3.2.7}
+  cap_add:
+    - NET_ADMIN
+  devices:
+    - /dev/net/tun:/dev/net/tun
+
+services:
+  ueransim-gnb:
+    <<: *ueransim-defaults
+    profiles: [ueransim]
+    container_name: gnb
+    command: ./nr-gnb -c /ueransim/config/gnbcfg.yaml
+    volumes:
+      - ./ueransim/gnb.yaml:/ueransim/config/gnbcfg.yaml
+      - ./ueransim/ue.yaml:/ueransim/config/uecfg.yaml
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.180
+        aliases:
+          - gnb.free5gc.org
+          - gnb
+      n3_net:
+        ipv4_address: 192.168.71.180
+        aliases:
+          - gnb-n3.free5gc.org
+          - gnb-n3
+
+  ueransim-ue:
+    <<: *ueransim-defaults
+    profiles: [ueransim]
+    container_name: ue
+    command:
+      - /bin/bash
+      - -c
+      - |
+        sleep 15
+        echo "Starting UE..."
+        nr-ue -c /ueransim/config/uecfg.yaml
+        tail -f /dev/null
+    volumes:
+      - ./ueransim/gnb.yaml:/ueransim/config/gnbcfg.yaml
+      - ./ueransim/ue.yaml:/ueransim/config/uecfg.yaml
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.181
+        aliases:
+          - ue.free5gc.org
+          - ue.oai.org
+          - ue
+    depends_on:
+      - ueransim-gnb

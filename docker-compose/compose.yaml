@@ -1,0 +1,231 @@
+include:
+  - ./compose.free5gc.yaml
+  - ./compose.oai.yaml
+  - ./compose.ueransim.yaml
+
+name: phine-af
+
+# Unified Docker Compose file for all AF deployment variants.
+#
+# Profiles
+# --------
+# free5gc    : free5GC core network + UPF + external DN + UERANSIM
+# oai-core   : OAI core network + OAI UPF + external DN + UERANSIM
+# afs   : separate `af_core` + `pcf_handler` + `api_component`
+# standalone-qod : standalone `demo-qod-adapter` to pair with split or bundled AF
+# af : bundled `af` + `api_component`
+# demo-qod   : bundled `af_demo_qod` + `api_component`
+# af-client  : lightweight Ubuntu helper container for manual curl/testing
+#
+# Common examples
+# ---------------
+# docker compose --profile afs up -d
+# docker compose --profile afs --profile standalone-qod up -d
+# docker compose --profile af --profile standalone-qod up -d
+# docker compose --profile free5gc --profile af up -d
+# docker compose --profile oai-core --profile af up -d
+# docker compose --profile free5gc --profile demo-qod up -d
+# docker compose up -d af
+# docker compose up -d af_core pcf_handler demo-qod-adapter
+#
+# Note: `free5gc` and `oai-core` are alternative core network topologies.
+# `afs`, `af`, and `demo-qod` are alternative AF topologies.
+# `standalone-qod` can be paired with either `afs` or `af`.
+# Do not enable multiple core or AF topology profiles together because they intentionally reuse the same IPs/ports.
+
+x-defaults: &defaults
+  restart: "no"
+  environment: &default-env
+    TZ: ${TZ:-Europe/Paris}
+
+x-af-build: &af-build
+  <<: *defaults
+  build:
+    context: ..
+  environment:
+    <<: *default-env
+
+services:
+  oai-ext-dn:
+    <<: *defaults
+    profiles: [free5gc, oai-core]
+    container_name: oai-ext-dn
+    image: ${OAI_EXT_DN_IMAGE:-oaisoftwarealliance/trf-gen-cn5g:latest}
+    privileged: true
+    init: true
+    environment:
+      <<: *default-env
+      EBPF_GW_SETUP: yes
+      EBPF_GW_N6_IP_ADDR: ${EXT_DN_N6_IP_ADDR:-192.168.72.135}
+      GW_SGI_IP_ADDR: ${EXT_DN_GW_SGI_IP_ADDR:-192.168.70.135}
+      GW_N3_IP_ADDR: ${EXT_DN_GW_N3_IP_ADDR:-192.168.71.135}
+      UE_IP_ADDRESS_POOL: ${EXT_DN_UE_IP_POOL:-10.60.0.0/24}
+      N6_UPF_IP_ADDR: ${EXT_DN_N6_UPF_IP_ADDR:-192.168.72.129}
+      SGI_DEMO_OAI_ADDR: ${EXT_DN_SGI_DEMO_OAI_ADDR:-192.168.70.129}
+    healthcheck:
+      test: /bin/bash -c "ip r | grep ${EXT_DN_ROUTE_MATCH:-10.60.0}"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.135
+      n3_net:
+        ipv4_address: 192.168.71.135
+      n6_net:
+        ipv4_address: 192.168.72.135
+
+  af_client:
+    <<: *defaults
+    profiles: [af-client]
+    container_name: af-client
+    image: ${AF_CLIENT_IMAGE:-ubuntu:22.04}
+    expose:
+      - 80/tcp
+      - 8080/tcp
+    command:
+      - /bin/bash
+      - -c
+      - |
+        apt update -y && apt install curl -y
+        tail -f /dev/null
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.143
+
+  pcf_handler:
+    <<: *af-build
+    profiles: [afs]
+    container_name: af-pcf-handler
+    image: phinetech/pcf-handler:${TAG:-latest}
+    build:
+      context: ..
+      dockerfile: southbound/pcf_handler/Dockerfile
+    volumes:
+      - ./conf/pcf_handler.yaml:/etc/oai/af/pcf_handler.yaml
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.140
+
+  af_core:
+    <<: *af-build
+    profiles: [afs]
+    container_name: af-core
+    image: phinetech/af-core:${TAG:-latest}
+    build:
+      context: ..
+      dockerfile: af_core/Dockerfile
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.141
+        aliases:
+          - af-core
+
+  af:
+    <<: *af-build
+    profiles: [af]
+    container_name: af
+    image: phinetech/af:${TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    volumes:
+      - ./conf/af.yaml:/etc/oai/af/af.yaml
+    expose:
+      - 50051/tcp
+    ports:
+      - "50051:50051"
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.141
+        aliases:
+          - af.local
+          - af-core
+
+  af_demo_qod:
+    <<: *af-build
+    profiles: [demo-qod]
+    container_name: af-demo-qod
+    image: phinetech/af-demo-qod:${TAG:-latest}
+    build:
+      context: ..
+      dockerfile: adapters/demo-qod-adapter/Dockerfile.bundle
+    environment:
+      <<: *default-env
+      PHINE_DEMO_QOD_ADAPTER_CONFIG: /etc/oai/af/demo_qod_adapter.yaml
+    volumes:
+      - ./conf/af.yaml:/etc/oai/af/af.yaml
+      - ../adapters/demo-qod-adapter/config.yaml:/etc/oai/af/demo_qod_adapter.yaml
+    expose:
+      - 50051/tcp
+    ports:
+      - "50051:50051"
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.141
+        aliases:
+          - af.local
+          - af-core
+          - af-demo-qod
+
+  demo-qod-adapter:
+    <<: *af-build
+    profiles: [standalone-qod]
+    container_name: demo-qod-adapter
+    image: phinetech/demo-qod-adapter:${TAG:-latest}
+    build:
+      context: ..
+      dockerfile: adapters/demo-qod-adapter/Dockerfile
+    volumes:
+      - ./conf/adapter_config.yaml:/app/config.yaml:ro
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.143
+        aliases:
+          - demo-qod-adapter
+
+  api_component:
+    <<: *af-build
+    profiles: [afs, af, demo-qod]
+    container_name: af-north-api
+    image: phinetech/af-api:${TAG:-latest}
+    build:
+      context: ..
+      dockerfile: northbound/api_component/Dockerfile
+    volumes:
+      - ./conf/api_adapter.yaml:/etc/oai/af/api_adapter.yaml
+    expose:
+      - 8081/tcp
+    ports:
+      - "8081:8081"
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.142
+        aliases:
+          - af-api
+
+networks:
+  public_net:
+    driver: bridge
+    name: ${PUBLIC_NET_NAME:-demo-oai-public-net}
+    ipam:
+      config:
+        - subnet: ${PUBLIC_NET_SUBNET:-192.168.70.128/26}
+    driver_opts:
+      com.docker.network.bridge.name: ${PUBLIC_NET_BRIDGE:-demo-oai}
+  n3_net:
+    driver: bridge
+    name: ${N3_NET_NAME:-demo-oai-n3-net}
+    ipam:
+      config:
+        - subnet: ${N3_NET_SUBNET:-192.168.71.128/26}
+    driver_opts:
+      com.docker.network.bridge.name: ${N3_NET_BRIDGE:-demo-n3}
+  n6_net:
+    driver: bridge
+    name: ${N6_NET_NAME:-demo-oai-n6-net}
+    ipam:
+      config:
+        - subnet: ${N6_NET_SUBNET:-192.168.72.128/26}
+    driver_opts:
+      com.docker.network.bridge.name: ${N6_NET_BRIDGE:-demo-n6}

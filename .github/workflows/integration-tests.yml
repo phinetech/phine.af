@@ -1,23 +1,7 @@
 name: Integration Tests
 
 on:
-  pull_request:
-    branches:
-      - main
-      - develop
-      - 'feat-*'
-    paths:
-      - 'af_core/**'
-      - 'northbound/**'
-      - 'southbound/**'
-      - 'common/**'
-      - 'docker-compose/**'
-      - '.github/workflows/integration-tests.yml'
-  push:
-    branches:
-      - main
-      - develop
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:  # Allow manual trigger only (automatic pull_request/push triggers disabled)
 
 env:
   DOCKER_BUILDKIT: 1

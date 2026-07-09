@@ -21,9 +21,12 @@ ApiHandlers::ApiHandlers() {
 ApiHandlers::~ApiHandlers() {
 }
 
-void ApiHandlers::initialize(std::shared_ptr<af::communication::CommunicationService> core_comm) {
+void ApiHandlers::initialize(std::shared_ptr<af::communication::CommunicationService> core_comm,
+                             const std::string& core_destination) {
     core_comm_ = core_comm;
-    logger_->info("API Handlers initialized with core communication interface");
+    core_destination_ = core_destination;
+    logger_->info("API Handlers initialized with core communication interface to {}",
+                  core_destination_);
 }
 
 void ApiHandlers::getHealth(const request& req, const response& res) {
@@ -65,7 +68,7 @@ void ApiHandlers::requestQoS(const request& req, const response& res) {
             auto msg = createMessage("qos_request", json_body.dump());
 
             // Send to AF Core and wait for response
-            auto reply = core_comm_->send_request("af_core", msg);
+            auto reply = core_comm_->send_request(core_destination_, msg);
 
             // Send response back to client
             if (reply && reply->message_type == "qos_success") {
@@ -112,7 +115,7 @@ void ApiHandlers::getSubscriptions(const request& req, const response& res) {
         auto msg = createMessage("get_subscriptions", "");
 
         // Send to AF Core and wait for response
-        auto reply = core_comm_->send_request("af_core", msg);
+        auto reply = core_comm_->send_request(core_destination_, msg);
 
         // Send response back to client
         if (reply && reply->message_type == "subscriptions_list") {
@@ -159,7 +162,7 @@ void ApiHandlers::createSubscription(const request& req, const response& res) {
             auto msg = createMessage("create_subscription", json_body.dump());
 
             // Send to AF Core and wait for response
-            auto reply = core_comm_->send_request("af_core", msg);
+            auto reply = core_comm_->send_request(core_destination_, msg);
 
             // Send response back to client
             if (reply && reply->message_type == "subscription_created") {
@@ -207,7 +210,7 @@ void ApiHandlers::getSubscription(const request& req, const response& res, const
         auto msg = createMessage("get_subscription", content.dump());
 
         // Send to AF Core and wait for response
-        auto reply = core_comm_->send_request("af_core", msg);
+        auto reply = core_comm_->send_request(core_destination_, msg);
 
         // Send response back to client
         if (reply && reply->message_type == "subscription") {
@@ -257,7 +260,7 @@ void ApiHandlers::deleteSubscription(const request& req, const response& res, co
         auto msg = createMessage("delete_subscription", content.dump());
 
         // Send to AF Core and wait for response
-        auto reply = core_comm_->send_request("af_core", msg);
+        auto reply = core_comm_->send_request(core_destination_, msg);
 
         // Send response back to client
         if (reply && reply->message_type == "subscription_deleted") {

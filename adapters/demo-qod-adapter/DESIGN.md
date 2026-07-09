@@ -545,7 +545,7 @@ Add the adapter to `docker-compose/docker-compose-build.yaml`:
 
 ```yaml
   demo_qod_adapter:
-    image: tariromukute/demo-qod-adapter:${TAG:-latest}
+    image: phinetech/demo-qod-adapter:${TAG:-latest}
     container_name: demo-qod-adapter
     build:
       context: ..

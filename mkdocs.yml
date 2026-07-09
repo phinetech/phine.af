@@ -43,6 +43,7 @@ nav:
       - Southbound: apis/southbound.md
   - Development:
       - Add a CAMARA API: development/add-camara-api.md
+      - Add a New Adapter: development/add-adapter.md
       - Add a Southbound Handler: development/add-southbound-handler.md
       - Service Handlers: development/service-handlers.md
       - Configuration: development/configuration.md

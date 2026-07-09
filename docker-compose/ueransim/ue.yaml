@@ -20,7 +20,7 @@ imeiSv: "4370816125816151"
 
 # List of gNB IP addresses for Radio Link Simulation
 gnbSearchList:
-  - gnb.free5gc.org
+  - gnb
 
 # UAC Access Identities Configuration
 uacAic:

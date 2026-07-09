@@ -9,7 +9,9 @@
 
 #pragma once
 
+#include <condition_variable>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include "request_router.h"
@@ -18,6 +20,7 @@
 #include "ue_state_manager.h"
 #include "common/component/include/af_component.h"
 #include "common/communication/include/communication_interface.h"
+#include "af_typed_config.hpp"
 
 // QoD includes
 #include "qod/qod_session_manager.h"
@@ -58,6 +61,11 @@ public:
      * @brief Stop the orchestrator and its services
      */
     void stop() override;
+
+    /**
+     * @brief Block until the orchestrator has been stopped.
+     */
+    void wait();
 
     /**
      * @brief Process a message from any source
@@ -101,6 +109,12 @@ public:
     }
 
     /**
+     * @brief Get the configured destination used to reach the PCF handler.
+     * @return Destination string for the PCF handler.
+     */
+    const std::string& get_pcf_destination() const { return pcf_destination_; }
+
+    /**
      * @brief Initialize the component's logger
      * @param log_level The log level to use
      */
@@ -109,6 +123,8 @@ public:
 private:
     // Configuration
     std::string config_path_;
+    af::config::AppConfig app_config_{};
+    std::string pcf_destination_{"pcf_handler:50055"};
 
     std::shared_ptr<af::core::events::EventDispatcher> event_dispatcher_;
 
@@ -133,6 +149,10 @@ private:
 
     // Logger
     std::shared_ptr<spdlog::logger> logger_;
+
+    // Wait support
+    mutable std::mutex wait_mutex_;
+    std::condition_variable wait_cv_;
 
     /**
      * @brief Load configuration from file

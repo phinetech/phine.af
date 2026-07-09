@@ -283,6 +283,140 @@ For more request examples, see [af_core/README.md](af_core/README.md).
 - Compose environments (build/test): [docs/operations/docker-compose.md](docs/operations/docker-compose.md)
 - Testing guide: [docs/development/testing.md](docs/development/testing.md)
 
+## Building
+
+The project supports two deployment modes: **microservice** (default) and **bundled** (single binary/container). Both share the same codebase — the mode is selected at build time.
+
+### Prerequisites
+
+| Dependency | Version | Install |
+|------------|---------|---------|
+| CMake | ≥ 3.14 | `apt install cmake` |
+| gRPC + Protobuf | 1.72.x | See [build/cmake/FindgRPC.cmake](build/cmake/FindgRPC.cmake) or use `phinetech/grpc-builder` |
+| OpenSSL | 3.0+ | `apt install libssl-dev` |
+| Boost | 1.74+ | `apt install libboost-all-dev` |
+| nghttp2 / nghttp2-asio | 1.65+ | Built from source (see Dockerfiles) |
+| spdlog | any | `apt install libspdlog-dev` |
+| yaml-cpp | any | `apt install libyaml-cpp-dev` |
+| nlohmann_json | 3.11.2 | `apt install nlohmann-json3-dev` |
+| OAI CN5G Common | latest | `phinetech/oai-cn5g-common-src` Docker image |
+
+> **Tip**: The easiest way to get all dependencies is to extract them from the builder Docker images (see Docker build below).
+
+---
+
+### Microservice build (individual components)
+
+Each component builds independently and communicates over gRPC.
+
+**1. Build common libraries:**
+```bash
+mkdir -p build-output && cd build-output
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j$(nproc)
+```
+
+**2. Build a specific component:**
+```bash
+make af_core          # Core orchestrator
+make api_server       # Northbound HTTP/2 API
+make pcf_server       # Southbound PCF handler
+```
+
+**Run each service separately:**
+```bash
+./bin/af_core     --config af_core/config/af_core.yaml
+./bin/api_server  --config northbound/api_component/config/api_adapter.yaml
+./bin/pcf_server  --config southbound/pcf_handler/config/pcf_handler.yaml
+```
+
+---
+
+### Bundled build (single binary)
+
+The bundled `af` binary contains **AF Core** and the **southbound PCF handler** in one process. Northbound applications remain standalone services and connect to AF Core over gRPC.
+
+**1. Install OAI CN5G Common libraries from Docker image (one-time):**
+```bash
+CID=$(docker create phinetech/oai-cn5g-common-src:latest)
+sudo docker cp "$CID:/usr/local/lib/libCONFIG.a"       /usr/local/lib/
+sudo docker cp "$CID:/usr/local/lib/libPCF.a"           /usr/local/lib/
+sudo docker cp "$CID:/usr/local/lib/libCOMMON_MODEL.a"  /usr/local/lib/
+sudo docker cp "$CID:/usr/local/lib/libLOGGER.a"        /usr/local/lib/
+sudo docker cp "$CID:/usr/local/lib/libNAS.a"           /usr/local/lib/
+sudo docker cp "$CID:/usr/local/lib/libCOMMON.a"        /usr/local/lib/
+sudo docker cp "$CID:/usr/local/lib/libUTILS.a"         /usr/local/lib/
+sudo docker cp "$CID:/usr/local/lib/cmake/oai_cn5g_common" /usr/local/lib/cmake/
+sudo docker cp "$CID:/usr/local/include/oai"            /usr/local/include/
+docker rm "$CID"
+```
+
+**2. Configure and build:**
+```bash
+mkdir -p build-output && cd build-output
+cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_BUNDLED=ON
+make -j$(nproc) af
+```
+
+**3. Run:**
+```bash
+./bin/af --config config/af.yaml
+```
+
+The unified config file [config/af.yaml](config/af.yaml) configures AF Core for external gRPC access and the bundled southbound handler for in-process direct communication.
+
+---
+
+### Docker builds
+
+Each service has its own Dockerfile for containerised deployment.
+
+**Build individual service images:**
+```bash
+# Southbound PCF handler
+docker build -f southbound/pcf_handler/Dockerfile -t af-pcf-handler .
+
+# AF Core
+docker build -f af_core/Dockerfile -t af-core .
+
+# Northbound API
+docker build -f northbound/api_component/Dockerfile -t af-api .
+```
+
+**Build the AF image (all-in-one):**
+```bash
+docker build -f Dockerfile -t af .
+```
+
+---
+
+### Docker Compose environments
+
+| File / Profile | Description |
+|------|-------------|
+| [compose.yaml](compose.yaml) | Simple getting-started stack: AF + free5GC core + UERANSIM |
+| [docker-compose/compose.yaml](docker-compose/compose.yaml) + `free5gc` + `af` | bundled **AF Core + southbound** container + standalone northbound API + free5GC core |
+| [docker-compose/compose.yaml](docker-compose/compose.yaml) + `free5gc` + `afs` | Microservice AF + free5GC core |
+| [docker-compose/compose.yaml](docker-compose/compose.yaml) + `free5gc` + `afs` + `standalone-qod` | Microservice AF + standalone demo QoD adapter + free5GC core |
+| [docker-compose/compose.yaml](docker-compose/compose.yaml) + `free5gc` + `demo-qod` | Bundled AF including demo QoD adapter + free5GC core |
+
+**Start the simple getting-started stack:**
+```bash
+docker compose up -d --build
+```
+
+**Start the bundled stack:**
+```bash
+docker compose -f docker-compose/compose.yaml --profile free5gc --profile af build
+docker compose -f docker-compose/compose.yaml --profile free5gc --profile af up
+```
+
+**Start the microservice stack (free5gc):**
+```bash
+docker compose -f docker-compose/compose.yaml --profile free5gc --profile afs build
+docker compose -f docker-compose/compose.yaml --profile free5gc --profile afs up
+```
+
 ## Development
 
 - Submodule management: [docs/development/submodule-management.md](docs/development/submodule-management.md)

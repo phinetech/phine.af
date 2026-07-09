@@ -1,0 +1,172 @@
+x-oai-defaults: &oai-defaults
+  restart: "no"
+  environment: &oai-default-env
+    TZ: ${TZ:-Europe/Paris}
+
+services:
+  mysql:
+    <<: *oai-defaults
+    profiles: [oai-core]
+    container_name: mysql
+    image: ${OAI_MYSQL_IMAGE:-mysql:8.0}
+    volumes:
+      - ./database/oai_db2.sql:/docker-entrypoint-initdb.d/oai_db.sql
+      - ./healthscripts/mysql-healthcheck2.sh:/tmp/mysql-healthcheck.sh
+    environment:
+      <<: *oai-default-env
+      MYSQL_DATABASE: oai_db
+      MYSQL_USER: test
+      MYSQL_PASSWORD: test
+      MYSQL_ROOT_PASSWORD: linux
+    healthcheck:
+      test: /bin/bash -c "/tmp/mysql-healthcheck.sh"
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.131
+
+  oai-udr:
+    <<: *oai-defaults
+    profiles: [oai-core]
+    container_name: udr
+    image: ${OAI_UDR_IMAGE:-oaisoftwarealliance/oai-udr:v2.1.9}
+    expose:
+      - 80/tcp
+      - 8080/tcp
+    volumes:
+      - ./conf/basic_nrf_config_ebpf.yaml:/openair-udr/etc/config.yaml
+    depends_on:
+      - mysql
+      - oai-nrf
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.136
+
+  oai-udm:
+    <<: *oai-defaults
+    profiles: [oai-core]
+    container_name: udm
+    image: ${OAI_UDM_IMAGE:-oaisoftwarealliance/oai-udm:develop}
+    expose:
+      - 80/tcp
+      - 8080/tcp
+    volumes:
+      - ./conf/basic_nrf_config_ebpf.yaml:/openair-udm/etc/config.yaml
+    depends_on:
+      - oai-nrf
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.137
+
+  oai-ausf:
+    <<: *oai-defaults
+    profiles: [oai-core]
+    container_name: ausf
+    image: ${OAI_AUSF_IMAGE:-oaisoftwarealliance/oai-ausf:v2.1.9}
+    expose:
+      - 80/tcp
+      - 8080/tcp
+    volumes:
+      - ./conf/basic_nrf_config_ebpf.yaml:/openair-ausf/etc/config.yaml
+    depends_on:
+      - oai-nrf
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.138
+
+  oai-nrf:
+    <<: *oai-defaults
+    profiles: [oai-core]
+    container_name: nrf
+    image: ${OAI_NRF_IMAGE:-oaisoftwarealliance/oai-nrf:develop}
+    expose:
+      - 80/tcp
+      - 8080/tcp
+    volumes:
+      - ./conf/basic_nrf_config_ebpf.yaml:/openair-nrf/etc/config.yaml
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.130
+
+  oai-amf:
+    <<: *oai-defaults
+    profiles: [oai-core]
+    container_name: amf
+    image: ${OAI_AMF_IMAGE:-oaisoftwarealliance/oai-amf:v2.1.9}
+    expose:
+      - 80/tcp
+      - 8080/tcp
+      - 38412/sctp
+    volumes:
+      - ./conf/basic_nrf_config_ebpf.yaml:/openair-amf/etc/config.yaml
+    depends_on:
+      - oai-nrf
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.132
+        aliases:
+          - amf
+
+  oai-smf:
+    <<: *oai-defaults
+    profiles: [oai-core]
+    container_name: smf
+    image: ${OAI_SMF_IMAGE:-oaisoftwarealliance/oai-smf:develop}
+    expose:
+      - 80/tcp
+      - 8080/tcp
+      - 8805/udp
+    volumes:
+      - ./conf/basic_nrf_config_ebpf.yaml:/openair-smf/etc/config.yaml
+    depends_on:
+      - oai-nrf
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.133
+    extra_hosts:
+      - oai-upf:192.168.70.129
+
+  oai-pcf:
+    <<: *oai-defaults
+    profiles: [oai-core]
+    container_name: pcf
+    image: ${OAI_PCF_IMAGE:-oaisoftwarealliance/oai-pcf:develop}
+    expose:
+      - 80/tcp
+      - 8080/tcp
+    volumes:
+      - ./policies/qos:/openair-pcf/policies
+      - ./conf/basic_nrf_config_ebpf.yaml:/openair-pcf/etc/config.yaml
+    depends_on:
+      - oai-nrf
+    networks:
+      public_net:
+        ipv4_address: 192.168.70.139
+
+  oai-upf:
+    <<: *oai-defaults
+    profiles: [oai-core]
+    container_name: upf
+    image: ${OAI_UPF_IMAGE:-oaisoftwarealliance/oai-upf:develop}
+    expose:
+      - 2152/udp
+      - 8805/udp
+      - 8080/tcp
+    volumes:
+      - ./conf/basic_nrf_config_ebpf.yaml:/openair-upf/etc/config.yaml
+      - /sys/fs/bpf:/sys/fs/bpf
+      - /sys/kernel/debug:/sys/kernel/debug:rw
+    depends_on:
+      - oai-nrf
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    cap_drop:
+      - ALL
+    privileged: true
+    network_mode: host
+    extra_hosts:
+      - oai-ext-dn:192.168.72.135
+      - oai-nrf:192.168.70.130

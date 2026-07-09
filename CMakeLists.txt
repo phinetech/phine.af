@@ -88,22 +88,26 @@ else()
     message(STATUS "Using existing nlohmann_json target")
 endif()
 
-# Find spdlog - use system installation from Debian package
+# Find spdlog - prefer config mode to properly define all targets
 if(NOT TARGET spdlog::spdlog)
-    find_path(SPDLOG_INCLUDE_DIR spdlog/spdlog.h)
-    find_library(SPDLOG_LIBRARY NAMES spdlog)
+    find_package(spdlog QUIET CONFIG)
+    if(NOT TARGET spdlog::spdlog)
+        # Fallback: manually create target from system installation
+        find_path(SPDLOG_INCLUDE_DIR spdlog/spdlog.h)
+        find_library(SPDLOG_LIBRARY NAMES spdlog)
 
-    if(SPDLOG_INCLUDE_DIR AND SPDLOG_LIBRARY)
-        # Create imported target for spdlog
-        add_library(spdlog::spdlog UNKNOWN IMPORTED)
-        set_target_properties(spdlog::spdlog PROPERTIES
-            IMPORTED_LOCATION "${SPDLOG_LIBRARY}"
-            INTERFACE_INCLUDE_DIRECTORIES "${SPDLOG_INCLUDE_DIR}"
-        )
-        message(STATUS "Found spdlog: ${SPDLOG_LIBRARY}")
-        message(STATUS "spdlog include: ${SPDLOG_INCLUDE_DIR}")
+        if(SPDLOG_INCLUDE_DIR AND SPDLOG_LIBRARY)
+            add_library(spdlog::spdlog UNKNOWN IMPORTED)
+            set_target_properties(spdlog::spdlog PROPERTIES
+                IMPORTED_LOCATION "${SPDLOG_LIBRARY}"
+                INTERFACE_INCLUDE_DIRECTORIES "${SPDLOG_INCLUDE_DIR}"
+            )
+            message(STATUS "Found spdlog (manual): ${SPDLOG_LIBRARY}")
+        else()
+            message(FATAL_ERROR "spdlog not found. Please install libspdlog-dev")
+        endif()
     else()
-        message(FATAL_ERROR "spdlog not found. Please install libspdlog-dev")
+        message(STATUS "Found spdlog via config file")
     endif()
 else()
     message(STATUS "Using existing spdlog target")
@@ -123,6 +127,9 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/af_core)
 endif()
 
 # Add southbound components (if directory exists)
+option(ENABLE_PCF_HANDLER "Build the PCF southbound handler" ON)
+option(ENABLE_NEF_HANDLER "Build the NEF southbound handler" OFF)
+option(ENABLE_UDR_HANDLER "Build the UDR southbound handler" OFF)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/southbound)
     add_subdirectory(southbound)
 endif()
@@ -134,8 +141,90 @@ if(BUILD_TESTS)
   add_subdirectory(tests)
 endif()
 
+# Bundled application configuration
+# Build a single executable that bundles AF Core and southbound handlers.
+# Northbound applications remain standalone services and connect to AF Core
+# over the configured communication interface.
+option(BUILD_BUNDLED "Build single bundled AF application" OFF)
+if(BUILD_BUNDLED)
+  message(STATUS "Building bundled AF application")
+
+    add_executable(af
+        src/bundled_af_runtime.cpp
+        src/main.cpp
+        src/southbound_handler_factory.cpp
+    )
+
+    if(ENABLE_PCF_HANDLER)
+        target_compile_definitions(af PRIVATE AF_ENABLE_PCF_HANDLER=1)
+    endif()
+
+    if(ENABLE_NEF_HANDLER)
+        target_compile_definitions(af PRIVATE AF_ENABLE_NEF_HANDLER=1)
+    endif()
+
+    if(ENABLE_UDR_HANDLER)
+        target_compile_definitions(af PRIVATE AF_ENABLE_UDR_HANDLER=1)
+    endif()
+
+  target_include_directories(af
+    PRIVATE
+      ${CMAKE_SOURCE_DIR}
+      ${CMAKE_SOURCE_DIR}/af_core/include
+      ${CMAKE_SOURCE_DIR}/common
+      ${CMAKE_SOURCE_DIR}/common/component/include
+      ${CMAKE_SOURCE_DIR}/common/communication/include
+      ${CMAKE_SOURCE_DIR}/common/models
+      ${CMAKE_SOURCE_DIR}/common/models/include
+      ${CMAKE_SOURCE_DIR}/common/config/include
+      ${CMAKE_SOURCE_DIR}/common/di/include
+      ${CMAKE_SOURCE_DIR}/common/cpp_utils/include
+      ${CMAKE_SOURCE_DIR}/common/handlers/include
+      ${CMAKE_SOURCE_DIR}/common/response/include
+      ${CMAKE_SOURCE_DIR}/common/communication/adapters/include
+  )
+
+    if(ENABLE_PCF_HANDLER)
+        target_include_directories(af
+            PRIVATE
+                ${CMAKE_SOURCE_DIR}/southbound/pcf_handler/include
+        )
+    endif()
+
+    # Link bundled core + southbound libraries + common
+  target_link_libraries(af
+    PRIVATE
+      af_core_lib
+      af_common
+  )
+
+    # Note: pcf_handler_lib depends on OAI static libraries. We use whole-archive
+    # to ensure all symbols from static libs are included in the final binary.
+    if(ENABLE_PCF_HANDLER)
+        target_link_libraries(af
+            PRIVATE
+                -Wl,--whole-archive
+                pcf_handler_lib
+                -Wl,--no-whole-archive
+        )
+    endif()
+
+  # Ensure proper static library resolution (needed for transitive deps from static libs)
+  target_link_options(af PRIVATE
+    -Wl,--no-as-needed
+    -L/usr/local/lib
+  )
+
+  install(TARGETS af
+    RUNTIME DESTINATION bin
+  )
+endif()
+
 # Print configuration summary
 message(STATUS "Configuration Summary:")
 message(STATUS "  Project version: ${PROJECT_VERSION}")
 message(STATUS "  C++ Compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
 message(STATUS "  Build tests: ${BUILD_TESTS}")
+message(STATUS "  PCF handler enabled: ${ENABLE_PCF_HANDLER}")
+message(STATUS "  NEF handler enabled: ${ENABLE_NEF_HANDLER}")
+message(STATUS "  UDR handler enabled: ${ENABLE_UDR_HANDLER}")

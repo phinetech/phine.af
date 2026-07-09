@@ -71,7 +71,8 @@ public:
      * @brief Initialize the QoD session manager with PCF communication service
      * @param pcf_service Shared pointer to PCF communication service for policy enforcement
      */
-    void initialize(std::shared_ptr<af::communication::CommunicationService> pcf_service);
+    void initialize(std::shared_ptr<af::communication::CommunicationService> pcf_service,
+                    const std::string& pcf_destination);
 
     /**
      * @brief Start the session manager (cleanup threads, etc.)
@@ -320,6 +321,7 @@ private:
 
     // Core dependencies
     std::shared_ptr<af::communication::CommunicationService> pcf_service_;
+    std::string pcf_destination_;
     std::shared_ptr<UeStateManager> ue_state_manager_;
     std::shared_ptr<QodStateManager> qod_state_manager_;
 

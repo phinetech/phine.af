@@ -1,0 +1,56 @@
+# Unified AF configuration for bundled Docker deployment.
+# The bundled container contains AF Core and the southbound PCF handler only.
+
+# AF Core (Orchestrator)
+af_core:
+  pcf_base_url: "http://192.168.70.139:8000/npcf-policyauthorization/v1"
+  use_tls: false
+  api_version: "v1"
+
+  logging:
+    level: "info"
+    console_output: true
+    file_output: false
+    file_path: "/app/logs/af_core.log"
+
+  communication:
+    type: "grpc"
+    server_address: "0.0.0.0"
+    server_port: "50051"
+
+# Southbound PCF Handler
+pcf_handler:
+  enabled: true
+
+  pcf_base_url: "http://192.168.70.139:8000/npcf-policyauthorization/v1"
+  use_tls: false
+  api_version: "v1"
+
+  logging:
+    level: "info"
+    console_output: true
+    file_output: false
+    file_path: "/app/logs/pcf_handler.log"
+
+  communication:
+    type: "direct"
+
+# Future southbound handlers
+nef_handler:
+  enabled: false
+
+udr_handler:
+  enabled: false
+
+# Global settings
+logging:
+  level: "info"
+  file: "/var/log/oai/af/af.log"
+  console: true
+  max_size_mb: 10
+  max_files: 5
+
+metrics:
+  enabled: true
+  port: 9090
+  path: "/metrics"

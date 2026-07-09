@@ -4,11 +4,22 @@
  */
 
 #include "pcf_handler.h"
-#include <yaml-cpp/yaml.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <nlohmann/json.hpp>
 #include <communication_factory.h>
+
+namespace {
+
+std::unordered_map<std::string, std::string> make_server_config(
+    const af::config::CommunicationConfig& config) {
+    return {
+        {"server_address", config.listen.host},
+        {"server_port", af::config::port_to_string(config.listen.port)}
+    };
+}
+
+} // namespace
 
 using namespace oai::model::pcf;
 namespace af {
@@ -46,14 +57,16 @@ PcfHandler::PcfHandler(const std::string& config_path)
     load_config();
 
     // Create QoD PCF handler
-    qod_pcf_handler_ = std::make_shared<QodPcfHandler>(config_path_);
+    qod_pcf_handler_ = std::make_shared<QodPcfHandler>(app_config_.pcf_handler);
 
     // Create PCC rule manager
     pcc_rule_manager_ = std::make_shared<PccRuleManager>();
 
     // Create PCF client
     pcf_client_ = std::make_shared<PcfClientWrapper>(
-        pcf_base_url_, use_tls_, api_version_);
+        app_config_.pcf_handler.pcf.base_url,
+        app_config_.pcf_handler.pcf.use_tls,
+        app_config_.pcf_handler.pcf.api_version);
 }
 
 PcfHandler::~PcfHandler() {
@@ -140,47 +153,45 @@ void PcfHandler::stop() {
 void PcfHandler::load_config() {
     try {
         logger_->info("Loading configuration from {}", config_path_);
-        YAML::Node config = YAML::LoadFile(config_path_);
-
-        // Load PCF connection details
-        pcf_base_url_ = config["pcf_handler"]["pcf_base_url"].as<std::string>(
-            "http://pcf:80/npcf-policyauthorization/v1");
-
-        use_tls_ = config["pcf_handler"]["use_tls"].as<bool>(false);
-        api_version_ = config["pcf_handler"]["api_version"].as<std::string>("v1");
-
-        logger_->info("PCF base URL: {}", pcf_base_url_);
-        logger_->info("Using TLS: {}", use_tls_ ? "true" : "false");
-        logger_->info("API version: {}", api_version_);
+        app_config_ = af::config::load_app_config(config_path_);
+        af::config::validate(app_config_);
     }
     catch (const std::exception& e) {
         logger_->error("Failed to load configuration: {}", e.what());
-
-        // Set default values
-        pcf_base_url_ = "http://pcf:80/npcf-policyauthorization/v1";
-        use_tls_ = false;
-        api_version_ = "v1";
     }
+
+    logger_->set_level(app_config_.pcf_handler.logging.level);
+
+    const auto& pcf_config = app_config_.pcf_handler;
+    const auto& communication = pcf_config.communication;
+    const auto remote_endpoint = communication.remote.value_or(af::config::EndpointConfig{"af_core", 50051});
+    core_destination_ = af::config::resolve_destination(
+        communication.kind,
+        remote_endpoint,
+        "af_core");
+
+    logger_->info("PCF base URL: {}", pcf_config.pcf.base_url);
+    logger_->info("Using TLS: {}", pcf_config.pcf.use_tls ? "true" : "false");
+    logger_->info("API version: {}", pcf_config.pcf.api_version);
+    logger_->info("Communication kind: {}", af::config::to_string(communication.kind));
+    logger_->info("PCF handler listen address: {}", af::config::endpoint_to_string(communication.listen));
+    logger_->info("AF Core destination: {}", core_destination_);
 }
 
 void PcfHandler::initialize_communication() {
     try {
         logger_->info("Initializing communication with AF Core");
 
-        // Create communication service
-        std::unordered_map<std::string, std::string> comm_config;
-        comm_config["server_address"] = "0.0.0.0";
-        comm_config["server_port"] = "50055";  // Use a different port than AF Core
+        const auto& communication = app_config_.pcf_handler.communication;
 
+        // Create communication service
         core_comm_ = af::communication::CommunicationFactory::create_service(
-            "grpc", "pcf_handler", comm_config);
+            af::config::to_string(communication.kind),
+            "pcf_handler",
+            make_server_config(communication));
 
         if (!core_comm_) {
             throw std::runtime_error("Failed to create communication service");
-        }
-
-        if (!core_comm_->initialize("pcf_handler", comm_config)) {
-            throw std::runtime_error("Failed to initialize communication service");
         }
 
         logger_->info("Communication with AF Core initialized");
@@ -857,7 +868,7 @@ void PcfHandler::forward_notification(const std::string& notification_type,
 
     // Send asynchronously to AF Core
     if (core_comm_) {
-        core_comm_->send_async("af_core", message, [this](const af::communication::MessagePtr& response) -> af::communication::MessagePtr {
+        core_comm_->send_async(core_destination_, message, [this](const af::communication::MessagePtr& response) -> af::communication::MessagePtr {
             if (response) {
                 logger_->debug("Received response from AF Core: {}", response->message_type);
             }

@@ -17,6 +17,7 @@
 #include <spdlog/spdlog.h>
 #include <af_component.h>
 #include <communication_interface.h>
+#include <af_typed_config.hpp>
 #include "request_router.h"
 #include "pcc_rule_manager.h"
 #include "pcf_client_wrapper.h"
@@ -123,9 +124,8 @@ public:
 private:
     // Configuration
     std::string config_path_;
-    std::string pcf_base_url_;
-    bool use_tls_;
-    std::string api_version_;
+    af::config::AppConfig app_config_{};
+    std::string core_destination_{"af_core:50051"};
 
     // Components
     std::shared_ptr<PcfClientWrapper> pcf_client_;
