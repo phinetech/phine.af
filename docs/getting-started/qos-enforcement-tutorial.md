@@ -12,9 +12,9 @@ This tutorial deploys the 5G testbed, sends a CAMARA QoD session request, captur
 By the end of the run you will:
 
 1. Start free5GC, UERANSIM, and the phine.af Application Function
-2. Send a QoD session request using the `premium` profile
+2. Exercise the full QoD session lifecycle: create, retrieve, query by device, extend, and delete
 3. Optionally inspect the policy signalling path: **AF → PCF → SMF → UPF**
-4. Verify that the UPF enforces downlink bandwidth with `iperf3`
+4. Verify that the UPF enforces downlink bandwidth with `iperf3` — and releases it after the session is deleted
 
 ## Prerequisites
 
@@ -130,7 +130,7 @@ Verify that the UE has registered and received its tunnel IP:
 
 ```bash {"name":"verify-ue-ip","interactive":"false"}
 sleep 15
-docker exec ue ip addr show uesimtun0 | grep -q "10.60.0.1"
+docker exec ue ip addr show uesimtun0 | grep "10.60.0.1"
 ```
 
 Verify connectivity between the UE and the external data network:
@@ -160,7 +160,13 @@ sleep 2
 
 This filter keeps the capture focused on the AF path, the PCF, the SMF, and the PFCP session update toward the UPF.
 
-## Step 3: Send a QoD Session Request
+## Step 3: Session Lifecycle
+
+This step exercises the full CAMARA QoD REST API: create a session, retrieve it by ID, query sessions by device, extend the duration, then delete it.
+
+> **Note:** Steps 3.2–3.4 and Step 6 use `docker compose run` with explicit curl arguments and apply to the **HTTP transport only**. If you are running the gRPC variant, skip ahead to Step 4 after step 3.1.
+
+### 3.1 — Create a Session
 
 This tutorial uses the `premium` QoS profile:
 
@@ -217,7 +223,22 @@ The wrapper inside `af_client` chooses the correct client for the active overrid
 
 The exact request (endpoint, headers, and payload file) is defined by the `af-client` service in the active compose override — see [docker-compose/compose.http.yaml](../../docker-compose/compose.http.yaml) or [docker-compose/compose.grpc.yaml](../../docker-compose/compose.grpc.yaml).
 
-Because the request runs detached (`up -d`), view the response with `docker logs af-client`. After that, wait a few seconds for the policy to propagate:
+Because the request runs detached (`up -d`), view the response with `docker logs af-client`. Extract the `sessionId` returned in the response body — it is required for all subsequent lifecycle steps:
+
+```bash {"name":"extract-session-id","interactive":"false"}
+# Wait for af-client to exit, then pull the sessionId from the response body
+docker wait af-client > /dev/null 2>&1 || true
+SESSION_ID=$(docker logs af-client 2>/dev/null | jq -r '.sessionId // empty')
+if [ -z "$SESSION_ID" ]; then
+  echo "ERROR: Could not extract sessionId — inspect the response with: docker logs af-client"
+  docker logs af-client 2>&1 || true
+else
+  export SESSION_ID
+  echo "SESSION_ID: $SESSION_ID"
+fi
+```
+
+Wait for the QoS policy to propagate through the signalling chain:
 
 ```bash {"name":"wait-for-qos-policy","interactive":"false"}
 echo "Waiting for QoS policy to propagate through signalling chain..."
@@ -243,6 +264,46 @@ fi
 sudo chmod a+r "$PCAP_FILE" 2>/dev/null || true
 echo "Capture stopped"
 ```
+
+### 3.2 — Retrieve a Session
+
+Fetch the session object by ID and confirm it is `AVAILABLE`:
+
+```bash {"name":"get-qod-session","interactive":"false"}
+docker compose -f $COMPOSE_FILE -f $COMPOSE_OVERRIDE_FILE run --rm --no-deps af-client \
+  --http2-prior-knowledge -sS \
+  "http://${AF_HOST:-af-core}:8080/quality-on-demand/v1/sessions/$SESSION_ID"
+```
+
+Expected: a JSON object with `"qosStatus": "AVAILABLE"` and the `premium` profile parameters.
+
+### 3.3 — Query Sessions by Device
+
+Retrieve all active sessions for the test device. The request body is at `af_core/tests/requests/qod/qod_retrieve_sessions.json` and filters by the same device used in step 3.1:
+
+```bash {"name":"retrieve-qod-sessions","interactive":"false"}
+docker compose -f $COMPOSE_FILE -f $COMPOSE_OVERRIDE_FILE run --rm --no-deps af-client \
+  --http2-prior-knowledge -sS -X POST \
+  -H "content-type: application/json" \
+  --data "@/requests/qod_retrieve_sessions.json" \
+  "http://${AF_HOST:-af-core}:8080/quality-on-demand/v1/retrieve-sessions"
+```
+
+Expected: a JSON array containing the session created in step 3.1.
+
+### 3.4 — Extend Session Duration
+
+Request an additional 360 seconds on top of the original duration. The request body is at `af_core/tests/requests/qod/qod_session_extend_duration.json`:
+
+```bash {"name":"extend-qod-session","interactive":"false"}
+docker compose -f $COMPOSE_FILE -f $COMPOSE_OVERRIDE_FILE run --rm --no-deps af-client \
+  --http2-prior-knowledge -sS -X POST \
+  -H "content-type: application/json" \
+  --data "@/requests/qod_session_extend_duration.json" \
+  "http://${AF_HOST:-af-core}:8080/quality-on-demand/v1/sessions/$SESSION_ID/extend"
+```
+
+Expected: a JSON object with the updated `duration` field.
 
 ## Step 4: Trace the Signalling Path
 
@@ -317,18 +378,18 @@ The following script automatically validates that bandwidth is being rate-limite
 ```bash {"name":"run-iperf3-client","interactive":"false"}
 sleep 2
 
-# Run iperf3 client and capture JSON output
-IPERF_OUTPUT=$(docker exec oai-ext-dn iperf3 -c $UE_IP -p 5070 -t 10 --json)
+# Run iperf3 client and capture output
+IPERF_OUTPUT=$(docker exec oai-ext-dn iperf3 -c $UE_IP -p 5070 -t 10)
 
-# Extract receiver bitrate (bits_per_second) and convert to Mbps
-BITRATE_BPS=$(echo "$IPERF_OUTPUT" | jq -r '.end.sum_received.bits_per_second // empty')
+echo "$IPERF_OUTPUT"
 
-if [ -z "$BITRATE_BPS" ]; then
+# Extract receiver bitrate (Mbits/sec) from the summary line
+BITRATE_MBPS=$(echo "$IPERF_OUTPUT" | awk '/receiver/{print $7}')
+
+if [ -z "$BITRATE_MBPS" ]; then
   echo "ERROR: Failed to extract bitrate from iperf3 output"
   exit 1
 fi
-
-BITRATE_MBPS=$(echo "scale=4; $BITRATE_BPS / 1000000" | bc)
 
 echo "Measured receiver bitrate: ${BITRATE_MBPS} Mbps"
 
@@ -380,8 +441,72 @@ docker exec -d ue iperf3 -s -B $UE_IP -p 9000
 # Start iperf3 client on data network
 docker exec oai-ext-dn iperf3 -c $UE_IP -p 9000 -t 10
 ```
+## Step 6: Delete the Session
 
-## Step 6: Collect Logs
+Tear down the QoS policy by deleting the session. The AF signals the PCF to remove the policy rule; the PCF instructs the SMF, and the UPF releases the rate limit.
+
+```bash {"name":"delete-qod-session","interactive":"false"}
+docker compose -f $COMPOSE_FILE -f $COMPOSE_OVERRIDE_FILE run --rm --no-deps af-client \
+  --http2-prior-knowledge -sS -X DELETE \
+  "http://${AF_HOST:-af-core}:8080/quality-on-demand/v1/sessions/$SESSION_ID"
+echo "Session $SESSION_ID deleted (HTTP 204 No Content — empty response body expected)"
+```
+
+Verify the session state after deletion. The AF immediately marks the session `UNAVAILABLE` with `statusInfo: "DELETE_REQUESTED"` and dispatches the teardown signal to the PCF (which then propagates to SMF → UPF). The record is retained briefly so polling clients can observe the final state:
+
+```bash {"name":"verify-session-deleted","interactive":"false"}
+docker compose -f $COMPOSE_FILE -f $COMPOSE_OVERRIDE_FILE run --rm --no-deps af-client \
+  --http2-prior-knowledge -sS \
+  "http://${AF_HOST:-af-core}:8080/quality-on-demand/v1/sessions/$SESSION_ID"
+echo "(expected: qosStatus=UNAVAILABLE, statusInfo=DELETE_REQUESTED)"
+```
+
+### Verify Control-Plane Teardown in SMF Logs
+
+The authoritative proof that the QoS policy was released is in the SMF logs, not `iperf3`. The SMF should log the removal of the AF-installed PCC rules at the moment the PCF processes the delete:
+
+```bash {"name":"verify-smf-teardown","interactive":"false"}
+# Collect current SMF logs and look for AF PCC rule removal
+docker logs smf 2>&1 | grep -i "Remove PCCRule" | tail -10
+```
+
+Expected output: lines such as `Remove PCCRule[PccRuleId-N]` timestamped at the moment you deleted the session, confirming the SMF received the PCF notification and removed the AF-specific GBR rules from the PDU session.
+
+> **Note — OAI-UPF data-plane cleanup:** When the SMF sends a PFCP `Session Modification Request` to remove the AF PDRs and FARs, the OAI-UPF removes those PDRs and FARs but does **not** destroy the associated TC/HTB class or update the `m_qos_enabling` eBPF map. The GBR rate shaper installed at session creation therefore persists on the data plane until the entire PFCP session is deleted (e.g., at UE detach). As a result, a second `iperf3` run immediately after DELETE will show the same receiver rate (~9.43 Mbps for `premium`) as during the active session. This is a known OAI-UPF limitation — the control-plane teardown is complete and correct; only the data-plane cleanup is deferred.
+
+### Verify QoS is Released (iperf3 — informational)
+
+Run a second `iperf3` measurement for completeness. Due to the OAI-UPF data-plane cleanup limitation described above, the rate will appear the same as during the active session; the SMF log check above is the reliable teardown verification.
+
+Start the server on the UE:
+
+```bash {"name":"start-iperf3-post-delete","background":"true","interactive":"false"}
+docker exec -d ue iperf3 -s -B $UE_IP -p 5070
+```
+
+Run the client from the external data network:
+
+```bash {"name":"iperf3-after-delete","interactive":"false"}
+sleep 2
+IPERF_OUTPUT=$(docker exec oai-ext-dn iperf3 -c $UE_IP -p 5070 -t 10)
+
+echo "$IPERF_OUTPUT"
+
+BITRATE_MBPS=$(echo "$IPERF_OUTPUT" | awk '/receiver/{print $7}')
+if [ -n "$BITRATE_MBPS" ]; then
+  echo "Receiver bitrate after DELETE: ${BITRATE_MBPS} Mbps"
+  echo "(informational — the OAI-UPF GBR shaper persists until UE detach; see SMF log for control-plane confirmation)"
+else
+  echo "ERROR: Could not extract bitrate from iperf3 output"
+fi
+```
+
+Stop the server:
+
+```bash {"name":"stop-iperf3-post-delete","interactive":"false"}
+docker exec ue pkill iperf3 || true
+```
+## Step 7: Collect Logs
 
 Collect logs from all containers after the test run:
 

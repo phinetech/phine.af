@@ -126,6 +126,9 @@ endif()
 # Find fmt library (required by spdlog)
 find_package(fmt REQUIRED)
 
+# Find Boost::url for RFC-compliant URL parsing (requires Boost >= 1.81)
+find_package(Boost REQUIRED COMPONENTS url)
+
 # Use the root common library (built by parent CMakeLists.txt)
 # No need to add_subdirectory or find installed library - parent handles it
 
@@ -166,6 +169,7 @@ target_link_libraries(af_core_lib
         fmt::fmt
         OpenSSL::SSL
         OpenSSL::Crypto
+        Boost::url
 )
 
 # Create standalone executable

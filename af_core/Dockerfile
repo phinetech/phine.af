@@ -13,15 +13,15 @@ FROM base AS dependencies
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get upgrade --yes && \
     DEBIAN_FRONTEND=noninteractive apt-get install --yes \
-      build-essential \
-      cmake \
-      psmisc \
-      git \
-      libspdlog-dev \
-      libyaml-cpp-dev \
-      libfmt-dev \
-      nlohmann-json3-dev \
-  && rm -rf /var/lib/apt/lists/*
+    build-essential \
+    cmake \
+    psmisc \
+    git \
+    libspdlog-dev \
+    libyaml-cpp-dev \
+    libfmt-dev \
+    nlohmann-json3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 
 # Install gRPC and protobuf
@@ -52,13 +52,32 @@ RUN ldconfig
 # Install build dependencies
 RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
-      build-essential \
-      libssl-dev \
-      cmake \
-      git \
-      libboost-all-dev \
-      libnghttp2-dev \
-  && rm -rf /var/lib/apt/lists/*
+    build-essential \
+    libssl-dev \
+    cmake \
+    curl \
+    git \
+    libboost-all-dev \
+    libnghttp2-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Build Boost 1.83 from source — apt provides only 1.74 on Debian Bookworm;
+# boost::url (needed by af_http_communication) requires Boost >= 1.81.
+# Static linking keeps the compiled Boost code inside the AF binaries so
+# no extra .so files need to be copied into the runtime image.
+RUN cd /tmp && \
+    curl -fsSL https://archives.boost.io/release/1.83.0/source/boost_1_83_0.tar.gz \
+    | tar -xz && \
+    cd boost_1_83_0 && \
+    ./bootstrap.sh --prefix=/usr/local \
+    --with-libraries=url,system,thread && \
+    ./b2 install -j$(nproc) \
+    variant=release \
+    link=static \
+    threading=multi \
+    cxxflags=-fPIC && \
+    ldconfig && \
+    cd /tmp && rm -rf boost_1_83_0
 
 # Build common runtime libraries
 COPY common/ /app/common/
@@ -69,9 +88,10 @@ RUN cd /app && \
     mkdir -p build && \
     cd build && \
     cmake .. -DCMAKE_BUILD_TYPE=Release \
-             -DUSE_SYSTEM_GRPC=ON \
-             -DUSE_SYSTEM_PROTOBUF=ON \
-             -DCMAKE_INSTALL_PREFIX=/usr/local && \
+    -DUSE_SYSTEM_GRPC=ON \
+    -DUSE_SYSTEM_PROTOBUF=ON \
+    -DBOOST_ROOT=/usr/local \
+    -DCMAKE_INSTALL_PREFIX=/usr/local && \
     make -j$(nproc) && \
     make install && \
     ldconfig
@@ -109,18 +129,18 @@ RUN ldconfig
 # Install minimal build dependencies
 RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
-      build-essential \
-      cmake \
-      libssl-dev \
-      libboost-all-dev \
-      libnghttp2-dev \
-      libc6-dev \
-      linux-libc-dev \
-      git \
-      libspdlog-dev \
-      libyaml-cpp-dev \
-      libfmt-dev \
-      nlohmann-json3-dev \
+    build-essential \
+    cmake \
+    libssl-dev \
+    libboost-all-dev \
+    libnghttp2-dev \
+    libc6-dev \
+    linux-libc-dev \
+    git \
+    libspdlog-dev \
+    libyaml-cpp-dev \
+    libfmt-dev \
+    nlohmann-json3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 
@@ -142,9 +162,9 @@ RUN cd /app && \
     mkdir -p build-output && \
     cd build-output && \
     cmake .. -DCMAKE_BUILD_TYPE=Release \
-             -DUSE_SYSTEM_GRPC=ON \
-             -DUSE_SYSTEM_PROTOBUF=ON \
-             -DCMAKE_INSTALL_PREFIX=/usr/local && \
+    -DUSE_SYSTEM_GRPC=ON \
+    -DUSE_SYSTEM_PROTOBUF=ON \
+    -DCMAKE_INSTALL_PREFIX=/usr/local && \
     make -j$(nproc) af_core && \
     make install && \
     ldconfig

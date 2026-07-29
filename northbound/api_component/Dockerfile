@@ -13,27 +13,27 @@ FROM base AS dependencies
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get upgrade --yes && \
     DEBIAN_FRONTEND=noninteractive apt-get install --yes \
-      build-essential \
-      cmake \
-      psmisc \
-      libssl-dev \
-      libboost-system-dev \
-      libboost-thread-dev \
-      libboost-dev \
-      pkg-config \
-      git \
-      libspdlog-dev \
-      libyaml-cpp-dev \
-      libfmt-dev \
-      nlohmann-json3-dev \
-      autoconf \
-      automake \
-      libtool \
-      curl \
-      make \
-      g++ \
-      unzip \
-  && rm -rf /var/lib/apt/lists/*
+    build-essential \
+    cmake \
+    psmisc \
+    libssl-dev \
+    libboost-system-dev \
+    libboost-thread-dev \
+    libboost-dev \
+    pkg-config \
+    git \
+    libspdlog-dev \
+    libyaml-cpp-dev \
+    libfmt-dev \
+    nlohmann-json3-dev \
+    autoconf \
+    automake \
+    libtool \
+    curl \
+    make \
+    g++ \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /tmp
 
@@ -42,9 +42,9 @@ RUN git clone --recurse-submodules -b v1.65.0 --depth 1 --shallow-submodules htt
     cd nghttp2 && \
     mkdir build && cd build && \
     cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local \
-             -DOPENSSL_ROOT_DIR=/usr \
-             -DENABLE_LIB_ONLY=ON \
-             -DCMAKE_BUILD_TYPE=Release && \
+    -DOPENSSL_ROOT_DIR=/usr \
+    -DENABLE_LIB_ONLY=ON \
+    -DCMAKE_BUILD_TYPE=Release && \
     make -j$(nproc) && \
     make install && \
     cd /tmp && rm -rf nghttp2
@@ -60,9 +60,9 @@ RUN git clone https://github.com/nghttp2/nghttp2-asio.git && \
     cd nghttp2-asio && \
     mkdir build && cd build && \
     cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local \
-             -DOPENSSL_ROOT_DIR=/usr \
-             -DNGHTTP2_ROOT_DIR=/usr/local \
-             -DCMAKE_BUILD_TYPE=Release && \
+    -DOPENSSL_ROOT_DIR=/usr \
+    -DNGHTTP2_ROOT_DIR=/usr/local \
+    -DCMAKE_BUILD_TYPE=Release && \
     make -j$(nproc) && \
     make install && \
     cd /tmp && rm -rf nghttp2-asio
@@ -72,7 +72,23 @@ RUN ldconfig
 # Create symlinks for nghttp2_asio libraries
 RUN ln -sf /usr/local/lib/libnghttp2_asio.so /usr/lib/libnghttp2_asio.so
 
-# Common runtime libraries stage
+# Build Boost 1.83 from source — apt provides only 1.74 on Debian Bookworm;
+# boost::url (needed by af_http_communication) requires Boost >= 1.81.
+# Static linking keeps the compiled Boost code inside the AF binaries so
+# no extra .so files need to be copied into the runtime image.
+RUN cd /tmp && \
+    curl -fsSL https://archives.boost.io/release/1.83.0/source/boost_1_83_0.tar.gz \
+    | tar -xz && \
+    cd boost_1_83_0 && \
+    ./bootstrap.sh --prefix=/usr/local \
+    --with-libraries=url,system,thread && \
+    ./b2 install -j$(nproc) \
+    variant=release \
+    link=static \
+    threading=multi \
+    cxxflags=-fPIC && \
+    ldconfig && \
+    cd /tmp && rm -rf boost_1_83_0
 FROM base AS common-runtime
 WORKDIR /app
 
@@ -92,14 +108,14 @@ COPY --from=dependencies /usr/include/yaml-cpp /usr/include/yaml-cpp
 # Install build dependencies
 RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
-      build-essential \
-      libssl-dev \
-      cmake \
-      libboost-system-dev \
-      libboost-thread-dev \
-      libboost-dev \
-      pkg-config \
-  && rm -rf /var/lib/apt/lists/*
+    build-essential \
+    libssl-dev \
+    cmake \
+    libboost-system-dev \
+    libboost-thread-dev \
+    libboost-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN ldconfig
 
@@ -113,9 +129,10 @@ COPY ./common /app/common
 # Build common libraries
 WORKDIR /app/build-output
 RUN cmake -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_MODULE_PATH=/app/common/cmake:/app/build/cmake \
-          -DCMAKE_INSTALL_PREFIX=/usr/local \
-          /app/common && \
+    -DCMAKE_MODULE_PATH=/app/common/cmake:/app/build/cmake \
+    -DCMAKE_INSTALL_PREFIX=/usr/local \
+    -DBOOST_ROOT=/usr/local \
+    /app/common && \
     make -j$(nproc) && \
     make install
 
@@ -145,17 +162,17 @@ RUN ldconfig
 # Install minimal build dependencies
 RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
-      build-essential \
-      cmake \
-      libssl-dev \
-      libboost-system-dev \
-      libboost-thread-dev \
-      libboost-dev \
-      libspdlog-dev \
-      libyaml-cpp-dev \
-      libfmt-dev \
-      nlohmann-json3-dev \
-      pkg-config \
+    build-essential \
+    cmake \
+    libssl-dev \
+    libboost-system-dev \
+    libboost-thread-dev \
+    libboost-dev \
+    libspdlog-dev \
+    libyaml-cpp-dev \
+    libfmt-dev \
+    nlohmann-json3-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy cmake modules
@@ -173,9 +190,9 @@ COPY ./northbound/api_component/CMakeLists.txt /app/CMakeLists.txt
 # Build api_component
 WORKDIR /app/build-output
 RUN cmake -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_MODULE_PATH=/app/common/cmake:/app/build/cmake \
-          -DCMAKE_INSTALL_PREFIX=/usr/local \
-          /app && \
+    -DCMAKE_MODULE_PATH=/app/common/cmake:/app/build/cmake \
+    -DCMAKE_INSTALL_PREFIX=/usr/local \
+    /app && \
     make -j$(nproc)
 
 # Final runtime stage
@@ -184,9 +201,9 @@ FROM base AS runtime
 # Install runtime dependencies
 RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
-      libssl3 \
-      libboost-system1.74.0 \
-      libboost-thread1.74.0 \
+    libssl3 \
+    libboost-system1.74.0 \
+    libboost-thread1.74.0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy necessary runtime dependencies from the builder image

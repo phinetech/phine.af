@@ -4,6 +4,9 @@
  */
 
 #include "rest_router.h"
+#include "path_pattern.h"
+
+#include <boost/url.hpp>
 #include <sstream>
 #include <random>
 #include <iomanip>
@@ -35,12 +38,28 @@ af::communication::MessagePtr RestRouter::http_request_to_message(
         message->metadata[lowercase_key] = value;
     }
 
-    // Extract path parameters if pattern provided
+    // Extract path parameters if pattern provided.
+    // Pass only the path component (no query string) to extract_path_params so
+    // that the regex anchored on '$' still matches correctly.
     if (!path_pattern.empty()) {
-        auto params = extract_path_params(path_pattern, req.path);
+        std::string path_only = req.path;
+        {
+            auto parsed = boost::urls::parse_relative_ref(req.path);
+            if (parsed) {
+                path_only = parsed->path();
+            }
+        }
+        auto params = extract_path_params(path_pattern, path_only);
         for (const auto& [param_name, param_value] : params) {
             message->metadata[param_name] = param_value;
         }
+    }
+
+    // Extract query parameters — stored as "query.<name>" to avoid collisions
+    // with path params and header names in the same metadata map.
+    auto query_params = extract_query_params(req.path);
+    for (const auto& [k, v] : query_params) {
+        message->metadata[k] = v;
     }
 
     // Store HTTP method and path for reference
@@ -105,28 +124,36 @@ std::map<std::string, std::string> RestRouter::extract_path_params(
 
     std::map<std::string, std::string> params;
 
-    // Convert pattern to regex
-    std::string regex_str = pattern_to_regex(pattern);
-    std::regex path_regex(regex_str);
+    // Build anchored regex from the pattern using the shared utility.
+    const std::string regex_str =
+        af::communication::http::path_pattern::to_regex(pattern);
+    const std::regex path_regex("^" + regex_str + "$");
     std::smatch matches;
 
     if (!std::regex_match(path, matches, path_regex)) {
         return params;
     }
 
-    // Extract parameter names from pattern
+    // Extract parameter names from {param} tokens in the pattern.
     std::vector<std::string> param_names;
-    std::regex param_regex(R"(\{([^}]+)\})");
-    auto pattern_begin = std::sregex_iterator(pattern.begin(), pattern.end(), param_regex);
-    auto pattern_end = std::sregex_iterator();
-
-    for (auto it = pattern_begin; it != pattern_end; ++it) {
+    static const std::regex param_name_re(R"(\{([^}]+)\})");
+    auto it  = std::sregex_iterator(pattern.begin(), pattern.end(), param_name_re);
+    auto end = std::sregex_iterator();
+    for (; it != end; ++it) {
         param_names.push_back((*it)[1].str());
     }
 
-    // Match parameter values
-    for (size_t i = 0; i < param_names.size() && i + 1 < matches.size(); ++i) {
-        params[param_names[i]] = matches[i + 1].str();
+    // Correlate captured groups with param names.
+    // matches[0] is the full match; captures start at index 1.
+    // Percent-decode each captured value via boost::urls.
+    for (std::size_t i = 0;
+         i < param_names.size() && i + 1 < matches.size();
+         ++i) {
+        const std::string raw = matches[i + 1].str();
+        std::string decoded;
+        boost::urls::pct_string_view pct(raw);
+        decoded = pct.decode();
+        params[param_names[i]] = std::move(decoded);
     }
 
     return params;
@@ -177,25 +204,28 @@ std::string RestRouter::get_correlation_id(const af::communication::HttpRequest&
     return ss.str();
 }
 
-std::string RestRouter::pattern_to_regex(const std::string& pattern) {
-    std::string regex_str = pattern;
+std::map<std::string, std::string> RestRouter::extract_query_params(
+    const std::string& raw_path) {
 
-    // Escape special regex characters except {}
-    std::string escaped;
-    for (char c : regex_str) {
-        if (c == '.' || c == '+' || c == '*' || c == '?' ||
-            c == '^' || c == '$' || c == '(' || c == ')' ||
-            c == '[' || c == ']' || c == '|' || c == '\\') {
-            escaped += '\\';
-        }
-        escaped += c;
+    std::map<std::string, std::string> params;
+
+    auto parsed = boost::urls::parse_relative_ref(raw_path);
+    if (!parsed) {
+        return params;
     }
 
-    // Replace {param} with ([^/]+) to capture path segments
-    std::regex param_regex(R"(\\\{[^}]+\\\})");
-    regex_str = std::regex_replace(escaped, param_regex, "([^/]+)");
+    // boost::urls::url_view::params() iterates key-value pairs and
+    // percent-decodes both key and value automatically.
+    for (auto param : parsed->params()) {
+        params["query." + std::string(param.key)] =
+            std::string(param.value);
+    }
 
-    return regex_str;
+    return params;
+}
+
+std::string RestRouter::pattern_to_regex(const std::string& pattern) {
+    return af::communication::http::path_pattern::to_regex(pattern);
 }
 
 } // namespace rest
