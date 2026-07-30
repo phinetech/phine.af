@@ -82,7 +82,7 @@ RUN cd /tmp && \
     | tar -xz && \
     cd boost_1_83_0 && \
     ./bootstrap.sh --prefix=/usr/local \
-    --with-libraries=url,system,thread && \
+    --with-libraries=url,system,thread,chrono && \
     ./b2 install -j$(nproc) \
     variant=release \
     link=static \
