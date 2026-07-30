@@ -122,6 +122,11 @@ COPY --from=common-runtime /usr/local/include/af /usr/local/include/af
 COPY --from=common-runtime /usr/local/include/oai/af /usr/local/include/oai/af
 # Copy generated headers from common-runtime stage
 COPY --from=common-runtime /app/build/generated/ /app/build-output/generated/
+# Copy Boost 1.83 headers and libs built from source in common-runtime
+COPY --from=common-runtime /usr/local/include/boost /usr/local/include/boost
+COPY --from=common-runtime /usr/local/lib/libboost_url.a /usr/local/lib/libboost_url.a
+COPY --from=common-runtime /usr/local/lib/libboost_system.a /usr/local/lib/libboost_system.a
+COPY --from=common-runtime /usr/local/lib/libboost_thread.a /usr/local/lib/libboost_thread.a
 
 
 # Ensure libraries are properly linked
@@ -165,6 +170,7 @@ RUN cd /app && \
     cmake .. -DCMAKE_BUILD_TYPE=Release \
     -DUSE_SYSTEM_GRPC=ON \
     -DUSE_SYSTEM_PROTOBUF=ON \
+    -DBOOST_ROOT=/usr/local \
     -DCMAKE_INSTALL_PREFIX=/usr/local && \
     make -j$(nproc) af_core && \
     make install && \
