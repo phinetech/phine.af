@@ -71,7 +71,7 @@ RUN cd /tmp && \
     | tar -xz && \
     cd boost_1_83_0 && \
     ./bootstrap.sh --prefix=/usr/local \
-    --with-libraries=url,system,thread,chrono && \
+    --with-libraries=url,system,thread,chrono,atomic && \
     ./b2 install -j$(nproc) \
     variant=release \
     link=static \
@@ -129,6 +129,7 @@ COPY --from=common-runtime /usr/local/lib/libboost_url.a /usr/local/lib/libboost
 COPY --from=common-runtime /usr/local/lib/libboost_system.a /usr/local/lib/libboost_system.a
 COPY --from=common-runtime /usr/local/lib/libboost_thread.a /usr/local/lib/libboost_thread.a
 COPY --from=common-runtime /usr/local/lib/libboost_chrono.a /usr/local/lib/libboost_chrono.a
+COPY --from=common-runtime /usr/local/lib/libboost_atomic.a /usr/local/lib/libboost_atomic.a
 
 
 # Ensure libraries are properly linked
