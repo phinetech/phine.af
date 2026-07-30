@@ -58,7 +58,6 @@ RUN apt-get update && \
     cmake \
     curl \
     git \
-    libboost-all-dev \
     libnghttp2-dev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -141,7 +140,6 @@ RUN apt-get update && \
     build-essential \
     cmake \
     libssl-dev \
-    libboost-all-dev \
     libnghttp2-dev \
     libc6-dev \
     linux-libc-dev \

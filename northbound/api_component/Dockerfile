@@ -17,9 +17,6 @@ RUN apt-get update && \
     cmake \
     psmisc \
     libssl-dev \
-    libboost-system-dev \
-    libboost-thread-dev \
-    libboost-dev \
     pkg-config \
     git \
     libspdlog-dev \
@@ -56,25 +53,9 @@ RUN ldconfig
 # Create symlinks for nghttp2 libraries
 RUN ln -sf /usr/local/lib/libnghttp2.so /usr/lib/libnghttp2.so
 
-# Install nghttp2_asio
-RUN git clone https://github.com/nghttp2/nghttp2-asio.git && \
-    cd nghttp2-asio && \
-    mkdir build && cd build && \
-    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local \
-    -DOPENSSL_ROOT_DIR=/usr \
-    -DNGHTTP2_ROOT_DIR=/usr/local \
-    -DCMAKE_BUILD_TYPE=Release && \
-    make -j$(nproc) && \
-    make install && \
-    cd /tmp && rm -rf nghttp2-asio
-
-RUN ldconfig
-
-# Create symlinks for nghttp2_asio libraries
-RUN ln -sf /usr/local/lib/libnghttp2_asio.so /usr/lib/libnghttp2_asio.so
-
 # Build Boost 1.83 from source — apt provides only 1.74 on Debian Bookworm;
 # boost::url (needed by af_http_communication) requires Boost >= 1.81.
+# Must be built before nghttp2-asio since that library depends on Boost.
 # Static linking keeps the compiled Boost code inside the AF binaries so
 # no extra .so files need to be copied into the runtime image.
 RUN cd /tmp && \
@@ -90,6 +71,25 @@ RUN cd /tmp && \
     cxxflags=-fPIC && \
     ldconfig && \
     cd /tmp && rm -rf boost_1_83_0
+
+# Install nghttp2_asio
+RUN git clone https://github.com/nghttp2/nghttp2-asio.git && \
+    cd nghttp2-asio && \
+    mkdir build && cd build && \
+    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local \
+    -DOPENSSL_ROOT_DIR=/usr \
+    -DNGHTTP2_ROOT_DIR=/usr/local \
+    -DBOOST_ROOT=/usr/local \
+    -DBoost_NO_BOOST_CMAKE=ON \
+    -DCMAKE_BUILD_TYPE=Release && \
+    make -j$(nproc) && \
+    make install && \
+    cd /tmp && rm -rf nghttp2-asio
+
+RUN ldconfig
+
+# Create symlinks for nghttp2_asio libraries
+RUN ln -sf /usr/local/lib/libnghttp2_asio.so /usr/lib/libnghttp2_asio.so
 FROM base AS common-runtime
 WORKDIR /app
 
@@ -112,9 +112,6 @@ RUN apt-get update && \
     build-essential \
     libssl-dev \
     cmake \
-    libboost-system-dev \
-    libboost-thread-dev \
-    libboost-dev \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
@@ -167,9 +164,6 @@ RUN apt-get update && \
     build-essential \
     cmake \
     libssl-dev \
-    libboost-system-dev \
-    libboost-thread-dev \
-    libboost-dev \
     libspdlog-dev \
     libyaml-cpp-dev \
     libfmt-dev \
@@ -204,8 +198,6 @@ FROM base AS runtime
 RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
     libssl3 \
-    libboost-system1.74.0 \
-    libboost-thread1.74.0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy necessary runtime dependencies from the builder image

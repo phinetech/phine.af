@@ -29,10 +29,6 @@ RUN apt-get update && \
     cmake \
     psmisc \
     libssl-dev \
-    libboost-system-dev \
-    libboost-thread-dev \
-    libboost-dev \
-    libboost-all-dev \
     pkg-config \
     git \
     libspdlog-dev \
@@ -69,25 +65,9 @@ RUN ldconfig
 # Create symlinks for nghttp2 libraries
 RUN ln -sf /usr/local/lib/libnghttp2.so /usr/lib/libnghttp2.so
 
-# Install nghttp2_asio
-RUN git clone https://github.com/nghttp2/nghttp2-asio.git && \
-    cd nghttp2-asio && \
-    mkdir build && cd build && \
-    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local \
-    -DOPENSSL_ROOT_DIR=/usr \
-    -DNGHTTP2_ROOT_DIR=/usr/local \
-    -DCMAKE_BUILD_TYPE=Release && \
-    make -j$(nproc) && \
-    make install && \
-    cd /tmp && rm -rf nghttp2-asio
-
-RUN ldconfig
-
-# Create symlinks for nghttp2_asio libraries
-RUN ln -sf /usr/local/lib/libnghttp2_asio.so /usr/lib/libnghttp2_asio.so
-
 # Build Boost 1.83 from source — apt provides only 1.74 on Debian Bookworm;
 # boost::url (needed by af_http_communication) requires Boost >= 1.81.
+# Must be built before nghttp2-asio since that library depends on Boost.
 # Static linking keeps the compiled Boost code inside the AF binaries so
 # no extra .so files need to be copied into the runtime image.
 RUN cd /tmp && \
@@ -104,6 +84,25 @@ RUN cd /tmp && \
     ldconfig && \
     cd /tmp && rm -rf boost_1_83_0
 
+# Install nghttp2_asio
+RUN git clone https://github.com/nghttp2/nghttp2-asio.git && \
+    cd nghttp2-asio && \
+    mkdir build && cd build && \
+    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local \
+    -DOPENSSL_ROOT_DIR=/usr \
+    -DNGHTTP2_ROOT_DIR=/usr/local \
+    -DBOOST_ROOT=/usr/local \
+    -DBoost_NO_BOOST_CMAKE=ON \
+    -DCMAKE_BUILD_TYPE=Release && \
+    make -j$(nproc) && \
+    make install && \
+    cd /tmp && rm -rf nghttp2-asio
+
+RUN ldconfig
+
+# Create symlinks for nghttp2_asio libraries
+RUN ln -sf /usr/local/lib/libnghttp2_asio.so /usr/lib/libnghttp2_asio.so
+
 # =============================================================================
 # Builder stage - build the bundled AF application
 # =============================================================================
@@ -116,9 +115,6 @@ RUN apt-get update && \
     cmake \
     libssl-dev \
     ca-certificates \
-    libboost-system-dev \
-    libboost-thread-dev \
-    libboost-all-dev \
     libc6-dev \
     linux-libc-dev \
     git \
@@ -216,7 +212,6 @@ COPY --from=builder /usr/local/lib/libcrypto* /usr/local/lib/
 COPY --from=builder /usr/lib/x86_64-linux-gnu/libfmt.so* /usr/lib/x86_64-linux-gnu/
 COPY --from=builder /usr/lib/x86_64-linux-gnu/libspdlog.so* /usr/lib/x86_64-linux-gnu/
 COPY --from=builder /usr/lib/x86_64-linux-gnu/libyaml-cpp.so* /usr/lib/x86_64-linux-gnu/
-COPY --from=builder /usr/lib/x86_64-linux-gnu/libboost* /usr/lib/x86_64-linux-gnu/
 
 # Copy AF common shared libraries
 COPY --from=builder /app/build-output/lib/libaf_communication_factory* /usr/local/lib/

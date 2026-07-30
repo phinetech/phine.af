@@ -19,9 +19,6 @@ RUN apt-get update && \
     cmake \
     psmisc \
     libssl-dev \
-    libboost-system-dev \
-    libboost-thread-dev \
-    libboost-dev \
     pkg-config \
     git \
     libspdlog-dev \
@@ -60,25 +57,9 @@ RUN ldconfig
 # Create symlinks for nghttp2 libraries
 RUN ln -sf /usr/local/lib/libnghttp2.so /usr/lib/libnghttp2.so
 
-# Install nghttp2_asio
-RUN git clone https://github.com/nghttp2/nghttp2-asio.git && \
-    cd nghttp2-asio && \
-    mkdir build && cd build && \
-    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local \
-    -DOPENSSL_ROOT_DIR=/usr \
-    -DNGHTTP2_ROOT_DIR=/usr/local \
-    -DCMAKE_BUILD_TYPE=Release && \
-    make -j$(nproc) && \
-    make install && \
-    cd /tmp && rm -rf nghttp2-asio
-
-RUN ldconfig
-
-# Create symlinks for nghttp2_asio libraries
-RUN ln -sf /usr/local/lib/libnghttp2_asio.so /usr/lib/libnghttp2_asio.so
-
 # Build Boost 1.83 from source — apt provides only 1.74 on Debian Bookworm;
 # boost::url (needed by af_http_communication) requires Boost >= 1.81.
+# Must be built before nghttp2-asio since that library depends on Boost.
 # Static linking keeps the compiled Boost code inside the AF binaries so
 # no extra .so files need to be copied into the runtime image.
 RUN cd /tmp && \
@@ -94,6 +75,25 @@ RUN cd /tmp && \
     cxxflags=-fPIC && \
     ldconfig && \
     cd /tmp && rm -rf boost_1_83_0
+
+# Install nghttp2_asio
+RUN git clone https://github.com/nghttp2/nghttp2-asio.git && \
+    cd nghttp2-asio && \
+    mkdir build && cd build && \
+    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local \
+    -DOPENSSL_ROOT_DIR=/usr \
+    -DNGHTTP2_ROOT_DIR=/usr/local \
+    -DBOOST_ROOT=/usr/local \
+    -DBoost_NO_BOOST_CMAKE=ON \
+    -DCMAKE_BUILD_TYPE=Release && \
+    make -j$(nproc) && \
+    make install && \
+    cd /tmp && rm -rf nghttp2-asio
+
+RUN ldconfig
+
+# Create symlinks for nghttp2_asio libraries
+RUN ln -sf /usr/local/lib/libnghttp2_asio.so /usr/lib/libnghttp2_asio.so
 
 # Common runtime libraries stage
 FROM base AS common-runtime
@@ -119,9 +119,6 @@ RUN apt-get update && \
     libssl-dev \
     cmake \
     git \
-    libboost-system-dev \
-    libboost-thread-dev \
-    libboost-all-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN ldconfig
@@ -155,9 +152,6 @@ RUN apt-get update && \
     build-essential \
     cmake \
     libssl-dev \
-    libboost-system-dev \
-    libboost-thread-dev \
-    libboost-all-dev \
     libc6-dev \
     linux-libc-dev \
     git \
@@ -239,7 +233,6 @@ COPY --from=builder /usr/local/lib/libgpr* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libprotobuf* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libspdlog* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libyaml-cpp* /usr/local/lib/
-COPY --from=builder /usr/lib/x86_64-linux-gnu/libboost* /usr/lib/x86_64-linux-gnu/
 COPY --from=builder /usr/local/lib/libssl* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libcrypto* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libfmt* /usr/local/lib/
