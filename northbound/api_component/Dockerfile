@@ -133,6 +133,7 @@ RUN cmake -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_MODULE_PATH=/app/common/cmake:/app/build/cmake \
     -DCMAKE_INSTALL_PREFIX=/usr/local \
     -DBOOST_ROOT=/usr/local \
+    -DBoost_NO_BOOST_CMAKE=ON \
     /app/common && \
     make -j$(nproc) && \
     make install

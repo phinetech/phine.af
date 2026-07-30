@@ -140,6 +140,7 @@ RUN cd /app/common && \
     -DUSE_SYSTEM_OPENSSL=ON \
     -DUSE_SYSTEM_BOOST=ON \
     -DBOOST_ROOT=/usr/local \
+    -DBoost_NO_BOOST_CMAKE=ON \
     -DCMAKE_INSTALL_PREFIX=/usr/local && \
     make -j$(nproc) && \
     make install && \

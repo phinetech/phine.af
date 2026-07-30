@@ -92,6 +92,7 @@ RUN cd /app && \
     -DUSE_SYSTEM_GRPC=ON \
     -DUSE_SYSTEM_PROTOBUF=ON \
     -DBOOST_ROOT=/usr/local \
+    -DBoost_NO_BOOST_CMAKE=ON \
     -DCMAKE_INSTALL_PREFIX=/usr/local && \
     make -j$(nproc) && \
     make install && \
@@ -171,6 +172,7 @@ RUN cd /app && \
     -DUSE_SYSTEM_GRPC=ON \
     -DUSE_SYSTEM_PROTOBUF=ON \
     -DBOOST_ROOT=/usr/local \
+    -DBoost_NO_BOOST_CMAKE=ON \
     -DCMAKE_INSTALL_PREFIX=/usr/local && \
     make -j$(nproc) af_core && \
     make install && \

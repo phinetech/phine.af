@@ -192,6 +192,7 @@ RUN cd /app && \
     -DUSE_SYSTEM_OPENSSL=ON \
     -DUSE_SYSTEM_BOOST=ON \
     -DBOOST_ROOT=/usr/local \
+    -DBoost_NO_BOOST_CMAKE=ON \
     -DCMAKE_PREFIX_PATH=/usr/local \
     -DCMAKE_INSTALL_PREFIX=/usr/local && \
     make -j$(nproc) af && \
