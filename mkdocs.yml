@@ -1,4 +1,5 @@
 site_name: phine.af
+site_url: https://af.phine.tech/
 site_description: Documentation for the phine.af 5G AF project
 
 # Keep docs in the existing /docs folder
