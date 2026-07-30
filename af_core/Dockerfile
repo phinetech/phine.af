@@ -54,6 +54,7 @@ RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
     build-essential \
     libssl-dev \
+    ca-certificates \
     cmake \
     curl \
     git \

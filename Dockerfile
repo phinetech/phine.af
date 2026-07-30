@@ -115,6 +115,7 @@ RUN apt-get update && \
     build-essential \
     cmake \
     libssl-dev \
+    ca-certificates \
     libboost-system-dev \
     libboost-thread-dev \
     libboost-all-dev \

@@ -31,6 +31,7 @@ RUN apt-get update && \
     autoconf \
     automake \
     libtool \
+    ca-certificates \
     curl \
     make \
     g++ \
