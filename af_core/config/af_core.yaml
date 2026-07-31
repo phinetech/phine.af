@@ -8,10 +8,11 @@ af_core:
 
   # Communication configuration
   communication:
-    kind: "grpc"
+    kind: "http"
     listen:
       host: "0.0.0.0"
-      port: 50051
+      port: 8080
+    timeout_ms: 5000
 
   qod:
     max_session_duration: 86400
@@ -28,7 +29,16 @@ pcf_handler:
     api_version: "v1"
 
   communication:
-    kind: "grpc"
+    kind: "http"
+    # af_core is the client of the PCF handler. `remote` is the handler's
+    # address (where af_core connects); `listen` is unused by af_core for this
+    # link (af_core does not bind a PCF server). In microservice mode the
+    # handler is reachable by its compose service name `pcf_handler`.
     listen:
+      host: "0.0.0.0"
+      port: 8085
+    remote:
       host: "pcf_handler"
-      port: 50055
+      port: 8085
+    client_only: false
+    timeout_ms: 5000

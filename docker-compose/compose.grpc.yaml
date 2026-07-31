@@ -1,0 +1,78 @@
+# gRPC-transport override for the bundled `af` service.
+#
+# Layer this on top of compose.yaml to run the QoS enforcement tutorial with
+# the northbound entrypoint switched from HTTP/2 cleartext (h2c) (:8080) to
+# gRPC on :50051.
+#
+# Works for both AF topologies — pick the profile:
+#
+#   bundled `af`:
+#     docker compose -f docker-compose/compose.yaml -f docker-compose/compose.grpc.yaml \
+#       --profile free5gc --profile af up -d --build
+#
+#   microservice `afs` (af_core + pcf_handler over gRPC):
+#     docker compose -f docker-compose/compose.yaml -f docker-compose/compose.grpc.yaml \
+#       --profile free5gc --profile afs up -d --build
+#
+# In both cases af_core binds its gRPC server on 50051 at 192.168.70.141.
+# Send QoD requests to 192.168.70.141:50051 via gRPC client calls
+# (see the tutorial's "gRPC Transport Variant"). Only services in the active
+# profile start; overrides for inactive services are ignored.
+
+name: phine-af
+
+services:
+  # --- Bundled AF topology (--profile af) ---
+  # Base service mounts conf/af.yaml and publishes 8080, but the overridden
+  # `command` points the binary at the gRPC config, so af_core listens on 50051.
+  af:
+    volumes:
+      - ./conf/af.grpc.yaml:/etc/oai/af/af.grpc.yaml
+    command: ["/usr/local/bin/af", "--config", "/etc/oai/af/af.grpc.yaml"]
+    expose:
+      - 50051/tcp
+    ports:
+      - "50051:50051"
+
+  # --- Microservice AF topology (--profile afs) ---
+  # Base service mounts conf/af_core.yaml (HTTP) and runs the image CMD; the
+  # overridden command points the binary at the gRPC config so af_core listens
+  # on 50051 and dials the handler at pcf_handler:50052.
+  af_core:
+    volumes:
+      - ./conf/af_core.grpc.yaml:/etc/oai/af/af_core.grpc.yaml
+    command: ["/usr/local/bin/af_core", "--config", "/etc/oai/af/af_core.grpc.yaml"]
+    expose:
+      - 50051/tcp
+    ports:
+      - "50051:50051"
+
+  # The handler switches from its default HTTP config to the gRPC config,
+  # binding a gRPC server on 50052 that af_core dials at pcf_handler:50052.
+  pcf_handler:
+    volumes:
+      - ./conf/pcf_handler.grpc.yaml:/etc/oai/af/pcf_handler.grpc.yaml
+    command: ["/usr/local/bin/pcf_server", "--config", "/etc/oai/af/pcf_handler.grpc.yaml"]
+    expose:
+      - 50052/tcp
+
+  # The client for sending request to the AF Core. We will use it to test the
+  # CAMARA API gRPC endpoint.
+  af-client:
+    image: alpine:latest
+    entrypoint: ["/bin/sh"]
+    command:
+      - -c
+      - |
+        wget -qO /tmp/grpcurl.tar.gz https://github.com/fullstorydev/grpcurl/releases/download/v1.9.1/grpcurl_1.9.1_linux_x86_64.tar.gz
+        tar -xzf /tmp/grpcurl.tar.gz -C /usr/local/bin grpcurl
+        PAYLOAD_B64="$$(base64 < $${PAYLOAD_FILE:-/requests/qod_create_session.json} | tr -d '\n')"
+        grpcurl -plaintext \
+          -proto message.proto \
+          -import-path /var/protos \
+          -d "{\"message_type\":\"qod_create_session\",\"correlation_id\":\"12345\",\"payload\":\"$${PAYLOAD_B64}\",\"metadata\":{\"source\":\"command_line\",\"priority\":\"high\"}}" \
+          192.168.70.141:50051 \
+          af.proto.InternalCommunication/SendMessage
+    volumes:
+      - ../common/protos:/var/protos:ro
+      - ../af_core/tests/requests/qod:/requests:ro

@@ -1,6 +1,6 @@
 # Demo QoD Adapter
 
-A C++ demo application that acts as the **Application Management** component for ROS2-over-5G deployments. It requests and manages [CAMARA Quality-on-Demand](https://github.com/camaraproject/QualityOnDemand) sessions through phine.af for different traffic types.
+A C++ demo application that acts as the **Application Management** component for ROS2-over-5G deployments. It requests and manages [CAMARA Quality-on-Demand](https://github.com/camaraproject/QualityOnDemand) sessions through phine.af using the CAMARA REST API.
 
 See [DESIGN.md](DESIGN.md) for the full design document.
 

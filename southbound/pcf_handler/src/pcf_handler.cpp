@@ -4,6 +4,7 @@
  */
 
 #include "pcf_handler.h"
+#include "http_pcf_gateway.h"
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <nlohmann/json.hpp>
@@ -13,10 +14,21 @@ namespace {
 
 std::unordered_map<std::string, std::string> make_server_config(
     const af::config::CommunicationConfig& config) {
-    return {
+    std::unordered_map<std::string, std::string> result = {
         {"server_address", config.listen.host},
         {"server_port", af::config::port_to_string(config.listen.port)}
     };
+    if (config.kind == af::config::CommunicationKind::Http) {
+        result["base_path"] = config.base_path;
+        result["use_tls"] = config.use_tls ? "true" : "false";
+        result["timeout_ms"] = std::to_string(config.timeout_ms);
+        if (config.remote.has_value()) {
+            const auto& remote = config.remote.value();
+            result["base_url"] = "http" + std::string(config.use_tls ? "s" : "") +
+                "://" + remote.host + ":" + af::config::port_to_string(remote.port);
+        }
+    }
+    return result;
 }
 
 } // namespace
@@ -62,11 +74,27 @@ PcfHandler::PcfHandler(const std::string& config_path)
     // Create PCC rule manager
     pcc_rule_manager_ = std::make_shared<PccRuleManager>();
 
-    // Create PCF client
-    pcf_client_ = std::make_shared<PcfClientWrapper>(
-        app_config_.pcf_handler.pcf.base_url,
-        app_config_.pcf_handler.pcf.use_tls,
-        app_config_.pcf_handler.pcf.api_version);
+    // Create PCF gateway using HTTP communication service
+    {
+        const auto& pcf_config = app_config_.pcf_handler.pcf;
+        std::unordered_map<std::string, std::string> pcf_sbi_config = {
+            {"base_url", pcf_config.base_url},
+            {"use_tls", pcf_config.use_tls ? "true" : "false"},
+            {"timeout_ms", "5000"},
+            {"client_only", "true"}
+        };
+
+        auto pcf_sbi_service = std::dynamic_pointer_cast<af::communication::http::HttpCommunicationService>(
+            af::communication::CommunicationFactory::create_service(
+                "http", "pcf_sbi", pcf_sbi_config));
+
+        if (!pcf_sbi_service) {
+            logger_->error("Failed to create HTTP communication service for PCF SBI");
+            throw std::runtime_error("Failed to create PCF SBI communication service");
+        }
+
+        pcf_gateway_ = std::make_shared<HttpPcfGateway>(pcf_sbi_service, pcf_config.api_version);
+    }
 }
 
 PcfHandler::~PcfHandler() {
@@ -106,8 +134,8 @@ void PcfHandler::initializeLogger(spdlog::level::level_enum log_level) {
 void PcfHandler::initialize() {
     logger_->info("Initializing PCF Handler components");
 
-    // Initialize PCF client
-    pcf_client_->initialize();
+    // Initialize PCF gateway
+    pcf_gateway_->initialize();
 
     request_router_->initialize(this);
 
@@ -341,7 +369,7 @@ af::communication::MessagePtr PcfHandler::create_app_session(
 
         // Call PCF client to create the app session
         logger_->debug("App session request data: {}", json_data.dump());
-        auto pcf_response = pcf_client_->create_app_session(json_data);
+        auto pcf_response = pcf_gateway_->create_app_session(json_data);
 
         if (pcf_response.first) {
             // Success
@@ -522,7 +550,7 @@ af::communication::MessagePtr PcfHandler::update_app_session(
         }
 
         // Call PCF client to update the app session
-        auto pcf_response = pcf_client_->update_app_session(app_session_id, update_context);
+        auto pcf_response = pcf_gateway_->update_app_session(app_session_id, update_context);
 
         if (pcf_response.first) {
             // Success
@@ -619,7 +647,7 @@ af::communication::MessagePtr PcfHandler::delete_app_session(
         }
 
         // Call PCF client to delete the app session
-        bool success = pcf_client_->delete_app_session(app_session_id, {});
+        bool success = pcf_gateway_->delete_app_session(app_session_id, {});
 
         if (success) {
             // Success
@@ -699,7 +727,7 @@ af::communication::MessagePtr PcfHandler::get_app_session(
         }
 
         // Call PCF client to get the app session
-        auto pcf_response = pcf_client_->get_app_session(app_session_id);
+        auto pcf_response = pcf_gateway_->get_app_session(app_session_id);
 
         if (pcf_response.first) {
             // Success

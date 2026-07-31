@@ -2,6 +2,7 @@
 /// @brief Demo QoD Adapter bundled runtime entry.
 
 #include "adapter_config.hpp"
+#include "http_qod_client.hpp"
 #include "qod_client.hpp"
 #include "session_manager.hpp"
 
@@ -91,7 +92,14 @@ class BundledAdapterRuntime {
                 return;
             }
 
-            auto client = std::make_shared<QodClient>(client_config);
+            std::shared_ptr<IQodClient> client;
+            if (client_config.transport == "http" || client_config.transport == "http2") {
+                spdlog::info("[demo-qod-adapter] Using HTTP/2 transport to af_core");
+                client = std::make_shared<HttpQodClient>(client_config);
+            } else {
+                spdlog::info("[demo-qod-adapter] Using gRPC transport to af_core");
+                client = std::make_shared<QodClient>(client_config);
+            }
             if (!client->wait_for_ready(client_config.timeout_seconds)) {
                 spdlog::error("[demo-qod-adapter] AF Core is not reachable from bundled adapter runtime.");
                 return;

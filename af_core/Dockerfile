@@ -13,15 +13,15 @@ FROM base AS dependencies
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get upgrade --yes && \
     DEBIAN_FRONTEND=noninteractive apt-get install --yes \
-      build-essential \
-      cmake \
-      psmisc \
-      git \
-      libspdlog-dev \
-      libyaml-cpp-dev \
-      libfmt-dev \
-      nlohmann-json3-dev \
-  && rm -rf /var/lib/apt/lists/*
+    build-essential \
+    cmake \
+    psmisc \
+    git \
+    libspdlog-dev \
+    libyaml-cpp-dev \
+    libfmt-dev \
+    nlohmann-json3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 
 # Install gRPC and protobuf
@@ -52,12 +52,32 @@ RUN ldconfig
 # Install build dependencies
 RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
-      build-essential \
-      libssl-dev \
-      cmake \
-      git \
-      libboost-all-dev \
-  && rm -rf /var/lib/apt/lists/*
+    build-essential \
+    libssl-dev \
+    ca-certificates \
+    cmake \
+    curl \
+    git \
+    libnghttp2-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Build Boost 1.83 from source — apt provides only 1.74 on Debian Bookworm;
+# boost::url (needed by af_http_communication) requires Boost >= 1.81.
+# Static linking keeps the compiled Boost code inside the AF binaries so
+# no extra .so files need to be copied into the runtime image.
+RUN cd /tmp && \
+    curl -fsSL https://archives.boost.io/release/1.83.0/source/boost_1_83_0.tar.gz \
+    | tar -xz && \
+    cd boost_1_83_0 && \
+    ./bootstrap.sh --prefix=/usr/local \
+    --with-libraries=url,system,thread,chrono,atomic && \
+    ./b2 install -j$(nproc) \
+    variant=release \
+    link=static \
+    threading=multi \
+    cxxflags=-fPIC && \
+    ldconfig && \
+    cd /tmp && rm -rf boost_1_83_0
 
 # Build common runtime libraries
 COPY common/ /app/common/
@@ -68,9 +88,11 @@ RUN cd /app && \
     mkdir -p build && \
     cd build && \
     cmake .. -DCMAKE_BUILD_TYPE=Release \
-             -DUSE_SYSTEM_GRPC=ON \
-             -DUSE_SYSTEM_PROTOBUF=ON \
-             -DCMAKE_INSTALL_PREFIX=/usr/local && \
+    -DUSE_SYSTEM_GRPC=ON \
+    -DUSE_SYSTEM_PROTOBUF=ON \
+    -DBOOST_ROOT=/usr/local \
+    -DBoost_NO_BOOST_CMAKE=ON \
+    -DCMAKE_INSTALL_PREFIX=/usr/local && \
     make -j$(nproc) && \
     make install && \
     ldconfig
@@ -100,6 +122,13 @@ COPY --from=common-runtime /usr/local/include/af /usr/local/include/af
 COPY --from=common-runtime /usr/local/include/oai/af /usr/local/include/oai/af
 # Copy generated headers from common-runtime stage
 COPY --from=common-runtime /app/build/generated/ /app/build-output/generated/
+# Copy Boost 1.83 headers and libs built from source in common-runtime
+COPY --from=common-runtime /usr/local/include/boost /usr/local/include/boost
+COPY --from=common-runtime /usr/local/lib/libboost_url.a /usr/local/lib/libboost_url.a
+COPY --from=common-runtime /usr/local/lib/libboost_system.a /usr/local/lib/libboost_system.a
+COPY --from=common-runtime /usr/local/lib/libboost_thread.a /usr/local/lib/libboost_thread.a
+COPY --from=common-runtime /usr/local/lib/libboost_chrono.a /usr/local/lib/libboost_chrono.a
+COPY --from=common-runtime /usr/local/lib/libboost_atomic.a /usr/local/lib/libboost_atomic.a
 
 
 # Ensure libraries are properly linked
@@ -108,17 +137,17 @@ RUN ldconfig
 # Install minimal build dependencies
 RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
-      build-essential \
-      cmake \
-      libssl-dev \
-      libboost-all-dev \
-      libc6-dev \
-      linux-libc-dev \
-      git \
-      libspdlog-dev \
-      libyaml-cpp-dev \
-      libfmt-dev \
-      nlohmann-json3-dev \
+    build-essential \
+    cmake \
+    libssl-dev \
+    libnghttp2-dev \
+    libc6-dev \
+    linux-libc-dev \
+    git \
+    libspdlog-dev \
+    libyaml-cpp-dev \
+    libfmt-dev \
+    nlohmann-json3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 
@@ -140,9 +169,11 @@ RUN cd /app && \
     mkdir -p build-output && \
     cd build-output && \
     cmake .. -DCMAKE_BUILD_TYPE=Release \
-             -DUSE_SYSTEM_GRPC=ON \
-             -DUSE_SYSTEM_PROTOBUF=ON \
-             -DCMAKE_INSTALL_PREFIX=/usr/local && \
+    -DUSE_SYSTEM_GRPC=ON \
+    -DUSE_SYSTEM_PROTOBUF=ON \
+    -DBOOST_ROOT=/usr/local \
+    -DBoost_NO_BOOST_CMAKE=ON \
+    -DCMAKE_INSTALL_PREFIX=/usr/local && \
     make -j$(nproc) af_core && \
     make install && \
     ldconfig
@@ -151,7 +182,7 @@ RUN cd /app && \
 FROM base AS runtime
 
 # Copy necessary runtime dependencies from the builder image
-COPY --from=builder /usr/local/lib/libnghttp2* /usr/local/lib/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libnghttp2* /usr/lib/x86_64-linux-gnu/
 COPY --from=builder /usr/local/lib/libgrpc* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libprotobuf* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libspdlog* /usr/local/lib/
@@ -182,7 +213,10 @@ COPY --from=grpc-builder /usr/local/lib/libutf8* /usr/local/lib/
 COPY --from=grpc-builder /usr/local/lib/libabsl* /usr/local/lib/
 COPY --from=grpc-builder /usr/local/lib/libprotobuf* /usr/local/lib/
 
-RUN ldconfig
+# Debian-linked libs (Boost etc.) need libssl.so.3; grpc-builder ships libssl.so without the version suffix
+RUN ln -sf /usr/local/lib/libssl.so /usr/local/lib/libssl.so.3 && \
+    ln -sf /usr/local/lib/libcrypto.so /usr/local/lib/libcrypto.so.3 && \
+    ldconfig
 
 # Copy build artifacts
 COPY --from=builder /app/build-output/bin/af_core /usr/local/bin/

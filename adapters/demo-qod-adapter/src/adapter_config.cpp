@@ -138,6 +138,10 @@ AdapterRuntimeConfig load_adapter_runtime_config(
         join_key(root_prefix, "af_core.address"),
         build_endpoint_address(config, root_prefix, "af_core.communication.remote", runtime.client.af_core_address));
 
+    runtime.client.transport = config->get<std::string>(
+        join_key(root_prefix, "af_core.transport"),
+        runtime.client.transport);
+
     runtime.client.timeout_seconds = config->get<int>(
         join_key(root_prefix, "af_core.timeout_seconds"),
         runtime.client.timeout_seconds);

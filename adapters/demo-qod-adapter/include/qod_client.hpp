@@ -26,6 +26,7 @@ namespace phine::adapter {
 
 struct QodClientConfig {
     std::string af_core_address = "localhost:50051";
+    std::string transport = "grpc";  // "grpc" or "http"
     int timeout_seconds = 30;
     int max_retries = 3;
     int initial_retry_delay_ms = 1000;

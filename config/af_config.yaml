@@ -9,10 +9,10 @@ af_config:
   key_file: "/etc/oai/af/certs/server.key"
 
 communication:
-  type: "grpc"
+  type: "http"
   af_core_service: "af_core"
   af_core_host: "localhost"
-  af_core_port: 50051
+  af_core_port: 8080
   timeout_ms: 5000
 
 logging:

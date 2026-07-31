@@ -4,7 +4,9 @@
  */
 
 #include "qod_pcf_handler.h"
+#include "http_pcf_gateway.h"
 #include "flow_description_utils.h"
+#include <communication_factory.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <random>
@@ -24,10 +26,26 @@ QodPcfHandler::QodPcfHandler(const af::config::PcfHandlerConfig& config)
     // Setup logger
     initializeLogger(config_.logging.level);
 
-    pcf_client_ = std::make_shared<PcfClientWrapper>(
-        config_.pcf.base_url,
-        config_.pcf.use_tls,
-        config_.pcf.api_version);
+    // Create PCF gateway using HTTP communication service
+    {
+        const auto& pcf_config = config_.pcf;
+        std::unordered_map<std::string, std::string> pcf_sbi_config = {
+            {"base_url", pcf_config.base_url},
+            {"use_tls", pcf_config.use_tls ? "true" : "false"},
+            {"timeout_ms", "5000"},
+            {"client_only", "true"}
+        };
+
+        auto pcf_sbi_service = std::dynamic_pointer_cast<af::communication::http::HttpCommunicationService>(
+            af::communication::CommunicationFactory::create_service(
+                "http", "qod_pcf_sbi", pcf_sbi_config));
+
+        if (pcf_sbi_service) {
+            pcf_gateway_ = std::make_shared<HttpPcfGateway>(pcf_sbi_service, pcf_config.api_version);
+        } else {
+            spdlog::error("Failed to create HTTP communication service for QoD PCF SBI");
+        }
+    }
 
     initialize();
 
@@ -41,8 +59,10 @@ QodPcfHandler::~QodPcfHandler() {
 void QodPcfHandler::initialize() {
     logger_->info("QoD PCF Adapter initialized");
 
-    // Initialize PCF client
-    pcf_client_->initialize();
+    // Initialize PCF gateway
+    if (pcf_gateway_) {
+        pcf_gateway_->initialize();
+    }
 
     // // Initialize PCC rule manager
     // pcc_rule_manager_->initialize();
@@ -405,7 +425,7 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::create_pcf_session(
         }
 
         // TODO: send the request to PCF via REST client
-        auto [success, response] = pcf_client_->create_app_session(pcf_request);
+        auto [success, response] = pcf_gateway_->create_app_session(pcf_request);
         if (!success) {
             logger_->error("Failed to send create app session request to PCF");
             return af::common::handlers::ServiceHandlerHelpers::create_error_response(
@@ -535,7 +555,7 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::update_pcf_session(
         }
 
 
-        auto [success, response] = pcf_client_->update_app_session(pcf_info.pcf_session_id, pcf_request);
+        auto [success, response] = pcf_gateway_->update_app_session(pcf_info.pcf_session_id, pcf_request);
         if (!success) {
             logger_->error("Failed to send update app session request to PCF");
             return af::common::handlers::ServiceHandlerHelpers::create_error_response(
@@ -600,7 +620,7 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::delete_pcf_session(
         pcf_request["events"].push_back({ {"event", "QOS_NOTIF"} });
         pcf_request["notifUri"] = af_notification_uri_ + "/" + qod_session.session_id;
 
-        bool success = pcf_client_->delete_app_session(pcf_info.pcf_session_id, pcf_request);
+        bool success = pcf_gateway_->delete_app_session(pcf_info.pcf_session_id, pcf_request);
         if (!success) {
             logger_->error("Failed to send delete app session request to PCF");
             return af::common::handlers::ServiceHandlerHelpers::create_error_response(
