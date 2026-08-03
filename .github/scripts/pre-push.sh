@@ -8,7 +8,7 @@
 #                                [--component <name>] [--fix]
 #
 # Default (no flags): format + trailing-whitespace/permissions +
-# static analysis + unit tests + build, for whichever components changed
+# checks (clang-tidy + unit tests) + build, for whichever components changed
 # vs --base (default origin/main). Docker-based checks are skipped per
 # component with no relevant changes, same as the CI matrices.
 #
@@ -17,7 +17,7 @@
 #   --coverage             Also build the coverage stage. Off by default —
 #                          it's report-only in CI and the slowest check
 #                          (needs a fresh -O0 recompile, not an incremental
-#                          add-on like tests/static-analysis).
+#                          add-on like checks).
 #   --component <name>     Restrict the Docker tier to one component
 #                          (af-core|pcf-handler|demo-qod-adapter|bundled-af)
 #                          instead of auto-detecting from the diff. Useful
@@ -93,22 +93,21 @@ fi
 
 if $QUICK; then
     echo
-    echo "--quick: skipping static analysis, unit tests, and build."
+    echo "--quick: skipping checks and build."
 else
     if ! command -v docker >/dev/null 2>&1; then
-        echo "error: docker is required for static analysis/unit tests/build (or pass --quick)" >&2
+        echo "error: docker is required for checks/build (or pass --quick)" >&2
         exit 1
     fi
 
-    # name:dockerfile:diff-path — used for static analysis, unit tests, and build.
+    # name:dockerfile:diff-path — used for checks and build.
     COMPONENTS=(
         "af-core:af_core/Dockerfile:af_core"
         "pcf-handler:southbound/pcf_handler/Dockerfile:southbound/pcf_handler"
         "demo-qod-adapter:adapters/demo-qod-adapter/Dockerfile:adapters/demo-qod-adapter"
     )
-    # Static-analysis-only — src/ (the bundled runtime) has no unit-test
-    # suite, so it's not part of COMPONENTS, but static-analysis.yml does
-    # cover it in CI.
+    # Tidy-only — src/ (the bundled runtime) has no unit-test suite, so its
+    # `checks` stage is clang-tidy only (see checks.yml's has_tests: false).
     TIDY_ONLY_COMPONENTS=(
         "bundled-af:Dockerfile:src"
     )
@@ -122,32 +121,28 @@ else
         ! git diff --quiet "$BASE_REF...HEAD" -- "$diff_path" 2>/dev/null
     }
 
-    run_tidy() {
-        local name="$1" dockerfile="$2" diff_path="$3"
+    # Checks stage merges clang-tidy and unit tests into one image: tests
+    # run at build time (a failing test fails the build), then a diff is
+    # piped into the built image to run clang-tidy. has_tests=false skips
+    # the unit-test result (e.g. bundled-af, which has no test suite).
+    run_checks() {
+        local name="$1" dockerfile="$2" diff_path="$3" has_tests="$4"
         if ! component_selected "$name" "$diff_path"; then
             record "Static Analysis ($name)" "SKIPPED (no changes)"
+            [[ "$has_tests" == true ]] && record "Unit Tests ($name)" "SKIPPED (no changes)"
             return
         fi
-        banner "Static Analysis: $name"
-        if docker build --target static-analysis -f "$dockerfile" -t "$name:pre-push-tidy" . &&
-            git diff --no-prefix -U0 "$BASE_REF" -- "$diff_path" | docker run --rm -i "$name:pre-push-tidy"; then
-            record "Static Analysis ($name)" "PASS"
+        banner "Checks: $name"
+        if docker build --target checks -f "$dockerfile" -t "$name:pre-push-checks" .; then
+            [[ "$has_tests" == true ]] && record "Unit Tests ($name)" "PASS"
+            if git diff --no-prefix -U0 "$BASE_REF" -- "$diff_path" | docker run --rm -i "$name:pre-push-checks"; then
+                record "Static Analysis ($name)" "PASS"
+            else
+                record "Static Analysis ($name)" "FAIL"
+            fi
         else
-            record "Static Analysis ($name)" "FAIL"
-        fi
-    }
-
-    run_tests() {
-        local name="$1" dockerfile="$2" diff_path="$3"
-        if ! component_selected "$name" "$diff_path"; then
-            record "Unit Tests ($name)" "SKIPPED (no changes)"
-            return
-        fi
-        banner "Unit Tests: $name"
-        if docker build --target tests -f "$dockerfile" -t "$name:pre-push-tests" .; then
-            record "Unit Tests ($name)" "PASS"
-        else
-            record "Unit Tests ($name)" "FAIL"
+            [[ "$has_tests" == true ]] && record "Unit Tests ($name)" "FAIL"
+            record "Static Analysis ($name)" "SKIPPED (build failed)"
         fi
     }
 
@@ -179,14 +174,18 @@ else
         fi
     }
 
-    for entry in "${COMPONENTS[@]}" "${TIDY_ONLY_COMPONENTS[@]}"; do
+    for entry in "${COMPONENTS[@]}"; do
         IFS=":" read -r name dockerfile diff_path <<<"$entry"
-        run_tidy "$name" "$dockerfile" "$diff_path"
+        run_checks "$name" "$dockerfile" "$diff_path" true
+    done
+
+    for entry in "${TIDY_ONLY_COMPONENTS[@]}"; do
+        IFS=":" read -r name dockerfile diff_path <<<"$entry"
+        run_checks "$name" "$dockerfile" "$diff_path" false
     done
 
     for entry in "${COMPONENTS[@]}"; do
         IFS=":" read -r name dockerfile diff_path <<<"$entry"
-        run_tests "$name" "$dockerfile" "$diff_path"
         run_build "$name" "$dockerfile" "$diff_path"
         if $WITH_COVERAGE; then
             run_coverage "$name" "$dockerfile" "$diff_path"

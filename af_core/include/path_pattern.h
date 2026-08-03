@@ -27,7 +27,7 @@ inline std::string to_regex(const std::string& pattern) {
     std::string result;
     result.reserve(pattern.size() * 2);
 
-    for (std::size_t i = 0; i < pattern.size(); ) {
+    for (std::size_t i = 0; i < pattern.size();) {
         const char c = pattern[i];
 
         if (c == '{') {
