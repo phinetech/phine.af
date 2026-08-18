@@ -112,6 +112,17 @@ Ensure submodules are up to date:
 Build and start the core services, then start the RAN:
 
 ```bash {"name":"deploy-stack","interactive":"false"}
+# Tear down all AF topology profiles before deploying to avoid host-port
+# conflicts — 'af' and 'af_core' are mutually exclusive and both bind the
+# same host ports (8080 for HTTP, 50051 for gRPC).
+docker compose -f $COMPOSE_FILE -f $COMPOSE_OVERRIDE_FILE \
+  --profile af --profile afs --profile free5gc down 2>/dev/null || true
+
+# Forcibly stop any container still holding port 8080 or 50051 in case the
+# compose down did not release them (e.g. after a partial or crashed run).
+docker ps -q --filter publish=8080  | xargs -r docker stop 2>/dev/null || true
+docker ps -q --filter publish=50051 | xargs -r docker stop 2>/dev/null || true
+
 docker compose -f $COMPOSE_FILE -f $COMPOSE_OVERRIDE_FILE $COMPOSE_PROFILES up -d --build
 
 sleep 30
