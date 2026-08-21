@@ -70,13 +70,13 @@ Non-executable blocks (diagrams, sample output, config snippets) use `text` or `
 ### Run a Single Named Cell
 
 ```bash {"name":"example-list","interactive":"false"}
-runme ls --filename docs/getting-started/qos-enforcement-tutorial.md
+runme ls --filename docs/getting-started/06-qos-http-tutorial.md
 ```
 
 To run a specific cell by name:
 
 ```sh {"excludeFromRunAll":"true","interactive":"false"}
-runme run deploy-stack --filename docs/getting-started/qos-enforcement-tutorial.md
+runme run deploy-stack --filename docs/getting-started/06-qos-http-tutorial.md
 ```
 
 ### Run All Cells
@@ -84,7 +84,7 @@ runme run deploy-stack --filename docs/getting-started/qos-enforcement-tutorial.
 Runs every cell except those marked `excludeFromRunAll`:
 
 ```sh {"excludeFromRunAll":"true","interactive":"false"}
-runme run --all --skip-prompts --filename docs/getting-started/qos-enforcement-tutorial.md
+runme run --all --skip-prompts --filename docs/getting-started/06-qos-http-tutorial.md
 ```
 
 ### Run in VS Code
@@ -243,21 +243,21 @@ Execute named cells using `runme run`:
 
 ```yaml {"excludeFromRunAll":"true"}
 - name: Run tutorial step
-  run: runme run deploy-stack --filename docs/getting-started/qos-enforcement-tutorial.md
+  run: runme run deploy-stack --filename docs/getting-started/06-qos-http-tutorial.md
 ```
 
 Multiple steps can be sequenced:
 
 ```yaml {"excludeFromRunAll":"true"}
 - name: Deploy
-  run: runme run deploy-stack --filename docs/getting-started/qos-enforcement-tutorial.md
+  run: runme run deploy-stack --filename docs/getting-started/06-qos-http-tutorial.md
 
 - name: Verify
-  run: runme run verify-ue-ip --filename docs/getting-started/qos-enforcement-tutorial.md
+  run: runme run verify-ue-ip --filename docs/getting-started/06-qos-http-tutorial.md
 
 - name: Cleanup
   if: always()
-  run: runme run cleanup --filename docs/getting-started/qos-enforcement-tutorial.md
+  run: runme run cleanup --filename docs/getting-started/06-qos-http-tutorial.md
   continue-on-error: true
 ```
 
@@ -272,7 +272,7 @@ Multiple steps can be sequenced:
 
 | Workflow | File | What It Validates |
 |---|---|---|
-| QoS Tutorial | `.github/workflows/qos-tutorial.yml` | End-to-end QoS enforcement tutorial |
+| Tutorials Validation | `.github/workflows/test-tutorials.yml` | All runme-enabled getting-started tutorials |
 | Integration Tests | `.github/workflows/integration-tests.yml` | AF Core integration test suite |
 | Build | `.github/workflows/build.yml` | Compilation and unit tests |
 
@@ -280,7 +280,9 @@ Multiple steps can be sequenced:
 
 | Document | Description |
 |---|---|
-| [QoS Enforcement Tutorial](../getting-started/qos-enforcement-tutorial.md) | Full end-to-end 5G QoS tutorial with iperf3 verification |
+| [QoS Enforcement Tutorial (HTTP)](../getting-started/06-qos-http-tutorial.md) | Full end-to-end 5G QoS tutorial with iperf3 verification |
+| [QoS Enforcement Tutorial (gRPC)](../getting-started/07-qos-grpc-tutorial.md) | Same tutorial over the gRPC northbound interface |
+| [Demo QoD Adapter Tutorial](../getting-started/08-demo-adapter-tutorial.md) | Automated adapter-driven QoD session lifecycle |
 
 ## Additional Resources
 

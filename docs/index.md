@@ -7,8 +7,9 @@ The project is designed to expose 3GPP 5G network capabilities to third-party ap
 ## What to read next
 
 
-- Start here: [Getting Started](getting-started/quickstart.md)
-- Run the QoD adapter demo: [Adapter Tutorial](getting-started/adapter-qod-tutorial.md)
+- Start here: [Getting Started](getting-started/05-quickstart.md)
+- Full QoS enforcement walkthrough: [QoS Enforcement Tutorial](getting-started/06-qos-http-tutorial.md)
+- Run the QoD adapter demo: [Adapter Tutorial](getting-started/08-demo-adapter-tutorial.md)
 - Understand the design: [Architecture Overview](architecture/overview.md)
 - See what is implemented: [Status](status.md)
 - Developer workflows: [Development](development/add-camara-api.md)

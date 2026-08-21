@@ -1,13 +1,15 @@
 ---
 runme:
-  id: qos-enforcement-tutorial
+  id: qos-http-tutorial
   version: v3
 cwd: ../..
 ---
 
-# End-to-End QoS Enforcement Tutorial
+# End-to-End QoS Enforcement Tutorial (HTTP Transport)
 
 This tutorial deploys the 5G testbed, sends a CAMARA QoD session request, captures the control-plane path, and verifies downlink bandwidth enforcement with `iperf3`.
+
+This is the primary walkthrough of the QoS enforcement tutorial and covers every step in full detail. For the gRPC transport instead, see the [gRPC QoS Enforcement Tutorial](07-qos-grpc-tutorial.md) — that page only covers what differs from this one.
 
 By the end of the run you will:
 
@@ -33,7 +35,7 @@ In most cases you only need to choose the AF topology:
 - `AF_PROFILE=af` for the bundled `af` container
 - `AF_PROFILE=afs` for separate `af_core` and `pcf_handler` containers
 
-The default transport is **HTTP/2** because `COMPOSE_OVERRIDE_FILE` points at `docker-compose/compose.http.yaml`. If you want **gRPC** instead, set `COMPOSE_OVERRIDE_FILE=docker-compose/compose.grpc.yaml` before deployment.
+This tutorial always runs over **HTTP/2** (`COMPOSE_OVERRIDE_FILE=docker-compose/compose.http.yaml`). For gRPC, see the [gRPC QoS Enforcement Tutorial](07-qos-grpc-tutorial.md).
 
 ```bash {"name":"setup-variables","interactive":"false"}
 # Choose one deployment mode:
@@ -44,7 +46,7 @@ export COMPOSE_OVERRIDE_FILE="${COMPOSE_OVERRIDE_FILE:-docker-compose/compose.ht
 export AF_PROFILE="${AF_PROFILE:-af}"
 export COMPOSE_PROFILES="${COMPOSE_PROFILES:---profile free5gc --profile $AF_PROFILE}"
 export RAN_SERVICES="${RAN_SERVICES:-ueransim-gnb ueransim-ue}"
-export LOGS_DIR="${LOGS_DIR:-/tmp/phine.af/qos-enforcement-tutorial/logs}"
+export LOGS_DIR="${LOGS_DIR:-/tmp/phine.af/qos-http-tutorial/logs}"
 mkdir -p "$LOGS_DIR"
 sudo mkdir -p "$LOGS_DIR"
 sudo chmod 777 "$LOGS_DIR"
@@ -63,19 +65,6 @@ echo "  LOGS_DIR: $LOGS_DIR"
 echo "  UE_IP: $UE_IP"
 echo "  EXT_DN_IP: $EXT_DN_IP"
 echo "  Bandwidth validation range: ${MIN_MBPS}-${MAX_MBPS} Mbps"
-```
-
-### Transport Reference
-
-| Transport | Compose override | AF entrypoint | Notes |
-|---|---|---|---|
-| HTTP/2 (default) | `docker-compose/compose.http.yaml` | `192.168.70.141:8080` | `af_client` uses `curl` |
-| gRPC | `docker-compose/compose.grpc.yaml` | `192.168.70.141:50051` | `af_client` uses `grpcurl` |
-
-If you have changed overrides locally and want to reset to the documented HTTP default, run:
-
-```bash {"name":"setup-http-variant","excludeFromRunAll":"true","interactive":"false"}
-export COMPOSE_OVERRIDE_FILE="docker-compose/compose.http.yaml"
 ```
 
 For the full component topology and how the AF, PCF, SMF, and UPF interact, see the [Architecture Overview](../architecture/overview.md).
@@ -175,8 +164,6 @@ This filter keeps the capture focused on the AF path, the PCF, the SMF, and the 
 
 This step exercises the full CAMARA QoD REST API: create a session, retrieve it by ID, query sessions by device, extend the duration, then delete it.
 
-> **Note:** Steps 3.2–3.4 and Step 6 use `docker compose run` with explicit curl arguments and apply to the **HTTP transport only**. If you are running the gRPC variant, skip ahead to Step 4 after step 3.1.
-
 ### 3.1 — Create a Session
 
 This tutorial uses the `premium` QoS profile:
@@ -223,16 +210,10 @@ The key fields for this test are:
 Send the request:
 
 ```bash {"name":"send-qod-request","interactive":"false"}
-# Unified command that works for both gRPC and HTTP transports
 docker compose -f $COMPOSE_FILE -f $COMPOSE_OVERRIDE_FILE --profile af-client up -d
 ```
 
-The wrapper inside `af_client` chooses the correct client for the active override:
-
-- HTTP override: sends a CAMARA JSON request with `curl`
-- gRPC override: sends the same payload through `grpcurl`
-
-The exact request (endpoint, headers, and payload file) is defined by the `af-client` service in the active compose override — see [docker-compose/compose.http.yaml](../../docker-compose/compose.http.yaml) or [docker-compose/compose.grpc.yaml](../../docker-compose/compose.grpc.yaml).
+The `af-client` service sends a CAMARA JSON request with `curl`. The exact request (endpoint, headers, and payload file) is defined in [docker-compose/compose.http.yaml](../../docker-compose/compose.http.yaml).
 
 Because the request runs detached (`up -d`), view the response with `docker logs af-client`. Extract the `sessionId` returned in the response body — it is required for all subsequent lifecycle steps:
 
@@ -522,6 +503,10 @@ docker exec ue pkill iperf3 || true
 Collect logs from all containers after the test run:
 
 ```bash {"name":"collect-logs","interactive":"false"}
+# Each `runme run <name>` invocation starts a fresh shell, so setup-variables'
+# exports aren't inherited here — re-apply the same defaults.
+export LOGS_DIR="${LOGS_DIR:-/tmp/phine.af/qos-http-tutorial/logs}"
+
 ./build/scripts/ci_helper.sh collect_logs $LOGS_DIR
 echo "Logs collected to $LOGS_DIR"
 ls -la $LOGS_DIR
@@ -532,6 +517,14 @@ ls -la $LOGS_DIR
 Stop and remove all containers:
 
 ```bash {"name":"cleanup","interactive":"false"}
+# Each `runme run <name>` invocation starts a fresh shell, so setup-variables'
+# exports aren't inherited here — re-apply the same defaults.
+export COMPOSE_FILE="${COMPOSE_FILE:-docker-compose/compose.yaml}"
+export COMPOSE_OVERRIDE_FILE="${COMPOSE_OVERRIDE_FILE:-docker-compose/compose.http.yaml}"
+export AF_PROFILE="${AF_PROFILE:-af}"
+export COMPOSE_PROFILES="${COMPOSE_PROFILES:---profile free5gc --profile $AF_PROFILE}"
+export RAN_SERVICES="${RAN_SERVICES:-ueransim-gnb ueransim-ue}"
+
 docker compose -f $COMPOSE_FILE down $RAN_SERVICES
 
 docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES down
@@ -542,6 +535,10 @@ docker compose -f $COMPOSE_FILE -f $COMPOSE_OVERRIDE_FILE --profile af-client do
 To also remove built images:
 
 ```bash {"name":"cleanup-all","excludeFromRunAll":"true","interactive":"false"}
+export COMPOSE_FILE="${COMPOSE_FILE:-docker-compose/compose.yaml}"
+export AF_PROFILE="${AF_PROFILE:-af}"
+export COMPOSE_PROFILES="${COMPOSE_PROFILES:---profile free5gc --profile $AF_PROFILE}"
+
 docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES down --rmi all
 ```
 
@@ -605,5 +602,7 @@ EOF'
 
 - Try a different QoS profile and compare the `iperf3` result
 - Explore session lifecycle operations such as [extend duration](../../af_core/tests/requests/qod/qod_session_extend_duration.json)
+- Try the gRPC transport instead: [gRPC QoS Enforcement Tutorial](07-qos-grpc-tutorial.md)
+- Run the automated adapter demo: [Demo QoD Adapter Tutorial](08-demo-adapter-tutorial.md)
 - Review the [Architecture Overview](../architecture/overview.md) for more detail on AF internals
 - See [CAMARA Compliance](../apis/camara-compliance.md) for API-specific behavior

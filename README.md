@@ -263,11 +263,14 @@ See [docs/README.md](docs/README.md) for details.
 
 ## Getting started
 
-- Quickstart (Docker Compose + sample request): [docs/getting-started/quickstart.md](docs/getting-started/quickstart.md)
-- Prerequisites: [docs/getting-started/prerequisites.md](docs/getting-started/prerequisites.md)
-- Build: [docs/getting-started/build.md](docs/getting-started/build.md)
-- Run: [docs/getting-started/run.md](docs/getting-started/run.md)
-- First request: [docs/getting-started/first-request.md](docs/getting-started/first-request.md)
+- Prerequisites: [docs/getting-started/01-prerequisites.md](docs/getting-started/01-prerequisites.md)
+- Build: [docs/getting-started/02-build.md](docs/getting-started/02-build.md)
+- Run: [docs/getting-started/03-run.md](docs/getting-started/03-run.md)
+- First request: [docs/getting-started/04-first-request.md](docs/getting-started/04-first-request.md)
+- Quickstart (Docker Compose + sample request): [docs/getting-started/05-quickstart.md](docs/getting-started/05-quickstart.md)
+- QoS enforcement tutorial (HTTP): [docs/getting-started/06-qos-http-tutorial.md](docs/getting-started/06-qos-http-tutorial.md)
+- QoS enforcement tutorial (gRPC): [docs/getting-started/07-qos-grpc-tutorial.md](docs/getting-started/07-qos-grpc-tutorial.md)
+- Demo QoD adapter tutorial: [docs/getting-started/08-demo-adapter-tutorial.md](docs/getting-started/08-demo-adapter-tutorial.md)
 
 **Important**: This project uses git submodules. After cloning, run:
 ```bash
