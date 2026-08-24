@@ -183,7 +183,8 @@ RUN cd /app && \
 # ─────────────────────────────────────────────────────────────────────────
 # Checks (clang-tidy + unit tests) — not part of the default build.
 # Build explicitly with: docker build --target checks ...
-# Tests run at build time (docker build fails immediately on test failure).
+# Tests run at build time; the image still builds on test failure so CI can
+# extract results.xml, and a test-exit-code file records the ctest outcome.
 # Run clang-tidy against a diff on stdin: docker run --rm -i <image> < component.diff
 # ─────────────────────────────────────────────────────────────────────────
 FROM builder AS checks
@@ -199,7 +200,7 @@ RUN apt-get update && \
 RUN cd /app/build-output && \
     cmake -DBUILD_TESTING=ON . && \
     make -j$(nproc) af_core_unit_tests && \
-    ctest -L unit --output-on-failure --output-junit results.xml
+    { ctest -L unit --output-on-failure --output-junit results.xml; echo $? > test-exit-code; }
 
 COPY .clang-tidy /app/.clang-tidy
 COPY .github/scripts/check_tidy.sh /usr/local/bin/check_tidy.sh

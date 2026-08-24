@@ -83,6 +83,7 @@ jobs:
         run: |
           docker create --name extract-results ${{ matrix.component.name }}:checks
           docker cp extract-results:${{ matrix.component.results_path }} ./results.xml
+          docker cp "extract-results:$(dirname ${{ matrix.component.results_path }})/test-exit-code" ./test-exit-code
           docker rm extract-results
 
       - name: Upload JUnit results
@@ -92,6 +93,15 @@ jobs:
           name: unit-test-results-${{ matrix.component.name }}
           path: results.xml
           retention-days: 30
+
+      - name: Fail if unit tests failed
+        if: always() && steps.build-checks.outcome == 'success' && steps.diff.outputs.has_changes == 'true' && matrix.component.has_tests
+        run: |
+          code="$(cat test-exit-code)"
+          if [[ "$code" != "0" ]]; then
+            echo "Unit tests failed (ctest exit code $code) — see the unit-test-results-${{ matrix.component.name }} artifact for details."
+            exit 1
+          fi
 
       - name: Run clang-tidy on changed lines
         if: steps.diff.outputs.has_changes == 'true'
