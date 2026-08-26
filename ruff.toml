@@ -1,0 +1,10 @@
+# Formatting-only config for the small amount of Python in this repo
+# (e.g. docker-compose/free5gc/seed_db.py). No existing style to infer
+# from, so this uses Ruff's standard defaults.
+
+line-length = 88
+target-version = "py310"
+
+[format]
+quote-style = "double"
+indent-style = "space"

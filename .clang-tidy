@@ -1,0 +1,24 @@
+# Minimal starting check set for first-time adoption: high-signal, low-noise
+# categories only. Findings are scoped to changed lines in CI (see
+# .github/scripts/check_tidy.sh), so this only ever blocks new/touched code,
+# never the existing backlog.
+Checks: >
+  -*,
+  bugprone-*,
+  performance-*,
+  clang-analyzer-core.*
+
+WarningsAsErrors: '*'
+
+HeaderFilterRegex: '(af_core|southbound/pcf_handler|adapters/demo-qod-adapter|src)/.*\.(h|hpp)$'
+
+# clang-analyzer-core.* is the Clang Static Analyzer's "core" checker
+# package only (null deref, uninitialized values, division by zero, ...).
+# The full clang-analyzer-* wildcard runs the analyzer's expensive
+# path-sensitive checks across every reachable header, which explodes on
+# this project's gRPC/protobuf/OAI/Boost dependency graph.
+
+# TODO: expand Checks to modernize-*, readability-*, and cppcoreguidelines-*
+# (and consider more clang-analyzer-* packages) once the
+# bugprone-*/performance-*/clang-analyzer-core.* backlog surfaced in touched
+# files has been addressed.

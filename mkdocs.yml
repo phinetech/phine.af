@@ -26,12 +26,14 @@ nav:
   - Home: index.md
   - Status: status.md
   - Getting Started:
-      - Prerequisites: getting-started/prerequisites.md
-      - Build: getting-started/build.md
-      - Run: getting-started/run.md
-      - First Request: getting-started/first-request.md
-      - Quickstart: getting-started/quickstart.md
-      - QoS Enforcement Tutorial: getting-started/qos-enforcement-tutorial.md
+      - Prerequisites: getting-started/01-prerequisites.md
+      - Build: getting-started/02-build.md
+      - Run: getting-started/03-run.md
+      - First Request: getting-started/04-first-request.md
+      - Quickstart: getting-started/05-quickstart.md
+      - QoS Enforcement Tutorial (HTTP): getting-started/06-qos-http-tutorial.md
+      - QoS Enforcement Tutorial (gRPC): getting-started/07-qos-grpc-tutorial.md
+      - Demo QoD Adapter Tutorial: getting-started/08-demo-adapter-tutorial.md
   - Architecture:
       - Overview: architecture/overview.md
       - Data Flow: architecture/data-flow.md

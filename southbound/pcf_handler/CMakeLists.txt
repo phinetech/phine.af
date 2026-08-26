@@ -13,6 +13,14 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Export compile_commands.json for tooling (e.g. clang-tidy)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# pcf_handler is always built standalone (own Dockerfile, own project()
+# above) — it needs its own include(CTest) to define BUILD_TESTING;
+# nothing upstream provides it in that build path.
+include(CTest)
+
 # Add custom cmake module path
 # In Docker builds, common is copied to /app/common/ while we're in /app/southbound/pcf_handler/
 # Otherwise, it's at ../common (one level up in the southbound directory)
@@ -24,6 +32,11 @@ elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../common/cmake")
 elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../common/cmake")
     list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../common/cmake")
 endif()
+
+# gcov instrumentation for coverage reporting — off by default; requires
+# -O0 for accurate line mapping, so this should be paired with a Debug
+# build (see the Docker `coverage` stage, which sets both explicitly).
+option(ENABLE_COVERAGE "Instrument pcf_handler_lib with gcov coverage flags" OFF)
 
 # Use system libraries by default
 option(USE_SYSTEM_OPENSSL "Use system installed OpenSSL" ON)
@@ -377,6 +390,11 @@ target_link_options(pcf_handler_lib PUBLIC
     -Wl,--no-as-needed
     -L/usr/local/lib
 )
+
+if(ENABLE_COVERAGE)
+    target_compile_options(pcf_handler_lib PRIVATE --coverage -O0 -g)
+    target_link_options(pcf_handler_lib PRIVATE --coverage)
+endif()
 
 # --- Configure the standalone executable ---
 target_include_directories(pcf_server

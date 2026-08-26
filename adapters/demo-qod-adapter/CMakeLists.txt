@@ -18,6 +18,9 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Export compile_commands.json for tooling (e.g. clang-tidy)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # Output directories
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -30,6 +33,11 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
 
 option(BUILD_DEMO_QOD_STANDALONE "Build the standalone demo QoD adapter executable" ${DEMO_QOD_ADAPTER_TOP_LEVEL})
 option(BUILD_DEMO_QOD_BUNDLE "Build demo QoD adapter bundle support into the AF executable" ${BUILD_BUNDLED})
+
+# gcov instrumentation for coverage reporting — off by default; requires
+# -O0 for accurate line mapping, so this should be paired with a Debug
+# build (see the Docker `coverage` stage, which sets both explicitly).
+option(ENABLE_COVERAGE "Instrument adapter_lib with gcov coverage flags" OFF)
 
 function(demo_qod_adapter_finalize_bundle)
     if(NOT TARGET af)
@@ -308,6 +316,11 @@ target_link_libraries(adapter_lib
         Threads::Threads
 )
 
+if(ENABLE_COVERAGE)
+    target_compile_options(adapter_lib PRIVATE --coverage -O0 -g)
+    target_link_options(adapter_lib PRIVATE --coverage)
+endif()
+
 set_target_properties(adapter_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     CXX_STANDARD 17
@@ -363,11 +376,11 @@ endif()
 
 # ─── Tests (optional) ────────────────────────────────────────────────────────
 
-option(BUILD_ADAPTER_TESTS "Build adapter unit tests" OFF)
+# include(CTest) defines BUILD_TESTING (default ON) and calls
+# enable_testing() — standard CTest convention, matches af_core/pcf_handler.
+include(CTest)
 
-if(BUILD_ADAPTER_TESTS)
-    enable_testing()
-
+if(BUILD_TESTING)
     find_package(GTest QUIET)
     if(NOT GTest_FOUND)
         include(FetchContent)
@@ -392,8 +405,17 @@ if(BUILD_ADAPTER_TESTS)
             GTest::gmock
     )
 
+    # Covers any header-only code a test might include directly rather than
+    # through adapter_lib (that code compiles into this binary, not the lib).
+    if(ENABLE_COVERAGE)
+        target_compile_options(adapter_tests PRIVATE --coverage -O0 -g)
+        target_link_options(adapter_tests PRIVATE --coverage)
+    endif()
+
     include(GoogleTest)
-    gtest_discover_tests(adapter_tests)
+    gtest_discover_tests(adapter_tests
+        PROPERTIES LABELS "unit"
+    )
 endif()
 
 # ─── Summary ─────────────────────────────────────────────────────────────────
@@ -405,5 +427,5 @@ message(STATUS "  Proto file: ${PROTO_FILE}")
 message(STATUS "  Gen dir:    ${PROTO_GEN_DIR}")
 message(STATUS "  Standalone: ${BUILD_DEMO_QOD_STANDALONE}")
 message(STATUS "  Bundle:     ${BUILD_DEMO_QOD_BUNDLE}")
-message(STATUS "  Tests:      ${BUILD_ADAPTER_TESTS}")
+message(STATUS "  Tests:      ${BUILD_TESTING}")
 message(STATUS "")

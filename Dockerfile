@@ -177,6 +177,8 @@ RUN cd /app && \
     mkdir -p build-output && \
     cd build-output && \
     cmake .. -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+    -DBUILD_TESTING=OFF \
     -DBUILD_BUNDLED=ON \
     -DENABLE_PCF_HANDLER=${ENABLE_PCF_HANDLER} \
     -DENABLE_NEF_HANDLER=${ENABLE_NEF_HANDLER} \
@@ -194,6 +196,30 @@ RUN cd /app && \
     make -j$(nproc) af && \
     make install && \
     ldconfig
+
+# ─────────────────────────────────────────────────────────────────────────
+# Checks (clang-tidy) — not part of the default build.
+# Build explicitly with: docker build --target checks ...
+# Run against a diff on stdin: docker run --rm -i <image> < component.diff
+# Note: bundled-af has no unit-test suite, so this stage is tidy-only
+# (unlike the checks stage in af_core/pcf_handler/demo-qod-adapter, which
+# also runs ctest).
+# ─────────────────────────────────────────────────────────────────────────
+FROM builder AS checks
+
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends \
+    wget gnupg lsb-release software-properties-common ca-certificates python3 \
+    && wget -qO- https://apt.llvm.org/llvm.sh | bash -s -- 18 \
+    && apt-get install --yes --no-install-recommends clang-tidy-18 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY .clang-tidy /app/.clang-tidy
+COPY .github/scripts/check_tidy.sh /usr/local/bin/check_tidy.sh
+RUN chmod +x /usr/local/bin/check_tidy.sh
+
+WORKDIR /app
+ENTRYPOINT ["check_tidy.sh", "--build-dir", "build-output"]
 
 # =============================================================================
 # Runtime stage - minimal image with just the binary

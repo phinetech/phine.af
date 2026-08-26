@@ -22,7 +22,7 @@ By the end of the run you will:
 |---|---|
 | Docker Engine ≥ 24.0 | With Docker Compose v2 plugin |
 | Linux host | Network interface creation requires Linux kernel capabilities |
-| `gtp5g` kernel module | Required by the UPF — see [prerequisites](prerequisites.md) |
+| `gtp5g` kernel module | Required by the UPF — see [prerequisites](01-prerequisites.md) |
 | ~8 GB free RAM | The full stack runs roughly 16 containers |
 | Free local subnets | Nothing else should be bound to `192.168.70.128/26`, `192.168.71.128/26`, or `192.168.72.128/26` |
 
@@ -372,6 +372,10 @@ Key indicators to look for:
 Collect logs from all containers after the adapter run:
 
 ```bash {"name":"collect-logs","interactive":"false"}
+# Each `runme run <name>` invocation starts a fresh shell, so setup-variables'
+# exports aren't inherited here — re-apply the same default.
+export LOGS_DIR="${LOGS_DIR:-/tmp/phine.af/adapter-qod-tutorial/logs}"
+
 ./build/scripts/ci_helper.sh collect_logs $LOGS_DIR
 echo "Logs collected to $LOGS_DIR"
 ls -la $LOGS_DIR
@@ -413,12 +417,22 @@ echo "All tshark processes stopped"
 Stop and remove all containers:
 
 ```bash {"name":"cleanup","interactive":"false"}
+# Each `runme run <name>` invocation starts a fresh shell, so setup-variables'
+# exports aren't inherited here — re-apply the same defaults.
+export CORE_PROFILE="${CORE_PROFILE:-free5gc}"
+export COMPOSE_FILE="${COMPOSE_FILE:-docker-compose/compose.yaml}"
+export COMPOSE_PROFILES="${COMPOSE_PROFILES:---profile $CORE_PROFILE --profile afs --profile standalone-qod}"
+
 docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES down
 ```
 
 To also remove built images:
 
 ```bash {"name":"cleanup-all","excludeFromRunAll":"true","interactive":"false"}
+export CORE_PROFILE="${CORE_PROFILE:-free5gc}"
+export COMPOSE_FILE="${COMPOSE_FILE:-docker-compose/compose.yaml}"
+export COMPOSE_PROFILES="${COMPOSE_PROFILES:---profile $CORE_PROFILE --profile afs --profile standalone-qod}"
+
 docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES down --rmi all
 ```
 
@@ -541,6 +555,6 @@ docker network inspect demo-oai-public-net 2>/dev/null || echo "Network not foun
 ## Next Steps
 
 - Explore the adapter source and design: [DESIGN.md](../../adapters/demo-qod-adapter/DESIGN.md)
-- Try the end-to-end QoS enforcement tutorial with `iperf3` verification: [QoS Enforcement Tutorial](qos-enforcement-tutorial.md)
+- Try the end-to-end QoS enforcement tutorial with `iperf3` verification: [HTTP QoS Enforcement Tutorial](06-qos-http-tutorial.md) or [gRPC QoS Enforcement Tutorial](07-qos-grpc-tutorial.md)
 - Learn how to add new CAMARA APIs: [Add a CAMARA API](../development/add-camara-api.md)
 - Review the architecture: [Architecture Overview](../architecture/overview.md)

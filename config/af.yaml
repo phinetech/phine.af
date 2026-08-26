@@ -59,6 +59,13 @@ nef_handler:
 udr_handler:
   enabled: false
 
+# Future southbound handlers
+nef_handler:
+  enabled: false
+
+udr_handler:
+  enabled: false
+
 # Global settings
 logging:
   level: "info"

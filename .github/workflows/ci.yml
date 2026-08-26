@@ -1,0 +1,95 @@
+name: CI
+
+# Single entry point that orchestrates every other workflow as a staged
+# pipeline: fast lint first, then the moderate Docker-based checks, then
+# coverage/security (each gated on the specific job it depends on), and
+# finally the heaviest full-network E2E suites — which only run if
+# everything above passed. The individual workflows below are reusable
+# (triggered via `workflow_call`) and are no longer triggered directly.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+      - 'feat-*'
+    # Also trigger when a draft PR is marked ready for review, so the full
+    # pipeline runs immediately without needing a new commit push.
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+jobs:
+  # ── Tier 1: fast lint, no Docker ──────────────────────────────────────────
+  format-check:
+    name: Format Check
+    uses: ./.github/workflows/code-format.yml
+    secrets: inherit
+
+  # ── Tier 2: full dependency build, no extra recompiles (parallel) ────────
+  build:
+    name: Build and Test
+    needs: [format-check]
+    # Skip on draft PRs — runs when ready for review or on branch push.
+    if: github.event.pull_request.draft != true
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+
+  checks:
+    name: Checks
+    needs: [format-check]
+    uses: ./.github/workflows/checks.yml
+    secrets: inherit
+
+  # ── Tier 3: gated on the specific Tier 2 job each depends on ──────────────
+  coverage:
+    name: Coverage
+    needs: [checks]
+    # Skip on draft PRs.
+    if: github.event.pull_request.draft != true
+    uses: ./.github/workflows/coverage.yml
+    secrets: inherit
+
+  # ── Tier 4: heaviest, full E2E — only runs if everything above passed ────
+  tutorials:
+    name: Tutorials Validation
+    needs: [build, checks, coverage]
+    # Skip on draft PRs.
+    if: github.event.pull_request.draft != true
+    uses: ./.github/workflows/test-tutorials.yml
+    secrets: inherit
+
+  # ── Tier 5: publish — only on branch pushes after full pipeline ───────────
+  publish:
+    name: Publish
+    needs: [build, checks, coverage, tutorials]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    uses: ./.github/workflows/publish.yml
+    secrets: inherit
+
+  # Single aggregate status check to use for branch protection, instead of
+  # requiring every individual job above.
+  ci-status:
+    name: CI Status
+    runs-on: ubuntu-latest
+    needs: [format-check, build, checks, coverage, tutorials, publish]
+    if: always()
+    steps:
+      - name: Check overall pipeline status
+        run: |
+          for result in \
+            "${{ needs.format-check.result }}" \
+            "${{ needs.build.result }}" \
+            "${{ needs.checks.result }}" \
+            "${{ needs.coverage.result }}" \
+            "${{ needs.tutorials.result }}" \
+            "${{ needs.publish.result }}"; do
+            if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+              echo "::error::CI pipeline failed (found result: $result)"
+              exit 1
+            fi
+          done
+          echo "✅ CI pipeline passed"

@@ -212,16 +212,97 @@ RUN cd /app/southbound/pcf_handler && \
     mkdir -p build-output && \
     cd build-output && \
     cmake .. -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+    -DBUILD_TESTING=OFF \
     -DUSE_SYSTEM_GRPC=ON \
     -DUSE_SYSTEM_PROTOBUF=ON \
     -DUSE_SYSTEM_NGHTTP2=ON \
     -DUSE_SYSTEM_NGHTTP2_ASIO=ON \
     -DUSE_SYSTEM_OPENSSL=ON \
     -DUSE_SYSTEM_BOOST=ON \
+    -DBOOST_ROOT=/usr/local \
+    -DBoost_NO_BOOST_CMAKE=ON \
     -DCMAKE_INSTALL_PREFIX=/usr/local && \
     make -j$(nproc) && \
     make install && \
     ldconfig
+
+# ─────────────────────────────────────────────────────────────────────────
+# Checks (clang-tidy + unit tests) — not part of the default build.
+# Build explicitly with: docker build --target checks ...
+# Tests run at build time; the image still builds on test failure so CI can
+# extract results.xml, and a test-exit-code file records the ctest outcome.
+# Run clang-tidy against a diff on stdin: docker run --rm -i <image> < component.diff
+# ─────────────────────────────────────────────────────────────────────────
+FROM builder AS checks
+
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends \
+    wget gnupg lsb-release software-properties-common ca-certificates python3 \
+    libgtest-dev libgmock-dev \
+    && wget -qO- https://apt.llvm.org/llvm.sh | bash -s -- 18 \
+    && apt-get install --yes --no-install-recommends clang-tidy-18 \
+    && rm -rf /var/lib/apt/lists/*
+
+# The builder stage copies src/include/CMakeLists.txt granularly (not the
+# whole pcf_handler/ dir), so tests/ was never present — add it here.
+COPY ./southbound/pcf_handler/tests /app/southbound/pcf_handler/tests/
+
+RUN cd /app/southbound/pcf_handler/build-output && \
+    cmake -DBUILD_TESTING=ON . && \
+    make -j$(nproc) test_flow_descriptions && \
+    { ctest -L unit --output-on-failure --output-junit results.xml; echo $? > test-exit-code; }
+
+COPY .clang-tidy /app/.clang-tidy
+COPY .github/scripts/check_tidy.sh /usr/local/bin/check_tidy.sh
+RUN chmod +x /usr/local/bin/check_tidy.sh
+
+WORKDIR /app
+ENTRYPOINT ["check_tidy.sh", "--build-dir", "southbound/pcf_handler/build-output"]
+
+# ─────────────────────────────────────────────────────────────────────────
+# Coverage (gcov via gcovr) — not part of the default build.
+# Build explicitly with: docker build --target coverage ...
+# ─────────────────────────────────────────────────────────────────────────
+FROM builder AS coverage
+
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends \
+    libgtest-dev libgmock-dev python3-pip \
+    && pip install --break-system-packages gcovr==8.6 \
+    && rm -rf /var/lib/apt/lists/*
+
+# The builder stage copies src/include/CMakeLists.txt granularly (not the
+# whole pcf_handler/ dir), so tests/ was never present — add it here (same
+# gap as the `tests` stage above).
+COPY ./southbound/pcf_handler/tests /app/southbound/pcf_handler/tests/
+
+RUN cd /app/southbound/pcf_handler/build-output && \
+    cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DENABLE_COVERAGE=ON . && \
+    make -j$(nproc) test_flow_descriptions && \
+    ctest -L unit --output-on-failure && \
+    gcovr --root /app/southbound/pcf_handler \
+    --exclude '.*/tests/.*' \
+    --exclude '.*/generated/.*' \
+    --print-summary \
+    --html-details coverage.html \
+    .
+
+# TODO: coverage is report-only for now (see docs/contributing.md#coverage)
+# — pcf_handler's suite only covers flow_description_utils.h, so a hard
+# threshold would block unrelated PRs. Re-enable gating once coverage here
+# is more established by uncommenting below (adjust thresholds per current
+# coverage; gcovr fails the build, and therefore the CI job, if any
+# threshold isn't met):
+# RUN cd /app/southbound/pcf_handler/build-output && \
+#     gcovr --root /app/southbound/pcf_handler \
+#           --exclude '.*/tests/.*' \
+#           --exclude '.*/generated/.*' \
+#           --fail-under-line 50 \
+#           --fail-under-function 50 \
+#           --fail-under-branch 30 \
+#           --print-summary \
+#           .
 
 # Final runtime stage
 FROM base AS runtime

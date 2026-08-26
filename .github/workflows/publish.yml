@@ -1,0 +1,95 @@
+name: Publish Images
+
+# Called from ci.yml after the full pipeline passes (branch pushes to
+# main/develop), or triggered directly by a version tag push.
+# Direct tag pushes bypass the CI gate but include a branch-containment
+# check that refuses to publish if the tagged commit isn't reachable from
+# main or develop — catching accidental tagging of unreviewed branches
+# without paying for a full pipeline re-run.
+
+on:
+  workflow_call:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  publish:
+    name: Publish (${{ matrix.component.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        component:
+          - name: af-core
+            dockerfile: af_core/Dockerfile
+            image: phinetech/af-core
+          - name: pcf-handler
+            dockerfile: southbound/pcf_handler/Dockerfile
+            image: phinetech/pcf-handler
+          - name: demo-qod-adapter
+            dockerfile: adapters/demo-qod-adapter/Dockerfile
+            image: phinetech/demo-qod-adapter
+          - name: bundled-af
+            dockerfile: Dockerfile
+            image: phinetech/af
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.CI_GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      # Guard for direct tag pushes : refuse to publish if the
+      # tagged commit isn't reachable from origin/main or origin/develop,
+      # catching the "tagged a random branch" mistake without re-running CI.
+      - name: Verify tag commit is on main or develop
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          git fetch origin main develop
+          COMMIT="${{ github.sha }}"
+          if ! git merge-base --is-ancestor "$COMMIT" origin/main && \
+             ! git merge-base --is-ancestor "$COMMIT" origin/develop; then
+            echo "::error::Tag commit $COMMIT is not reachable from origin/main or origin/develop. Refusing to publish."
+            exit 1
+          fi
+          echo "Commit $COMMIT is reachable from main/develop — proceeding."
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${{ github.ref_name }}"
+          elif [[ "${{ github.ref }}" == refs/heads/main ]]; then
+            TAG="latest"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push ${{ matrix.component.name }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.component.dockerfile }}
+          target: runtime
+          push: true
+          tags: ${{ matrix.component.image }}:${{ steps.tag.outputs.tag }}
+          cache-from: type=gha,scope=${{ matrix.component.name }}
+          cache-to: type=gha,scope=${{ matrix.component.name }},mode=max
