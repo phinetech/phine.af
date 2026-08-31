@@ -268,11 +268,11 @@ RUN ldconfig
 COPY --from=builder /app/build-output/bin/af /usr/local/bin/
 
 # Copy unified config
-COPY config/af.yaml /etc/oai/af/af.yaml
+COPY config/af.yaml /etc/phine.af/af.yaml
 
 # Create a non-root user
 RUN groupadd -r afuser && useradd -r -g afuser afuser && \
-    chown -R afuser:afuser /usr/local/bin/af /etc/oai/af
+    chown -R afuser:afuser /usr/local/bin/af /etc/phine.af
 
 WORKDIR /usr/local/bin
 RUN chmod +x ./af
@@ -282,4 +282,4 @@ USER afuser
 # Expose ports: AF Core gRPC (50051)
 EXPOSE 50051
 
-CMD ["/usr/local/bin/af", "--config", "/etc/oai/af/af.yaml"]
+CMD ["/usr/local/bin/af", "--config", "/etc/phine.af/af.yaml"]

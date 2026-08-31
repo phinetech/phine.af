@@ -1,14 +1,33 @@
 # 5G Application Function (AF) Microservice
 
+[![CI](https://github.com/phinetech/phine.af/actions/workflows/ci.yml/badge.svg)](https://github.com/phinetech/phine.af/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![CAMARA Compliant](https://img.shields.io/badge/CAMARA-Compliant-2A9D8F)](docs/apis/camara-compliance.md)
+
+**Documentation:** <https://af.phine.tech/>
+
 ## Overview
 
 This repository contains a C++ microservice-based Application Function (AF) for 5G Core Networks. The AF serves as a crucial intermediary, connecting third-party applications and services with the capabilities of the 5G network, enabling enhanced functionalities such as dynamic Quality of Service (QoS) configuration, service function chaining, and data retrieval.
+
+## CAMARA APIs
+
+phine.af exposes 3GPP network capabilities to applications through
+[CAMARA](https://camaraproject.org/) APIs. Implemented so far:
+
+| API | Spec | Status |
+|---|---|---|
+| Quality-on-Demand (QoD) | [camaraproject/QualityOnDemand](https://github.com/camaraproject/QualityOnDemand) | ✅ Implemented |
+
+See [`docs/apis/camara-compliance.md`](docs/apis/camara-compliance.md) for
+compliance details and the [status page](docs/status.md) for the full
+implementation matrix.
 
 ## Architecture
 
 The AF is designed as a modular microservice application with distinct components responsible for specific functionalities:
 
-1. **Northbound Interface Adapters**: Connect with external applications (ROS2, SFC MANO, etc.)
+1. **Northbound APIs**: Connect with external applications (ROS2, SFC MANO, etc.)
 2. **AF Core Logic**: Orchestrates the overall functionality and routes requests
 3. **Southbound Interface Handlers**: Communicate with 5G Core Network Functions (PCF, NEF, etc.)
 
@@ -16,9 +35,9 @@ The AF is designed as a modular microservice application with distinct component
 
 The project follows a strict modular design philosophy to ensure scalability, maintainability, and testability.
 
-*   **Decoupled Components**: Each component (Northbound Adapter, Core, Southbound Handler) operates independently, communicating via well-defined interfaces. This allows for replacing or upgrading individual components without affecting the rest of the system.
-*   **Protocol Agnosticism**: The AF Core logic is isolated from external communication protocols. This applies to both **Northbound Adapters** (which can support HTTP, gRPC, MQTT) and **Southbound Handlers** (which translate generic internal commands to specific 3GPP N-interface calls). The core logic remains unchanged regardless of the external protocols used.
-*   **Scalability**: Components can be deployed and scaled independently. For example, multiple Northbound Adapters can run in parallel to handle receiving high traffic loads, while a single AF Core instance manages the state.
+*   **Decoupled Components**: Each component (Northbound API, Core, Southbound Handler) operates independently, communicating via well-defined interfaces. This allows for replacing or upgrading individual components without affecting the rest of the system.
+*   **Protocol Agnosticism**: The AF Core logic is isolated from external communication protocols. This applies to both **Northbound APIs** (which can support HTTP, gRPC, MQTT) and **Southbound Handlers** (which translate generic internal commands to specific 3GPP N-interface calls). The core logic remains unchanged regardless of the external protocols used.
+*   **Scalability**: Components can be deployed and scaled independently. For example, multiple Northbound APIs can run in parallel to handle receiving high traffic loads, while a single AF Core instance manages the state.
 *   **Testability**: The clear separation allows for focused unit testing of each module and simplified integration testing using mock interfaces.
 
 ### Communication & Dependency Injection
@@ -79,7 +98,7 @@ graph RL
         AF_Core[af.core]
 
         %% Northbound Interface Group
-        subgraph NB_Interfaces [Northbound Adapters]
+        subgraph NB_Interfaces [Northbound APIs]
             direction TB
             App_Spec_API[App-specific API]
             TSN_Adapter[TSN]
@@ -239,11 +258,11 @@ graph RL
 ```
 /phine.af/
 |-- common/               # Shared utilities, models, and frameworks
-|-- northbound/           # Northbound interface adapters
+|-- northbound/           # Northbound APIs (e.g. HTTP/2 REST for CAMARA)
 |-- af_core/              # Core orchestration logic
 |-- southbound/           # 5G Core Network interface handlers
-|-- adapters/             # Demo adapter applications
-|   |-- demo-qod-adapter/ # QoD session management demo
+|-- adapters/             # Example application-side adapters
+|   |-- phine.af-demo-qod-adapter/ # QoD session management demo (ROS2 scenario)
 |-- build/                # Build scripts and configuration
 |-- tests/                # Test suites
 |-- docs/                 # Documentation
@@ -302,7 +321,7 @@ The project supports two deployment modes: **microservice** (default) and **bund
 | spdlog | any | `apt install libspdlog-dev` |
 | yaml-cpp | any | `apt install libyaml-cpp-dev` |
 | nlohmann_json | 3.11.2 | `apt install nlohmann-json3-dev` |
-| OAI CN5G Common | latest | `phinetech/oai-cn5g-common-src` Docker image |
+| OAI CN5G Common | latest | `phinetech/oai-cn5g-common-src` Docker image (upstream OAI project) |
 
 > **Tip**: The easiest way to get all dependencies is to extract them from the builder Docker images (see Docker build below).
 
@@ -377,18 +396,18 @@ Each service has its own Dockerfile for containerised deployment.
 **Build individual service images:**
 ```bash
 # Southbound PCF handler
-docker build -f southbound/pcf_handler/Dockerfile -t af-pcf-handler .
+docker build -f southbound/pcf_handler/Dockerfile -t phine.af-pcf-handler .
 
 # AF Core
-docker build -f af_core/Dockerfile -t af-core .
+docker build -f af_core/Dockerfile -t phine.af-core .
 
 # Northbound API
-docker build -f northbound/api_component/Dockerfile -t af-api .
+docker build -f northbound/api_component/Dockerfile -t phine.af-api .
 ```
 
 **Build the AF image (all-in-one):**
 ```bash
-docker build -f Dockerfile -t af .
+docker build -f Dockerfile -t phine.af .
 ```
 
 ---
@@ -427,12 +446,19 @@ docker compose -f docker-compose/compose.yaml --profile free5gc --profile afs up
 - Add a CAMARA API: [docs/development/add-camara-api.md](docs/development/add-camara-api.md)
 - Add a southbound handler: [docs/development/add-southbound-handler.md](docs/development/add-southbound-handler.md)
 
-## Contributing
-
-See [docs/contributing.md](docs/contributing.md).
-
 ## License
 
-TODO: Add a repository-level license.
+This project is licensed under the [Apache License 2.0](LICENSE). See the
+[NOTICE](NOTICE) file for attribution and standard-essential-patent (SEP)
+notes.
 
-Note: [southbound/oai-cn5g-common-src/LICENSE](southbound/oai-cn5g-common-src/LICENSE) exists for that imported component.
+The `southbound/oai-cn5g-common-src/` directory is an upstream git submodule
+from the OAI CN5G project and retains its own
+[LICENSE](southbound/oai-cn5g-common-src/LICENSE).
+
+## Contributing
+
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) — it covers the DCO
+sign-off requirement, the draft-PR-first workflow, and how to run local
+checks before requesting review. See also [docs/contributing.md](docs/contributing.md)
+for the full CI / format / test reference.

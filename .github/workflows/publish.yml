@@ -26,18 +26,18 @@ jobs:
       fail-fast: false
       matrix:
         component:
-          - name: af-core
+          - name: phine.af-core
             dockerfile: af_core/Dockerfile
-            image: phinetech/af-core
+            image: phinetech/phine.af-core
           - name: pcf-handler
             dockerfile: southbound/pcf_handler/Dockerfile
-            image: phinetech/pcf-handler
-          - name: demo-qod-adapter
+            image: phinetech/phine.af-pcf-handler
+          - name: phine.af-demo-qod-adapter
             dockerfile: adapters/demo-qod-adapter/Dockerfile
-            image: phinetech/demo-qod-adapter
+            image: phinetech/phine.af-phine.af-demo-qod-adapter
           - name: bundled-af
             dockerfile: Dockerfile
-            image: phinetech/af
+            image: phinetech/phine.af
 
     steps:
       - name: Checkout code

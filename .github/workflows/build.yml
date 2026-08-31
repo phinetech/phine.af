@@ -17,11 +17,11 @@ jobs:
       fail-fast: false
       matrix:
         component:
-          - name: af-core
+          - name: phine.af-core
             dockerfile: af_core/Dockerfile
           - name: pcf-handler
             dockerfile: southbound/pcf_handler/Dockerfile
-          - name: demo-qod-adapter
+          - name: phine.af-demo-qod-adapter
             dockerfile: adapters/demo-qod-adapter/Dockerfile
           - name: bundled-af
             dockerfile: Dockerfile

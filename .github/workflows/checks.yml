@@ -20,7 +20,7 @@ jobs:
           # is not wired into CI yet (see build.yml). af_core's only other
           # suite (tests/integration) needs a full 5G network and stays in
           # integration-tests.yml, not here.
-          - name: af-core
+          - name: phine.af-core
             dockerfile: af_core/Dockerfile
             diff_path: af_core
             has_tests: true
@@ -30,7 +30,7 @@ jobs:
             diff_path: southbound/pcf_handler
             has_tests: true
             results_path: /app/southbound/pcf_handler/build-output/results.xml
-          - name: demo-qod-adapter
+          - name: phine.af-demo-qod-adapter
             dockerfile: adapters/demo-qod-adapter/Dockerfile
             diff_path: adapters/demo-qod-adapter
             has_tests: true

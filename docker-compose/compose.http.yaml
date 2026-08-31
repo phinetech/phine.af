@@ -26,10 +26,10 @@ services:
   # --- Bundled AF topology (--profile af) ---
   # Base service mounts conf/af.yaml and publishes 50051, but the overridden
   # `command` points the binary at the HTTP config, so af_core listens on 8080.
-  af:
+  phine.af:
     volumes:
-      - ./conf/af.http.yaml:/etc/oai/af/af.http.yaml
-    command: [ "/usr/local/bin/af", "--config", "/etc/oai/af/af.http.yaml" ]
+      - ./conf/af.http.yaml:/etc/phine.af/af.http.yaml
+    command: [ "/usr/local/bin/af", "--config", "/etc/phine.af/af.http.yaml" ]
     expose:
       - 8080/tcp
     ports:
@@ -41,8 +41,8 @@ services:
   # on 8080 and dials the handler at pcf_handler:8085.
   af_core:
     volumes:
-      - ./conf/af_core.http.yaml:/etc/oai/af/af_core.http.yaml
-    command: [ "/usr/local/bin/af_core", "--config", "/etc/oai/af/af_core.http.yaml" ]
+      - ./conf/af_core.http.yaml:/etc/phine.af/af_core.http.yaml
+    command: [ "/usr/local/bin/af_core", "--config", "/etc/phine.af/af_core.http.yaml" ]
     expose:
       - 8080/tcp
     ports:
@@ -52,8 +52,8 @@ services:
   # binding an h2c server on 8085 that af_core dials at pcf_handler:8085.
   pcf_handler:
     volumes:
-      - ./conf/pcf_handler.http.yaml:/etc/oai/af/pcf_handler.http.yaml
-    command: [ "/usr/local/bin/pcf_server", "--config", "/etc/oai/af/pcf_handler.http.yaml" ]
+      - ./conf/pcf_handler.http.yaml:/etc/phine.af/pcf_handler.http.yaml
+    command: [ "/usr/local/bin/pcf_server", "--config", "/etc/phine.af/pcf_handler.http.yaml" ]
     expose:
       - 8085/tcp
 
@@ -62,6 +62,6 @@ services:
   af-client:
     image: curlimages/curl:8.10.1
     command: >
-      --http2-prior-knowledge -sS -X POST -H "content-type: application/json" --data "@${PAYLOAD_FILE:-/requests/qod_create_session.json}" "http://${AF_HOST:-af-core}:8080/quality-on-demand/v1/sessions"
+      --http2-prior-knowledge -sS -X POST -H "content-type: application/json" --data "@${PAYLOAD_FILE:-/requests/qod_create_session.json}" "http://${AF_HOST:-phine.af-core}:8080/quality-on-demand/v1/sessions"
     volumes:
       - ../af_core/tests/requests/qod:/requests:ro

@@ -15,5 +15,5 @@ pcf_handler:
   communication:
     server_address: "0.0.0.0"
     server_port: "50055"
-    core_address: "af-core"
+    core_address: "phine.af-core"
     core_port: "50051"

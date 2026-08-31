@@ -65,7 +65,7 @@ graph RL
         AF_Core[af.core]
 
         %% Northbound Interface Group
-        subgraph NB_Interfaces [Northbound Adapters]
+        subgraph NB_Interfaces [Northbound APIs]
             direction TB
             App_Spec_API[App-specific API]
             TSN_Adapter[TSN]

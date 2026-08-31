@@ -19,7 +19,7 @@ jobs:
           # Same scope as unit-tests.yml — northbound has no unit suite,
           # and af_core's tests/integration suite needs a full 5G network
           # and isn't instrumented here.
-          - name: af-core
+          - name: phine.af-core
             dockerfile: af_core/Dockerfile
             diff-path: af_core
             report-path: /app/build-output/coverage.html
@@ -27,7 +27,7 @@ jobs:
             dockerfile: southbound/pcf_handler/Dockerfile
             diff-path: southbound/pcf_handler
             report-path: /app/southbound/pcf_handler/build-output/coverage.html
-          - name: demo-qod-adapter
+          - name: phine.af-demo-qod-adapter
             dockerfile: adapters/demo-qod-adapter/Dockerfile
             diff-path: adapters/demo-qod-adapter
             report-path: /app/adapters/demo-qod-adapter/build/coverage.html

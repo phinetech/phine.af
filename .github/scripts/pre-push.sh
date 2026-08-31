@@ -19,7 +19,7 @@
 #                          (needs a fresh -O0 recompile, not an incremental
 #                          add-on like checks).
 #   --component <name>     Restrict the Docker tier to one component
-#                          (af-core|pcf-handler|demo-qod-adapter|bundled-af)
+#                          (phine.af-core|pcf-handler|phine.af-demo-qod-adapter|bundled-af)
 #                          instead of auto-detecting from the diff. Useful
 #                          when you know exactly what you touched and don't
 #                          want to wait on the diff-based skip logic.
@@ -102,9 +102,9 @@ else
 
     # name:dockerfile:diff-path — used for checks and build.
     COMPONENTS=(
-        "af-core:af_core/Dockerfile:af_core"
+        "phine.af-core:af_core/Dockerfile:af_core"
         "pcf-handler:southbound/pcf_handler/Dockerfile:southbound/pcf_handler"
-        "demo-qod-adapter:adapters/demo-qod-adapter/Dockerfile:adapters/demo-qod-adapter"
+        "phine.af-demo-qod-adapter:adapters/demo-qod-adapter/Dockerfile:adapters/demo-qod-adapter"
     )
     # Tidy-only — src/ (the bundled runtime) has no unit-test suite, so its
     # `checks` stage is clang-tidy only (see checks.yml's has_tests: false).

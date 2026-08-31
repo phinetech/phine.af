@@ -25,10 +25,10 @@ services:
   # --- Bundled AF topology (--profile af) ---
   # Base service mounts conf/af.yaml and publishes 8080, but the overridden
   # `command` points the binary at the gRPC config, so af_core listens on 50051.
-  af:
+  phine.af:
     volumes:
-      - ./conf/af.grpc.yaml:/etc/oai/af/af.grpc.yaml
-    command: ["/usr/local/bin/af", "--config", "/etc/oai/af/af.grpc.yaml"]
+      - ./conf/af.grpc.yaml:/etc/phine.af/af.grpc.yaml
+    command: ["/usr/local/bin/af", "--config", "/etc/phine.af/af.grpc.yaml"]
     expose:
       - 50051/tcp
     ports:
@@ -40,8 +40,8 @@ services:
   # on 50051 and dials the handler at pcf_handler:50052.
   af_core:
     volumes:
-      - ./conf/af_core.grpc.yaml:/etc/oai/af/af_core.grpc.yaml
-    command: ["/usr/local/bin/af_core", "--config", "/etc/oai/af/af_core.grpc.yaml"]
+      - ./conf/af_core.grpc.yaml:/etc/phine.af/af_core.grpc.yaml
+    command: ["/usr/local/bin/af_core", "--config", "/etc/phine.af/af_core.grpc.yaml"]
     expose:
       - 50051/tcp
     ports:
@@ -51,8 +51,8 @@ services:
   # binding a gRPC server on 50052 that af_core dials at pcf_handler:50052.
   pcf_handler:
     volumes:
-      - ./conf/pcf_handler.grpc.yaml:/etc/oai/af/pcf_handler.grpc.yaml
-    command: ["/usr/local/bin/pcf_server", "--config", "/etc/oai/af/pcf_handler.grpc.yaml"]
+      - ./conf/pcf_handler.grpc.yaml:/etc/phine.af/pcf_handler.grpc.yaml
+    command: ["/usr/local/bin/pcf_server", "--config", "/etc/phine.af/pcf_handler.grpc.yaml"]
     expose:
       - 50052/tcp
 

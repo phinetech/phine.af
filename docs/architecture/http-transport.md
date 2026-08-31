@@ -560,7 +560,7 @@ core_comm_                        // Server + Client: accepts from AF Core AND s
 pcf_gateway_                      // Client-only: sends raw HTTP/2 to external PCF (via send_http)
 ```
 
-> **Note:** AF Core's `"main"` service is the single entry point for all inbound messages — from northbound adapters *and* from southbound handlers sending notifications. The `"pcf"` client is used only for outbound request/response calls.
+> **Note:** AF Core's `"main"` service is the single entry point for all inbound messages — from northbound APIs *and* from southbound handlers sending notifications. The `"pcf"` client is used only for outbound request/response calls.
 
 ### Configuration-Driven Transport Selection
 

@@ -291,11 +291,11 @@ RUN ln -sf /usr/local/lib/libssl.so /usr/local/lib/libssl.so.3 && \
 # Copy build artifacts
 COPY --from=builder /app/build-output/bin/af_core /usr/local/bin/
 
-COPY af_core/config/af_core.yaml /etc/oai/af/af_core.yaml
+COPY af_core/config/af_core.yaml /etc/phine.af/af_core.yaml
 
 # Create a non-root user
 RUN groupadd -r apiuser && useradd -r -g apiuser apiuser && \
-    chown -R apiuser:apiuser /usr/local/bin/af_core /etc/oai/af
+    chown -R apiuser:apiuser /usr/local/bin/af_core /etc/phine.af
 
 # Set working directory
 WORKDIR /usr/local/bin
@@ -310,4 +310,4 @@ USER apiuser
 EXPOSE 8080
 
 # Command to run
-CMD ["/usr/local/bin/af_core", "--config", "/etc/oai/af/af_core.yaml"]
+CMD ["/usr/local/bin/af_core", "--config", "/etc/phine.af/af_core.yaml"]

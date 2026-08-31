@@ -15,5 +15,5 @@ api_component:
   communication:
     server_address: "0.0.0.0"
     server_port: "50061"
-    core_address: "af-core"
+    core_address: "phine.af-core"
     core_port: "50051"

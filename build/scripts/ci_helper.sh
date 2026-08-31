@@ -7,7 +7,7 @@ set -e
 
 function install_dependencies() {
     echo "Checking for required dependencies..."
-    if ! command -v curl &> /dev/null; then
+    if ! command -v curl &>/dev/null; then
         echo "curl not found, installing..."
         sudo apt-get update && sudo apt-get install -y curl
         echo "curl installed successfully."
@@ -15,7 +15,7 @@ function install_dependencies() {
         echo "curl is already installed."
     fi
 
-    if ! command -v grpcurl &> /dev/null; then
+    if ! command -v grpcurl &>/dev/null; then
         echo "grpcurl not found, installing..."
         sudo snap install --edge grpcurl
         echo "grpcurl installed successfully."
@@ -93,7 +93,7 @@ function wait_for_nrf() {
         NRF_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' nrf 2>/dev/null || true)
 
         if [ -n "$NRF_IP" ]; then
-            if curl -s "http://${NRF_IP}:8000/nnrf-nfm/v1/nf-instances" > /dev/null 2>&1; then
+            if curl -s "http://${NRF_IP}:8000/nnrf-nfm/v1/nf-instances" >/dev/null 2>&1; then
                 echo "NRF is ready!"
                 return 0
             fi
@@ -114,8 +114,8 @@ function wait_for_af() {
     for i in $(seq 1 $retries); do
         local AF_CONTAINER=""
 
-        if docker ps -a --format '{{.Names}}' | grep -q '^af-core$'; then
-            AF_CONTAINER="af-core"
+        if docker ps -a --format '{{.Names}}' | grep -q '^phine.af-core$'; then
+            AF_CONTAINER="phine.af-core"
         elif docker ps -a --format '{{.Names}}' | grep -q '^af$'; then
             AF_CONTAINER="af"
         fi
@@ -127,7 +127,7 @@ function wait_for_af() {
         fi
 
         if [ -n "$AF_IP" ]; then
-            if grpcurl -plaintext "${AF_IP}:50051" list > /dev/null 2>&1; then
+            if grpcurl -plaintext "${AF_IP}:50051" list >/dev/null 2>&1; then
                 echo "AF gRPC endpoint is ready (${AF_CONTAINER})!"
                 return 0
             fi
@@ -146,16 +146,16 @@ function collect_logs() {
     echo "Collecting container logs to: $LOG_DIR"
 
     # Collect overall container status
-    echo "=== Status of all containers ===" > "$LOG_DIR/container_status.log"
-    docker ps -a >> "$LOG_DIR/container_status.log" 2>&1 || echo "Failed to get container status"
+    echo "=== Status of all containers ===" >"$LOG_DIR/container_status.log"
+    docker ps -a >>"$LOG_DIR/container_status.log" 2>&1 || echo "Failed to get container status"
 
     # List of containers
     local CONTAINERS=(
         "af:af.log"
-        "af-core:af_core.log"
-        "af-north-api:api_component.log"
-        "af-pcf-handler:pcf_handler.log"
-        "af-demo-qod:af_demo_qod.log"
+        "phine.af-core:af_core.log"
+        "phine.af-api:api_component.log"
+        "phine.af-pcf-handler:pcf_handler.log"
+        "phine.af-demo-qod:af_demo_qod.log"
         "af-integration-tests:integration_tests.log"
         "demo-qod-adapter:demo_qod_adapter.log"
         "pcf:pcf.log"
@@ -177,12 +177,12 @@ function collect_logs() {
         local log_file="${entry##*:}"
 
         echo "Collecting logs for $container_name..."
-        echo "=== $container_name Logs ===" > "$LOG_DIR/$log_file"
+        echo "=== $container_name Logs ===" >"$LOG_DIR/$log_file"
 
         if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}$"; then
-            docker logs "$container_name" >> "$LOG_DIR/$log_file" 2>&1 || echo "Failed to get $container_name logs"
+            docker logs "$container_name" >>"$LOG_DIR/$log_file" 2>&1 || echo "Failed to get $container_name logs"
         else
-            echo "Container $container_name not found" >> "$LOG_DIR/$log_file"
+            echo "Container $container_name not found" >>"$LOG_DIR/$log_file"
         fi
     done
 }
@@ -193,7 +193,7 @@ function parse_results() {
     if [ -f "$RESULTS_FILE" ]; then
         echo "Test results found!"
         # Display summary
-        if command -v xmllint > /dev/null; then
+        if command -v xmllint >/dev/null; then
             xmllint --format "$RESULTS_FILE" | grep -E "(tests=|failures=|errors=)" || true
         fi
         cat "$RESULTS_FILE"
@@ -353,37 +353,37 @@ function build_standalone() {
 
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --clean)
-                CLEAN=1
-                shift
-                ;;
-            --debug)
-                BUILD_TYPE="Debug"
-                shift
-                ;;
-            --tests)
-                BUILD_TESTS=1
-                shift
-                ;;
-            --install)
-                INSTALL=1
-                shift
-                ;;
-            --help)
-                echo "Usage: $0 build_standalone [options]"
-                echo "Options:"
-                echo "  --clean        Clean build directory before building"
-                echo "  --debug        Build in debug mode"
-                echo "  --tests        Build tests"
-                echo "  --install      Install after building"
-                echo "  --help         Show this help message"
-                exit 0
-                ;;
-            *)
-                echo "Unknown option: $1"
-                echo "Use --help for usage information"
-                exit 1
-                ;;
+        --clean)
+            CLEAN=1
+            shift
+            ;;
+        --debug)
+            BUILD_TYPE="Debug"
+            shift
+            ;;
+        --tests)
+            BUILD_TESTS=1
+            shift
+            ;;
+        --install)
+            INSTALL=1
+            shift
+            ;;
+        --help)
+            echo "Usage: $0 build_standalone [options]"
+            echo "Options:"
+            echo "  --clean        Clean build directory before building"
+            echo "  --debug        Build in debug mode"
+            echo "  --tests        Build tests"
+            echo "  --install      Install after building"
+            echo "  --help         Show this help message"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
         esac
     done
 
@@ -410,8 +410,8 @@ function build_standalone() {
 
     echo "Configuring CMake..."
     cmake -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-          -DBUILD_TESTS=$([[ $BUILD_TESTS -eq 1 ]] && echo "ON" || echo "OFF") \
-          "${PROJECT_ROOT}"
+        -DBUILD_TESTS=$([[ $BUILD_TESTS -eq 1 ]] && echo "ON" || echo "OFF") \
+        "${PROJECT_ROOT}"
 
     echo "Building..."
     cmake --build . -- -j${JOBS}
@@ -495,48 +495,48 @@ function run_all_local_validation() {
 }
 
 case "$COMMAND" in
-    install_dependencies)
-        install_dependencies
-        ;;
-    install_gtp5g)
-        install_gtp5g
-        ;;
-    check_submodules)
-        check_submodules
-        ;;
-    wait_for_nrf)
-        wait_for_nrf
-        ;;
-    wait_for_af)
-        wait_for_af
-        ;;
-    collect_logs)
-        collect_logs "$@"
-        ;;
-    cleanup_services)
-        cleanup_services
-        ;;
-    build)
-        build_image "$@"
-        ;;
-    build_all)
-        build_all_images "$@"
-        ;;
-    build_standalone)
-        build_standalone "$@"
-        ;;
-    run_adapter_test)
-        run_adapter_test
-        ;;
-    parse_results)
-        parse_results "$@"
-        ;;
-    "")
-        # Default behavior if no command provided
-        run_all_local_validation
-        ;;
-    *)
-        echo "Usage: $0 {check_submodules|install_dependencies|install_gtp5g|wait_for_nrf|wait_for_af|collect_logs|parse_results|cleanup_services|build|build_all|build_standalone|run_adapter_test}"
-        exit 1
-        ;;
+install_dependencies)
+    install_dependencies
+    ;;
+install_gtp5g)
+    install_gtp5g
+    ;;
+check_submodules)
+    check_submodules
+    ;;
+wait_for_nrf)
+    wait_for_nrf
+    ;;
+wait_for_af)
+    wait_for_af
+    ;;
+collect_logs)
+    collect_logs "$@"
+    ;;
+cleanup_services)
+    cleanup_services
+    ;;
+build)
+    build_image "$@"
+    ;;
+build_all)
+    build_all_images "$@"
+    ;;
+build_standalone)
+    build_standalone "$@"
+    ;;
+run_adapter_test)
+    run_adapter_test
+    ;;
+parse_results)
+    parse_results "$@"
+    ;;
+"")
+    # Default behavior if no command provided
+    run_all_local_validation
+    ;;
+*)
+    echo "Usage: $0 {check_submodules|install_dependencies|install_gtp5g|wait_for_nrf|wait_for_af|collect_logs|parse_results|cleanup_services|build|build_all|build_standalone|run_adapter_test}"
+    exit 1
+    ;;
 esac

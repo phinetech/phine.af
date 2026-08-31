@@ -74,7 +74,7 @@ In bundled mode, the adapter starts automatically inside `af`.
 
 By default the bundled adapter reads its own config from:
 
-- `/etc/oai/af/demo_qod_adapter.yaml`, or
+- `/etc/phine.af/demo_qod_adapter.yaml`, or
 - the path in `PHINE_DEMO_QOD_ADAPTER_CONFIG`
 
 It also supports a future `demo_qod_adapter:` section inside `af.yaml`.
@@ -103,8 +103,8 @@ docker compose -f docker-compose/compose.yaml --profile free5gc --profile demo-q
 
 The bundled image copies:
 
-- `config/af.yaml` to `/etc/oai/af/af.yaml`
-- `adapters/demo-qod-adapter/config.yaml` to `/etc/oai/af/demo_qod_adapter.yaml`
+- `config/af.yaml` to `/etc/phine.af/af.yaml`
+- `adapters/demo-qod-adapter/config.yaml` to `/etc/phine.af/demo_qod_adapter.yaml`
 
 The documented Compose entrypoint is:
 

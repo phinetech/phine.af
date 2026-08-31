@@ -14,7 +14,7 @@ namespace af {
 namespace core {
 
 PolicyManager::PolicyManager(std::shared_ptr<UeStateManager> ue_state_manager)
-        : ue_state_manager_(ue_state_manager) {
+    : ue_state_manager_(std::move(ue_state_manager)) {
     // Setup logger
     initializeLogger(spdlog::level::debug);
 
@@ -46,9 +46,7 @@ void PolicyManager::initialize(AfOrchestrator* orchestrator) {
     logger_->info("Policy Manager initialized");
 }
 
-af::communication::MessagePtr PolicyManager::handle_qos_request(
-    const af::communication::MessagePtr& message) {
-
+af::communication::MessagePtr PolicyManager::handle_qos_request(const af::communication::MessagePtr& message) {
     logger_->info("Handling QoS request");
 
     try {
@@ -57,7 +55,7 @@ af::communication::MessagePtr PolicyManager::handle_qos_request(
         auto policy_data = nlohmann::json::parse(payload_str);
 
         // Check if this is a create, update, or delete operation
-        std::string operation = "create";  // Default to create
+        std::string operation = "create"; // Default to create
 
         if (policy_data.contains("operation")) {
             operation = policy_data["operation"];
@@ -73,17 +71,13 @@ af::communication::MessagePtr PolicyManager::handle_qos_request(
             response->correlation_id = message->correlation_id;
 
             // Convert policy to JSON and set as payload
-            nlohmann::json result = {
-                {"policy_id", policy.id},
-                {"state", policy.state}
-            };
+            nlohmann::json result = {{"policy_id", policy.id}, {"state", policy.state}};
 
             std::string result_str = result.dump();
             response->payload.assign(result_str.begin(), result_str.end());
 
             return response;
-        }
-        else if (operation == "update") {
+        } else if (operation == "update") {
             if (!policy_data.contains("policy_id")) {
                 throw std::runtime_error("Missing policy_id for update operation");
             }
@@ -99,29 +93,22 @@ af::communication::MessagePtr PolicyManager::handle_qos_request(
                 response->message_type = "qos_success";
 
                 auto policy_opt = get_policy(policy_id);
-                nlohmann::json result = {
-                    {"policy_id", policy_id},
-                    {"state", policy_opt ? policy_opt->state : "unknown"}
-                };
+                nlohmann::json result = {{"policy_id", policy_id},
+                                         {"state", policy_opt ? policy_opt->state : "unknown"}};
 
                 std::string result_str = result.dump();
                 response->payload.assign(result_str.begin(), result_str.end());
-            }
-            else {
+            } else {
                 response->message_type = "qos_error";
 
-                nlohmann::json result = {
-                    {"error", "update_failed"},
-                    {"message", "Failed to update policy"}
-                };
+                nlohmann::json result = {{"error", "update_failed"}, {"message", "Failed to update policy"}};
 
                 std::string result_str = result.dump();
                 response->payload.assign(result_str.begin(), result_str.end());
             }
 
             return response;
-        }
-        else if (operation == "delete") {
+        } else if (operation == "delete") {
             if (!policy_data.contains("policy_id")) {
                 throw std::runtime_error("Missing policy_id for delete operation");
             }
@@ -136,33 +123,24 @@ af::communication::MessagePtr PolicyManager::handle_qos_request(
             if (success) {
                 response->message_type = "qos_success";
 
-                nlohmann::json result = {
-                    {"policy_id", policy_id},
-                    {"state", "deleted"}
-                };
+                nlohmann::json result = {{"policy_id", policy_id}, {"state", "deleted"}};
 
                 std::string result_str = result.dump();
                 response->payload.assign(result_str.begin(), result_str.end());
-            }
-            else {
+            } else {
                 response->message_type = "qos_error";
 
-                nlohmann::json result = {
-                    {"error", "delete_failed"},
-                    {"message", "Failed to delete policy"}
-                };
+                nlohmann::json result = {{"error", "delete_failed"}, {"message", "Failed to delete policy"}};
 
                 std::string result_str = result.dump();
                 response->payload.assign(result_str.begin(), result_str.end());
             }
 
             return response;
-        }
-        else {
+        } else {
             throw std::runtime_error("Unknown operation: " + operation);
         }
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         logger_->error("Error handling QoS request: {}", e.what());
 
         // Create error response
@@ -170,10 +148,7 @@ af::communication::MessagePtr PolicyManager::handle_qos_request(
         response->message_type = "qos_error";
         response->correlation_id = message->correlation_id;
 
-        nlohmann::json error = {
-            {"error", "bad_request"},
-            {"message", e.what()}
-        };
+        nlohmann::json error = {{"error", "bad_request"}, {"message", e.what()}};
 
         std::string error_str = error.dump();
         response->payload.assign(error_str.begin(), error_str.end());
@@ -207,36 +182,34 @@ QoSPolicy PolicyManager::create_policy(const nlohmann::json& policy_data) {
         if (policy_data.contains("flow_direction")) {
             policy.flow_direction = policy_data["flow_direction"];
         } else {
-            policy.flow_direction = "bidirectional";  // Default
+            policy.flow_direction = "bidirectional"; // Default
         }
 
         if (policy_data.contains("qos_reference")) {
             policy.qos_reference = policy_data["qos_reference"];
         } else {
-            policy.qos_reference = 9;  // Default 5QI
+            policy.qos_reference = 9; // Default 5QI
         }
 
         if (policy_data.contains("guaranteed_bandwidth")) {
             policy.guaranteed_bandwidth = policy_data["guaranteed_bandwidth"];
         } else {
-            policy.guaranteed_bandwidth = 0;  // Default
+            policy.guaranteed_bandwidth = 0; // Default
         }
 
         if (policy_data.contains("maximum_bandwidth")) {
             policy.maximum_bandwidth = policy_data["maximum_bandwidth"];
         } else {
-            policy.maximum_bandwidth = 0;  // Default
+            policy.maximum_bandwidth = 0; // Default
         }
 
         // Extract any additional parameters
         if (policy_data.contains("additional_params") && policy_data["additional_params"].is_object()) {
             for (auto& [key, value] : policy_data["additional_params"].items()) {
-                policy.additional_params[key] = value.is_string() ?
-                    value.get<std::string>() : value.dump();
+                policy.additional_params[key] = value.is_string() ? value.get<std::string>() : value.dump();
             }
         }
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         logger_->error("Error parsing policy data: {}", e.what());
         throw std::runtime_error("Invalid policy data: " + std::string(e.what()));
     }
@@ -257,8 +230,7 @@ QoSPolicy PolicyManager::create_policy(const nlohmann::json& policy_data) {
 
         logger_->info("Created QoS policy with ID: {}", policy.id);
         return policy;
-    }
-    else {
+    } else {
         policy.state = "error";
         policy.error_reason = "Failed to apply policy to network";
 
@@ -271,8 +243,7 @@ QoSPolicy PolicyManager::create_policy(const nlohmann::json& policy_data) {
     }
 }
 
-bool PolicyManager::update_policy(const std::string& policy_id,
-                                 const nlohmann::json& policy_data) {
+bool PolicyManager::update_policy(const std::string& policy_id, const nlohmann::json& policy_data) {
     logger_->info("Updating QoS policy: {}", policy_id);
 
     // Find the existing policy
@@ -285,7 +256,7 @@ bool PolicyManager::update_policy(const std::string& policy_id,
     }
 
     QoSPolicy& policy = it->second;
-    QoSPolicy old_policy = policy;  // Save for rollback
+    QoSPolicy old_policy = policy; // Save for rollback
 
     // Update policy fields
     try {
@@ -320,12 +291,10 @@ bool PolicyManager::update_policy(const std::string& policy_id,
         // Update additional parameters
         if (policy_data.contains("additional_params") && policy_data["additional_params"].is_object()) {
             for (auto& [key, value] : policy_data["additional_params"].items()) {
-                policy.additional_params[key] = value.is_string() ?
-                    value.get<std::string>() : value.dump();
+                policy.additional_params[key] = value.is_string() ? value.get<std::string>() : value.dump();
             }
         }
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         logger_->error("Error updating policy data: {}", e.what());
         return false;
     }
@@ -333,7 +302,7 @@ bool PolicyManager::update_policy(const std::string& policy_id,
     // Validate the updated policy
     if (!validate_policy(policy)) {
         logger_->error("Invalid policy configuration after update");
-        policy = old_policy;  // Rollback to previous state
+        policy = old_policy; // Rollback to previous state
         return false;
     }
 
@@ -343,10 +312,9 @@ bool PolicyManager::update_policy(const std::string& policy_id,
     if (apply_policy(policy)) {
         logger_->info("Successfully updated QoS policy: {}", policy_id);
         return true;
-    }
-    else {
+    } else {
         logger_->error("Failed to apply updated QoS policy: {}", policy_id);
-        policy = old_policy;  // Rollback to previous state
+        policy = old_policy; // Rollback to previous state
         return false;
     }
 }
@@ -371,8 +339,7 @@ bool PolicyManager::delete_policy(const std::string& policy_id) {
         policies_.erase(it);
         logger_->info("Successfully deleted QoS policy: {}", policy_id);
         return true;
-    }
-    else {
+    } else {
         logger_->error("Failed to remove QoS policy from network: {}", policy_id);
         return false;
     }
@@ -410,8 +377,7 @@ bool PolicyManager::validate_policy(const QoSPolicy& policy) {
     }
 
     // Validate flow direction
-    if (policy.flow_direction != "uplink" &&
-        policy.flow_direction != "downlink" &&
+    if (policy.flow_direction != "uplink" && policy.flow_direction != "downlink" &&
         policy.flow_direction != "bidirectional") {
         logger_->error("Invalid flow direction: {}", policy.flow_direction);
         return false;
@@ -435,8 +401,8 @@ bool PolicyManager::validate_policy(const QoSPolicy& policy) {
     }
 
     if (policy.maximum_bandwidth > 0 && policy.guaranteed_bandwidth > policy.maximum_bandwidth) {
-        logger_->error("Guaranteed bandwidth ({}) cannot exceed maximum bandwidth ({})",
-                      policy.guaranteed_bandwidth, policy.maximum_bandwidth);
+        logger_->error("Guaranteed bandwidth ({}) cannot exceed maximum bandwidth ({})", policy.guaranteed_bandwidth,
+                       policy.maximum_bandwidth);
         return false;
     }
 
@@ -454,15 +420,15 @@ bool PolicyManager::apply_policy(QoSPolicy& policy) {
     logger_->debug("Orchestrator is initialized");
     // Get PCF communication service
     auto& comm_services = orchestrator_->get_communication_services();
-        logger_->debug("Available communication services:");
+    logger_->debug("Available communication services:");
     auto pcf_comm_it = comm_services.find("pcf");
-        logger_->debug("Communication services count: {}", comm_services.size());
+    logger_->debug("Communication services count: {}", comm_services.size());
 
     if (pcf_comm_it == comm_services.end() || !pcf_comm_it->second) {
         logger_->error("PCF communication service not available");
         return false;
     }
-        logger_->debug("PCF communication service found");
+    logger_->debug("PCF communication service found");
 
     auto& pcf_comm = pcf_comm_it->second;
     const auto& pcf_destination = orchestrator_->get_pcf_destination();
@@ -474,10 +440,8 @@ bool PolicyManager::apply_policy(QoSPolicy& policy) {
 
     try {
         // Create application session request
-        nlohmann::json app_session_request = {
-            {"af_app_id", policy.app_id.empty() ? "default_app" : policy.app_id},
-            {"operation", "create"}
-        };
+        nlohmann::json app_session_request = {{"af_app_id", policy.app_id.empty() ? "default_app" : policy.app_id},
+                                              {"operation", "create"}};
 
         // Add UE information if available
         if (!policy.ue_ipv4.empty()) {
@@ -527,7 +491,6 @@ bool PolicyManager::apply_policy(QoSPolicy& policy) {
         // Add flow information if available
         if (!policy.additional_params.empty() &&
             policy.additional_params.find("flow_descriptions") != policy.additional_params.end()) {
-
             nlohmann::json flow_descriptions;
             try {
                 flow_descriptions = nlohmann::json::parse(policy.additional_params.at("flow_descriptions"));
@@ -537,10 +500,7 @@ bool PolicyManager::apply_policy(QoSPolicy& policy) {
             }
 
             nlohmann::json flows = nlohmann::json::array();
-            flows.push_back({
-                {"flow_id", "1"},
-                {"flow_descriptions", flow_descriptions}
-            });
+            flows.push_back({{"flow_id", "1"}, {"flow_descriptions", flow_descriptions}});
 
             media_component["flows"] = flows;
         }
@@ -550,14 +510,8 @@ bool PolicyManager::apply_policy(QoSPolicy& policy) {
 
         // Add subscription information for notifications
         app_session_request["subscription_info"] = {
-            {"notification_uri", "http://af-core:50051/notifications"},
-            {"events", nlohmann::json::array({
-                {
-                    {"event", "QOS_NOTIF"},
-                    {"notification_method", "EVENT_DETECTION"}
-                }
-            })}
-        };
+            {"notification_uri", "http://phine.af-core:50051/notifications"},
+            {"events", nlohmann::json::array({{{"event", "QOS_NOTIF"}, {"notification_method", "EVENT_DETECTION"}}})}};
 
         // Add any additional parameters
         if (!policy.additional_params.empty()) {
@@ -576,7 +530,7 @@ bool PolicyManager::apply_policy(QoSPolicy& policy) {
         // Create message to send to PCF Handler
         auto msg = std::make_shared<af::communication::Message>();
         msg->message_type = "pcf_create_app_session";
-        msg->correlation_id = policy.id;  // Use policy ID as correlation ID
+        msg->correlation_id = policy.id; // Use policy ID as correlation ID
 
         // Convert request to string and set as payload
         std::string payload = app_session_request.dump();
@@ -607,8 +561,7 @@ bool PolicyManager::apply_policy(QoSPolicy& policy) {
 
                 logger_->info("QoS policy applied successfully: {}", policy.id);
                 return true;
-            }
-            else if (response->message_type == "pcf_error") {
+            } else if (response->message_type == "pcf_error") {
                 // Extract error details
                 std::string error_str(response->payload.begin(), response->payload.end());
                 auto error_json = nlohmann::json::parse(error_str);
@@ -622,22 +575,19 @@ bool PolicyManager::apply_policy(QoSPolicy& policy) {
                 policy.state = "error";
                 policy.error_reason = "PCF error: " + error_message;
                 return false;
-            }
-            else {
+            } else {
                 logger_->error("Unexpected response type: {}", response->message_type);
                 policy.state = "error";
                 policy.error_reason = "Unexpected response from PCF Handler";
                 return false;
             }
-        }
-        else {
+        } else {
             logger_->error("No response received from PCF Handler");
             policy.state = "error";
             policy.error_reason = "No response from PCF Handler";
             return false;
         }
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         logger_->error("Error applying policy to PCF: {}", e.what());
         policy.state = "error";
         policy.error_reason = "Exception: " + std::string(e.what());
@@ -679,14 +629,12 @@ bool PolicyManager::remove_policy(QoSPolicy& policy) {
 
     try {
         // Create delete request
-        nlohmann::json delete_request = {
-            {"app_session_id", policy.pcf_transaction_id}
-        };
+        nlohmann::json delete_request = {{"app_session_id", policy.pcf_transaction_id}};
 
         // Create message to send to PCF Handler
         auto msg = std::make_shared<af::communication::Message>();
         msg->message_type = "pcf_delete_app_session";
-        msg->correlation_id = policy.id;  // Use policy ID as correlation ID
+        msg->correlation_id = policy.id; // Use policy ID as correlation ID
 
         // Convert request to string and set as payload
         std::string payload = delete_request.dump();
@@ -703,8 +651,7 @@ bool PolicyManager::remove_policy(QoSPolicy& policy) {
             if (response->message_type == "pcf_app_session_deleted") {
                 logger_->info("QoS policy removed successfully: {}", policy.id);
                 return true;
-            }
-            else if (response->message_type == "pcf_error") {
+            } else if (response->message_type == "pcf_error") {
                 // Extract error details
                 std::string error_str(response->payload.begin(), response->payload.end());
                 auto error_json = nlohmann::json::parse(error_str);
@@ -716,18 +663,15 @@ bool PolicyManager::remove_policy(QoSPolicy& policy) {
 
                 logger_->error("Failed to remove QoS policy: {}", error_message);
                 return false;
-            }
-            else {
+            } else {
                 logger_->error("Unexpected response type: {}", response->message_type);
                 return false;
             }
-        }
-        else {
+        } else {
             logger_->error("No response received from PCF Handler");
             return false;
         }
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         logger_->error("Error removing policy from PCF: {}", e.what());
         return false;
     }
