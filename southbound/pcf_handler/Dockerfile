@@ -240,7 +240,9 @@ RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
     wget gnupg lsb-release software-properties-common ca-certificates python3 \
     libgtest-dev libgmock-dev \
-    && wget -qO- https://apt.llvm.org/llvm.sh | bash -s -- 18 \
+     && wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /etc/apt/trusted.gpg.d/apt.llvm.org.gpg \
+     && echo "deb http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-18 main" > /etc/apt/sources.list.d/llvm-18.list \
+     && apt-get update \
     && apt-get install --yes --no-install-recommends clang-tidy-18 \
     && rm -rf /var/lib/apt/lists/*
 
