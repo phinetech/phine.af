@@ -34,7 +34,7 @@ jobs:
             image: phinetech/phine.af-pcf-handler
           - name: phine.af-demo-qod-adapter
             dockerfile: adapters/demo-qod-adapter/Dockerfile
-            image: phinetech/phine.af-phine.af-demo-qod-adapter
+            image: phinetech/phine.af-demo-qod-adapter
           - name: bundled-af
             dockerfile: Dockerfile
             image: phinetech/phine.af

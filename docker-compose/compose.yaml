@@ -143,20 +143,20 @@ services:
           - af.local
           - phine.af-core
 
-  af_demo_qod:
+  phine.af-demo-qod:
     <<: *af-build
     profiles: [ demo-qod ]
     container_name: phine.af-demo-qod
     image: phinetech/phine.af-demo-qod:${TAG:-latest}
     build:
       context: ..
-      dockerfile: adapters/phine.af-demo-qod-adapter/Dockerfile.bundle
+      dockerfile: adapters/demo-qod-adapter/Dockerfile.bundle
     environment:
       <<: *default-env
       PHINE_DEMO_QOD_ADAPTER_CONFIG: /etc/phine.af/demo_qod_adapter.yaml
     volumes:
       - ./conf/af.yaml:/etc/phine.af/af.yaml
-      - ../adapters/phine.af-demo-qod-adapter/config.yaml:/etc/phine.af/demo_qod_adapter.yaml
+      - ../adapters/demo-qod-adapter/config.yaml:/etc/phine.af/demo_qod_adapter.yaml
     expose:
       - 50051/tcp
     ports:
@@ -173,10 +173,10 @@ services:
     <<: *af-build
     profiles: [ standalone-qod ]
     container_name: phine.af-demo-qod-adapter
-    image: phinetech/phine.af-phine.af-demo-qod-adapter:${TAG:-latest}
+    image: phinetech/phine.af-demo-qod-adapter:${TAG:-latest}
     build:
       context: ..
-      dockerfile: adapters/phine.af-demo-qod-adapter/Dockerfile
+      dockerfile: adapters/demo-qod-adapter/Dockerfile
     volumes:
       - ./conf/adapter_config.yaml:/app/config.yaml:ro
     networks:

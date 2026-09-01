@@ -156,8 +156,8 @@ function collect_logs() {
         "phine.af-api:api_component.log"
         "phine.af-pcf-handler:pcf_handler.log"
         "phine.af-demo-qod:af_demo_qod.log"
+        "phine.af-demo-qod-adapter:demo_qod_adapter.log"
         "af-integration-tests:integration_tests.log"
-        "demo-qod-adapter:demo_qod_adapter.log"
         "pcf:pcf.log"
         "ue:ue.log"
         "gnb:gnb.log"
@@ -294,7 +294,7 @@ function run_adapter_test() {
     docker compose -f docker-compose-test.yaml pull db free5gc-nrf free5gc-amf free5gc-upf oai-ext-dn
 
     # Build AF components + adapter (skip api_component and af-integration-tests)
-    docker compose -f docker-compose-test.yaml build af_core pcf_handler demo-qod-adapter
+    docker compose -f docker-compose-test.yaml build af_core pcf_handler phine.af-demo-qod-adapter
 
     # Start infrastructure
     docker compose -f docker-compose-test.yaml up -d db free5gc-nrf free5gc-amf free5gc-ausf free5gc-nssf free5gc-pcf free5gc-smf free5gc-udm free5gc-udr free5gc-upf free5gc-webui oai-ext-dn
@@ -317,9 +317,9 @@ function run_adapter_test() {
     wait_for_af
     cd "$compose_dir"
 
-    echo "Running demo-qod-adapter..."
+    echo "Running phine.af-demo-qod-adapter..."
     set +e
-    docker compose -f docker-compose-test.yaml up --exit-code-from demo-qod-adapter demo-qod-adapter
+    docker compose -f docker-compose-test.yaml up --exit-code-from phine.af-demo-qod-adapter phine.af-demo-qod-adapter
     local EXIT_CODE=$?
     set -e
 
