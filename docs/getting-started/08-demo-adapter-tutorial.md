@@ -36,8 +36,8 @@ The adapter connects to af_core via gRPC and sends QoD session requests using th
 │                                                                          │
 │   config.yaml                                                            │
 │   ┌─────────────────────────────────────────────────────────────────┐    │
-│   │  video_stream     QOS_L   port 8554   "HD camera feed"         │    │
-│   │  webrtc_control   QOS_E   port 8443   "Teleoperation commands" │    │
+│   │  video_stream     QOS_L   port 8554   "HD camera feed"           │    │
+│   │  webrtc_control   QOS_E   port 8443   "Teleoperation commands"   │    │
 │   └─────────────────────────────────────────────────────────────────┘    │
 │                          │                                               │
 │               SessionManager                                             │
@@ -506,13 +506,18 @@ When stopped, the adapter catches SIGTERM, cleans up all sessions, and exits gra
 
 ## CI Quick Run
 
-The entire tutorial can be run non-interactively via the CI helper script:
+The entire tutorial can be run non-interactively via [runme] — the same way
+[CI](../../.github/workflows/test-tutorials.yml) runs it:
 
 ```bash {"name":"ci-run","excludeFromRunAll":"true","interactive":"false"}
-./build/scripts/ci_helper.sh run_adapter_test
+CORE_PROFILE=free5gc runme run --all --skip-prompts \
+  --filename docs/getting-started/08-demo-adapter-tutorial.md
 ```
 
-This builds all required images, deploys the full stack, runs the adapter, collects logs, and reports success or failure.
+This walks every step in this file, deploys the full stack, runs the adapter,
+collects logs, and reports success or failure.
+
+[runme]: https://runme.dev/
 
 ## Troubleshooting
 
