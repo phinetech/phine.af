@@ -43,7 +43,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
           token: ${{ secrets.CI_GITHUB_TOKEN }}
@@ -98,7 +98,7 @@ jobs:
 
       - name: Upload JUnit results
         if: always() && steps.build-checks.outcome == 'success' && steps.diff.outputs.has_changes == 'true' && matrix.component.has_tests
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: unit-test-results-${{ matrix.component.name }}
           path: results.xml

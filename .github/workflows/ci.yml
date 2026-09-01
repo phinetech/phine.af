@@ -35,6 +35,9 @@ jobs:
     needs: [format-check]
     # Skip on draft PRs — runs when ready for review or on branch push.
     if: github.event.pull_request.draft != true
+    permissions:
+      contents: read
+      security-events: write
     uses: ./.github/workflows/build.yml
     secrets: inherit
 
