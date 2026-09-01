@@ -14,7 +14,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check trailing whitespace and file permissions
+      - name: Compute base ref
+        id: base
         run: |
           BASE_REF="${{ github.base_ref }}"
           if [ -n "$BASE_REF" ]; then
@@ -23,8 +24,10 @@ jobs:
           else
             BASE="HEAD^"
           fi
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
 
-          .github/scripts/check_whitespace.sh --base "$BASE"
+      - name: Check trailing whitespace and file permissions
+        run: .github/scripts/check_whitespace.sh --base "${{ steps.base.outputs.base }}"
 
       - name: Install clang-format
         run: |
@@ -40,4 +43,4 @@ jobs:
         run: pip install ruff==0.6.9
 
       - name: Run format check
-        run: ./.github/scripts/check_format.sh --base "origin/${{ github.base_ref }}"
+        run: ./.github/scripts/check_format.sh --base "${{ steps.base.outputs.base }}"

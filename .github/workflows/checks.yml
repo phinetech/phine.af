@@ -52,8 +52,18 @@ jobs:
       - name: Compute changed lines
         id: diff
         run: |
-          git fetch origin "${{ github.base_ref }}"
-          git diff --no-prefix -U0 "origin/${{ github.base_ref }}...HEAD" -- "${{ matrix.component.diff_path }}" > component.diff
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git fetch origin "${{ github.base_ref }}"
+            base="origin/${{ github.base_ref }}"
+          else
+            # push event (e.g. merge to main) — github.base_ref is empty here,
+            # so diff against the commit that was HEAD before this push.
+            base="${{ github.event.before }}"
+            if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+              base="4b825dc642cb6eb9a060e54bf8d69288fbee4904" # git empty-tree hash
+            fi
+          fi
+          git diff --no-prefix -U0 "$base...HEAD" -- "${{ matrix.component.diff_path }}" > component.diff
           if [[ -s component.diff ]]; then
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           else
