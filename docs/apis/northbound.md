@@ -31,7 +31,20 @@ The AF Core registers handlers for (non-exhaustive):
 - `get_subscriptions`, `create_subscription`, `get_subscription`, `delete_subscription`
 - `qod_create_session`, `qod_get_session`, `qod_delete_session`, `qod_extend_session`, `qod_retrieve_sessions`
 
-<!---
-TODO: Map northbound HTTP endpoints to these message types.
-The API component README includes sequence diagrams but does not list the complete HTTP surface.
--->
+### HTTP endpoint → internal message mapping
+
+| HTTP request | Internal message type |
+|---|---|
+| `GET /health` | `health_check` |
+| `POST /qos` | `qos_request` |
+| `POST /subscriptions` | `create_subscription` |
+| `GET /subscriptions` | `get_subscriptions` |
+| `GET /subscriptions/{id}` | `get_subscription` |
+| `DELETE /subscriptions/{id}` | `delete_subscription` |
+| `POST /device-status/sessions` (CAMARA QoD) | `qod_create_session` |
+| `GET /device-status/sessions/{id}` | `qod_get_session` |
+| `DELETE /device-status/sessions/{id}` | `qod_delete_session` |
+
+See [`northbound/api_component/src/api_handlers.cpp`](../../northbound/api_component/src/api_handlers.cpp)
+for the full mapping and [CAMARA compliance](camara-compliance.md) for
+spec references.

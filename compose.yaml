@@ -46,17 +46,17 @@ services:
       n6_net:
         ipv4_address: 192.168.72.135
 
-  af:
+  phine.af:
     <<: *defaults
-    container_name: af
-    image: phinetech/af:${TAG:-latest}
+    container_name: phine.af
+    image: phinetech/phine.af:${TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
     environment:
       <<: *default-env
     volumes:
-      - ./docker-compose/conf/af.yaml:/etc/oai/af/af.yaml
+      - ./docker-compose/conf/af.yaml:/etc/phine.af/af.yaml
     expose:
       - 50051/tcp
     ports:
@@ -66,7 +66,7 @@ services:
         ipv4_address: 192.168.70.141
         aliases:
           - af.local
-          - af-core
+          - phine.af-core
 
 networks:
   public_net:

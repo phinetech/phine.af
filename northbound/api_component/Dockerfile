@@ -226,12 +226,12 @@ COPY --from=builder /app/build-output/bin/api_server /usr/local/bin/
 RUN ldconfig
 
 # Copy configuration
-COPY ./northbound/api_component/config/api_adapter.yaml /etc/oai/af/api_adapter.yaml
+COPY ./northbound/api_component/config/api_adapter.yaml /etc/phine.af/api_adapter.yaml
 
 # Create a non-root user
 RUN groupadd -r apiuser && useradd -r -g apiuser apiuser && \
-    mkdir -p /etc/oai/af && \
-    chown -R apiuser:apiuser /usr/local/bin/api_server /etc/oai/af
+    mkdir -p /etc/phine.af && \
+    chown -R apiuser:apiuser /usr/local/bin/api_server /etc/phine.af
 
 # Set working directory
 WORKDIR /usr/local/bin
@@ -246,4 +246,4 @@ USER apiuser
 EXPOSE 8080
 
 # Command to run
-CMD ["/usr/local/bin/api_server", "--config", "/etc/oai/af/api_adapter.yaml"]
+CMD ["/usr/local/bin/api_server", "--config", "/etc/phine.af/api_adapter.yaml"]

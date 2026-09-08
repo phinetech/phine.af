@@ -62,8 +62,12 @@ udr_handler:
 
 # Global settings
 logging:
+  # NOTE: This legacy `logging:` schema (level/file/console/max_size_mb/max_files)
+  # is NOT currently wired to spdlog — file-sink support is tracked in issue
+  # #13 ([TECH DEBT] Restore and enhance logging infrastructure). Components
+  # log to stdout regardless of these values.
   level: "info"
-  file: "/var/log/oai/af/af.log"
+  file: "/var/log/phine.af/af.log"
   console: true
   max_size_mb: 10
   max_files: 5

@@ -12,10 +12,17 @@ Use [docker-compose/compose.yaml](../../docker-compose/compose.yaml) only when y
 
 ## Health checks
 
-TODO: Document how to call the `health_check` message over the configured northbound interface.
+Every component exposes a `health_check` message. Over HTTP/2 that is a
+`GET /health` on the `api_component` port (default `:8080`):
 
-<!---
-TODO: Expand with “native run” instructions.
-The root README currently states this section will be expanded.
-Source: [README.md](../../README.md).
--->
+```bash
+curl -k http://localhost:8080/health
+# {"status":"up"}
+```
+
+Over gRPC (internal or for testing), send an `InternalCommunication.SendMessage`
+with `message_type: "health_check"` — see the [First Request](04-first-request.md)
+example for the invocation pattern.
+
+<!--- Native (non-Docker) run instructions live in [02-build.md](02-build.md);
+this page focuses on the Compose flow. -->

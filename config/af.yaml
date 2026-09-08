@@ -59,17 +59,16 @@ nef_handler:
 udr_handler:
   enabled: false
 
-# Future southbound handlers
-nef_handler:
-  enabled: false
-
-udr_handler:
-  enabled: false
-
 # Global settings
+# NOTE: The `logging:` block below uses the legacy schema and is currently
+# NOT wired to spdlog — file-sink support is tracked in issue #13
+# ([TECH DEBT] Restore and enhance logging infrastructure). Console logging
+# is always used; the per-component `logging:` blocks above (with
+# `console_output` / `file_output` / `file_path`) reflect the intended
+# schema once the file sink lands.
 logging:
   level: "info"
-  file: "/var/log/oai/af/af.log"
+  file: "/var/log/phine.af/af.log"
   console: true
   max_size_mb: 10
   max_files: 5

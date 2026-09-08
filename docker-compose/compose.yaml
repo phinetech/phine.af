@@ -12,7 +12,7 @@ name: phine-af
 # free5gc    : free5GC core network + UPF + external DN + UERANSIM
 # oai-core   : OAI core network + OAI UPF + external DN + UERANSIM
 # afs   : separate `af_core` + `pcf_handler` + `api_component`
-# standalone-qod : standalone `demo-qod-adapter` to pair with split or bundled AF
+# standalone-qod : standalone `phine.af-demo-qod-adapter` to pair with split or bundled AF
 # af : bundled `af` + `api_component`
 # demo-qod   : bundled `af_demo_qod` + `api_component`
 # af-client  : lightweight Ubuntu helper container for manual curl/testing
@@ -26,7 +26,7 @@ name: phine-af
 # docker compose --profile oai-core --profile af up -d
 # docker compose --profile free5gc --profile demo-qod up -d
 # docker compose up -d af
-# docker compose up -d af_core pcf_handler demo-qod-adapter
+# docker compose up -d af_core pcf_handler phine.af-demo-qod-adapter
 #
 # Note: `free5gc` and `oai-core` are alternative core network topologies.
 # `afs`, `af`, and `demo-qod` are alternative AF topologies.
@@ -81,7 +81,7 @@ services:
     container_name: af-client
     image: ${AF_CLIENT_IMAGE:-ubuntu:22.04}
     environment:
-      - AF_HOST=af-core
+      - AF_HOST=phine.af-core
       - PAYLOAD_FILE=/requests/qod_create_session.json
     expose:
       - 80/tcp
@@ -95,13 +95,13 @@ services:
   pcf_handler:
     <<: *af-build
     profiles: [ afs ]
-    container_name: af-pcf-handler
-    image: phinetech/pcf-handler:${TAG:-latest}
+    container_name: phine.af-pcf-handler
+    image: phinetech/phine.af-pcf-handler:${TAG:-latest}
     build:
       context: ..
       dockerfile: southbound/pcf_handler/Dockerfile
     volumes:
-      - ./conf/pcf_handler.yaml:/etc/oai/af/pcf_handler.yaml
+      - ./conf/pcf_handler.yaml:/etc/phine.af/pcf_handler.yaml
     networks:
       public_net:
         ipv4_address: 192.168.70.140
@@ -109,29 +109,29 @@ services:
   af_core:
     <<: *af-build
     profiles: [ afs ]
-    container_name: af-core
-    image: phinetech/af-core:${TAG:-latest}
+    container_name: phine.af-core
+    image: phinetech/phine.af-core:${TAG:-latest}
     build:
       context: ..
       dockerfile: af_core/Dockerfile
     volumes:
-      - ./conf/af_core.yaml:/etc/oai/af/af_core.yaml
+      - ./conf/af_core.yaml:/etc/phine.af/af_core.yaml
     networks:
       public_net:
         ipv4_address: 192.168.70.141
         aliases:
-          - af-core
+          - phine.af-core
 
-  af:
+  phine.af:
     <<: *af-build
     profiles: [ af ]
-    container_name: af
-    image: phinetech/af:${TAG:-latest}
+    container_name: phine.af
+    image: phinetech/phine.af:${TAG:-latest}
     build:
       context: ..
       dockerfile: Dockerfile
     volumes:
-      - ./conf/af.yaml:/etc/oai/af/af.yaml
+      - ./conf/af.yaml:/etc/phine.af/af.yaml
     expose:
       - 50051/tcp
     ports:
@@ -141,22 +141,22 @@ services:
         ipv4_address: 192.168.70.141
         aliases:
           - af.local
-          - af-core
+          - phine.af-core
 
-  af_demo_qod:
+  phine.af-demo-qod:
     <<: *af-build
     profiles: [ demo-qod ]
-    container_name: af-demo-qod
-    image: phinetech/af-demo-qod:${TAG:-latest}
+    container_name: phine.af-demo-qod
+    image: phinetech/phine.af-demo-qod:${TAG:-latest}
     build:
       context: ..
       dockerfile: adapters/demo-qod-adapter/Dockerfile.bundle
     environment:
       <<: *default-env
-      PHINE_DEMO_QOD_ADAPTER_CONFIG: /etc/oai/af/demo_qod_adapter.yaml
+      PHINE_DEMO_QOD_ADAPTER_CONFIG: /etc/phine.af/demo_qod_adapter.yaml
     volumes:
-      - ./conf/af.yaml:/etc/oai/af/af.yaml
-      - ../adapters/demo-qod-adapter/config.yaml:/etc/oai/af/demo_qod_adapter.yaml
+      - ./conf/af.yaml:/etc/phine.af/af.yaml
+      - ../adapters/demo-qod-adapter/config.yaml:/etc/phine.af/demo_qod_adapter.yaml
     expose:
       - 50051/tcp
     ports:
@@ -166,14 +166,14 @@ services:
         ipv4_address: 192.168.70.141
         aliases:
           - af.local
-          - af-core
-          - af-demo-qod
+          - phine.af-core
+          - phine.af-demo-qod
 
-  demo-qod-adapter:
+  phine.af-demo-qod-adapter:
     <<: *af-build
     profiles: [ standalone-qod ]
-    container_name: demo-qod-adapter
-    image: phinetech/demo-qod-adapter:${TAG:-latest}
+    container_name: phine.af-demo-qod-adapter
+    image: phinetech/phine.af-demo-qod-adapter:${TAG:-latest}
     build:
       context: ..
       dockerfile: adapters/demo-qod-adapter/Dockerfile
@@ -183,18 +183,18 @@ services:
       public_net:
         ipv4_address: 192.168.70.143
         aliases:
-          - demo-qod-adapter
+          - phine.af-demo-qod-adapter
 
   api_component:
     <<: *af-build
     profiles: [ afs, af, demo-qod ]
-    container_name: af-north-api
-    image: phinetech/af-api:${TAG:-latest}
+    container_name: phine.af-api
+    image: phinetech/phine.af-api:${TAG:-latest}
     build:
       context: ..
       dockerfile: northbound/api_component/Dockerfile
     volumes:
-      - ./conf/api_adapter.yaml:/etc/oai/af/api_adapter.yaml
+      - ./conf/api_adapter.yaml:/etc/phine.af/api_adapter.yaml
     expose:
       - 8081/tcp
     ports:
@@ -203,7 +203,7 @@ services:
       public_net:
         ipv4_address: 192.168.70.142
         aliases:
-          - af-api
+          - phine.af-api
 
 networks:
   public_net:

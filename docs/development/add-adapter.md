@@ -240,7 +240,7 @@ The bundled Dockerfile should:
 
 For the demo adapter, the bundled image also sets:
 
-- `PHINE_DEMO_QOD_ADAPTER_CONFIG=/etc/oai/af/demo_qod_adapter.yaml`
+- `PHINE_DEMO_QOD_ADAPTER_CONFIG=/etc/phine.af/demo_qod_adapter.yaml`
 
 ## Compose packaging
 

@@ -36,8 +36,8 @@ The adapter connects to af_core via gRPC and sends QoD session requests using th
 │                                                                          │
 │   config.yaml                                                            │
 │   ┌─────────────────────────────────────────────────────────────────┐    │
-│   │  video_stream     QOS_L   port 8554   "HD camera feed"         │    │
-│   │  webrtc_control   QOS_E   port 8443   "Teleoperation commands" │    │
+│   │  video_stream     QOS_L   port 8554   "HD camera feed"           │    │
+│   │  webrtc_control   QOS_E   port 8443   "Teleoperation commands"   │    │
 │   └─────────────────────────────────────────────────────────────────┘    │
 │                          │                                               │
 │               SessionManager                                             │
@@ -76,9 +76,9 @@ The adapter connects to af_core via gRPC and sends QoD session requests using th
 
 | Container | IP Address | Role |
 |---|---|---|
-| `demo-qod-adapter` | 192.168.70.143 | Adapter — creates and manages QoD sessions |
-| `af-core` | 192.168.70.141 | AF Core — receives and routes QoD requests |
-| `af-pcf-handler` | 192.168.70.140 | Southbound handler — translates to PCF API |
+| `phine.af-demo-qod-adapter` | 192.168.70.143 | Adapter — creates and manages QoD sessions |
+| `phine.af-core` | 192.168.70.141 | AF Core — receives and routes QoD requests |
+| `phine.af-pcf-handler` | 192.168.70.140 | Southbound handler — translates to PCF API |
 | `pcf` | 192.168.70.139 | free5GC PCF — policy control function |
 | `smf` | 192.168.70.133 | free5GC SMF — session management |
 | `upf` | host network | OAI UPF — user plane enforcement |
@@ -92,7 +92,7 @@ Set up environment variables for this tutorial. `COMPOSE_PROFILES` combines a co
 
 - `$CORE_PROFILE` (`free5gc` by default): the 5G core, UPF, external DN, and UERANSIM
 - `afs`: the split-microservice AF — `af_core` + `pcf_handler`
-- `standalone-qod`: the standalone `demo-qod-adapter` container
+- `standalone-qod`: the standalone `phine.af-demo-qod-adapter` container
 
 ```bash {"name":"setup-variables","interactive":"false"}
 export CORE_PROFILE="${CORE_PROFILE:-free5gc}"
@@ -131,7 +131,7 @@ Ensure submodules are up to date:
 Build the adapter and AF images:
 
 ```bash {"name":"build-images","interactive":"false"}
-docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES build af_core pcf_handler demo-qod-adapter
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES build af_core pcf_handler phine.af-demo-qod-adapter
 ```
 
 Start the 5G core infrastructure:
@@ -175,7 +175,7 @@ docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES up -d af_core pcf_handler
 Wait for the AF Core gRPC server to become ready:
 
 ```bash {"name":"wait-for-af","interactive":"false"}
-# Wait for af-core to be ready
+# Wait for phine.af-core to be ready
 sleep 15
 ```
 
@@ -243,37 +243,37 @@ monitor:
 Start the adapter. It connects to af_core, creates QoD sessions, monitors them, and exits after the configured number of iterations:
 
 ```bash {"name":"run-adapter","interactive":"false"}
-docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES up --exit-code-from demo-qod-adapter demo-qod-adapter
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES up --exit-code-from phine.af-demo-qod-adapter phine.af-demo-qod-adapter
 ```
 
 <details>
 <summary><b>Example output</b></summary>
 
 ```text
-demo-qod-adapter  | [2026-02-16 17:01:45.569] [] [info] Demo QoD Adapter starting — config: /app/config.yaml
-demo-qod-adapter  | [2026-02-16 17:01:45.569] [] [info] Loaded 2 stream definition(s)
-demo-qod-adapter  | [2026-02-16 17:01:45.570] [] [info] [QodClient] Created — target: 192.168.70.141:50051
-demo-qod-adapter  | [2026-02-16 17:01:45.570] [] [info] [QodClient] Waiting for af_core at 192.168.70.141:50051 (timeout 30s)…
-demo-qod-adapter  | [2026-02-16 17:01:45.572] [] [info] [QodClient] Channel READY
-demo-qod-adapter  | [2026-02-16 17:01:45.572] [] [info] [SessionManager] Initialised
-demo-qod-adapter  | [2026-02-16 17:01:45.572] [] [info] [SessionManager] Creating 2 session(s)…
-demo-qod-adapter  | [2026-02-16 17:01:45.572] [] [info] [SessionManager] Requesting QoS for 'video_stream' (profile=QOS_L, duration=300s)
-demo-qod-adapter  | [2026-02-16 17:01:45.598] [] [info] [SessionManager] Session created for 'video_stream': id=01c6135b-..., status=REQUESTED
-demo-qod-adapter  | [2026-02-16 17:01:45.598] [] [info] [SessionManager] Requesting QoS for 'webrtc_control' (profile=QOS_E, duration=300s)
-demo-qod-adapter  | [2026-02-16 17:01:45.621] [] [info] [SessionManager] Session created for 'webrtc_control': id=09978f8b-..., status=REQUESTED
-demo-qod-adapter  | [2026-02-16 17:01:45.621] [] [info] [SessionManager] Created 2/2 session(s) successfully
-demo-qod-adapter  | [2026-02-16 17:01:50.621] [] [info] [SessionManager] Monitoring 2 session(s)…
-demo-qod-adapter  | [2026-02-16 17:01:50.622] [] [info] [SessionManager] Session 01c6135b-... ('video_stream') status: REQUESTED → AVAILABLE
-demo-qod-adapter  | [2026-02-16 17:01:50.623] [] [info] [SessionManager] Session 09978f8b-... ('webrtc_control') status: REQUESTED → AVAILABLE
-demo-qod-adapter  | [2026-02-16 17:01:55.623] [] [info] [SessionManager] Monitoring 2 session(s)…
-demo-qod-adapter  | [2026-02-16 17:02:00.624] [] [info] [SessionManager] Monitoring 2 session(s)…
-demo-qod-adapter  | [2026-02-16 17:02:00.628] [] [info] Shutting down — cleaning up sessions…
-demo-qod-adapter  | [2026-02-16 17:02:00.628] [] [info] [SessionManager] Cleaning up 2 session(s)…
-demo-qod-adapter  | [2026-02-16 17:02:00.628] [] [info] [SessionManager] Deleting session 01c6135b-... ('video_stream')
-demo-qod-adapter  | [2026-02-16 17:02:00.651] [] [info] [SessionManager] Deleting session 09978f8b-... ('webrtc_control')
-demo-qod-adapter  | [2026-02-16 17:02:00.673] [] [info] [SessionManager] Cleanup complete: 2/2 deleted
-demo-qod-adapter  | [2026-02-16 17:02:00.673] [] [info] Demo QoD Adapter finished.
-demo-qod-adapter exited with code 0
+phine.af-demo-qod-adapter  | [2026-02-16 17:01:45.569] [] [info] Demo QoD Adapter starting — config: /app/config.yaml
+phine.af-demo-qod-adapter  | [2026-02-16 17:01:45.569] [] [info] Loaded 2 stream definition(s)
+phine.af-demo-qod-adapter  | [2026-02-16 17:01:45.570] [] [info] [QodClient] Created — target: 192.168.70.141:50051
+phine.af-demo-qod-adapter  | [2026-02-16 17:01:45.570] [] [info] [QodClient] Waiting for af_core at 192.168.70.141:50051 (timeout 30s)…
+phine.af-demo-qod-adapter  | [2026-02-16 17:01:45.572] [] [info] [QodClient] Channel READY
+phine.af-demo-qod-adapter  | [2026-02-16 17:01:45.572] [] [info] [SessionManager] Initialised
+phine.af-demo-qod-adapter  | [2026-02-16 17:01:45.572] [] [info] [SessionManager] Creating 2 session(s)…
+phine.af-demo-qod-adapter  | [2026-02-16 17:01:45.572] [] [info] [SessionManager] Requesting QoS for 'video_stream' (profile=QOS_L, duration=300s)
+phine.af-demo-qod-adapter  | [2026-02-16 17:01:45.598] [] [info] [SessionManager] Session created for 'video_stream': id=01c6135b-..., status=REQUESTED
+phine.af-demo-qod-adapter  | [2026-02-16 17:01:45.598] [] [info] [SessionManager] Requesting QoS for 'webrtc_control' (profile=QOS_E, duration=300s)
+phine.af-demo-qod-adapter  | [2026-02-16 17:01:45.621] [] [info] [SessionManager] Session created for 'webrtc_control': id=09978f8b-..., status=REQUESTED
+phine.af-demo-qod-adapter  | [2026-02-16 17:01:45.621] [] [info] [SessionManager] Created 2/2 session(s) successfully
+phine.af-demo-qod-adapter  | [2026-02-16 17:01:50.621] [] [info] [SessionManager] Monitoring 2 session(s)…
+phine.af-demo-qod-adapter  | [2026-02-16 17:01:50.622] [] [info] [SessionManager] Session 01c6135b-... ('video_stream') status: REQUESTED → AVAILABLE
+phine.af-demo-qod-adapter  | [2026-02-16 17:01:50.623] [] [info] [SessionManager] Session 09978f8b-... ('webrtc_control') status: REQUESTED → AVAILABLE
+phine.af-demo-qod-adapter  | [2026-02-16 17:01:55.623] [] [info] [SessionManager] Monitoring 2 session(s)…
+phine.af-demo-qod-adapter  | [2026-02-16 17:02:00.624] [] [info] [SessionManager] Monitoring 2 session(s)…
+phine.af-demo-qod-adapter  | [2026-02-16 17:02:00.628] [] [info] Shutting down — cleaning up sessions…
+phine.af-demo-qod-adapter  | [2026-02-16 17:02:00.628] [] [info] [SessionManager] Cleaning up 2 session(s)…
+phine.af-demo-qod-adapter  | [2026-02-16 17:02:00.628] [] [info] [SessionManager] Deleting session 01c6135b-... ('video_stream')
+phine.af-demo-qod-adapter  | [2026-02-16 17:02:00.651] [] [info] [SessionManager] Deleting session 09978f8b-... ('webrtc_control')
+phine.af-demo-qod-adapter  | [2026-02-16 17:02:00.673] [] [info] [SessionManager] Cleanup complete: 2/2 deleted
+phine.af-demo-qod-adapter  | [2026-02-16 17:02:00.673] [] [info] Demo QoD Adapter finished.
+phine.af-demo-qod-adapter exited with code 0
 ```
 
 </details>
@@ -327,7 +327,7 @@ wireshark $PCAP_FILE
 When the adapter creates a session, the following chain of events occurs:
 
 ```text
-demo-qod-adapter (.143)
+phine.af-demo-qod-adapter (.143)
        │
        │  gRPC: InternalCommunication.SendMessage
        │  message_type: "qod_create_session"
@@ -491,13 +491,13 @@ Run the adapter in the background with the indefinite config:
 ```bash {"name":"run-adapter-indefinite","excludeFromRunAll":"true","background":"true","interactive":"false"}
 docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES run --rm \
   -v /tmp/adapter_config_indefinite.yaml:/app/config.yaml:ro \
-  demo-qod-adapter
+  phine.af-demo-qod-adapter
 ```
 
 The adapter keeps monitoring sessions until you stop it:
 
 ```bash {"name":"stop-adapter","excludeFromRunAll":"true","interactive":"false"}
-docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES stop demo-qod-adapter
+docker compose -f $COMPOSE_FILE $COMPOSE_PROFILES stop phine.af-demo-qod-adapter
 ```
 
 When stopped, the adapter catches SIGTERM, cleans up all sessions, and exits gracefully.
@@ -506,23 +506,28 @@ When stopped, the adapter catches SIGTERM, cleans up all sessions, and exits gra
 
 ## CI Quick Run
 
-The entire tutorial can be run non-interactively via the CI helper script:
+The entire tutorial can be run non-interactively via [runme] — the same way
+[CI](../../.github/workflows/test-tutorials.yml) runs it:
 
 ```bash {"name":"ci-run","excludeFromRunAll":"true","interactive":"false"}
-./build/scripts/ci_helper.sh run_adapter_test
+CORE_PROFILE=free5gc runme run --all --skip-prompts \
+  --filename docs/getting-started/08-demo-adapter-tutorial.md
 ```
 
-This builds all required images, deploys the full stack, runs the adapter, collects logs, and reports success or failure.
+This walks every step in this file, deploys the full stack, runs the adapter,
+collects logs, and reports success or failure.
+
+[runme]: https://runme.dev/
 
 ## Troubleshooting
 
 <details>
 <summary><b>Adapter exits immediately with "af_core not reachable"</b></summary>
 
-The af_core gRPC server isn't ready yet. Ensure the `wait-for-af` step completed successfully and that the `af-core` container is running:
+The af_core gRPC server isn't ready yet. Ensure the `wait-for-af` step completed successfully and that the `phine.af-core` container is running:
 
-```bash {"name":"check-af-core","excludeFromRunAll":"true","interactive":"false"}
-docker ps --filter name=af-core --format "table {{.Names}}\t{{.Status}}"
+```bash {"name":"check-phine.af-core","excludeFromRunAll":"true","interactive":"false"}
+docker ps --filter name=phine.af-core --format "table {{.Names}}\t{{.Status}}"
 grpcurl -plaintext 192.168.70.141:50051 list
 ```
 
@@ -534,7 +539,7 @@ grpcurl -plaintext 192.168.70.141:50051 list
 This is expected if the PCF backend has not fully processed the policy. Check the PCF handler and PCF logs:
 
 ```bash {"name":"check-pcf-logs","excludeFromRunAll":"true","interactive":"false"}
-docker logs af-pcf-handler --tail 20
+docker logs phine.af-pcf-handler --tail 20
 docker logs pcf --tail 20
 ```
 

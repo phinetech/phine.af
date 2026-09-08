@@ -74,8 +74,8 @@ For the full component topology and how the AF, PCF, SMF, and UPF interact, see 
 
 | Service | Address | Notes |
 |---|---|---|
-| `af` / `af-core` | `192.168.70.141` | QoD request entrypoint |
-| `af-pcf-handler` | `192.168.70.140` | Used only in microservice mode |
+| `af` / `phine.af-core` | `192.168.70.141` | QoD request entrypoint |
+| `phine.af-pcf-handler` | `192.168.70.140` | Used only in microservice mode |
 | `pcf` | `192.168.70.139` | Policy control |
 | `smf` | `192.168.70.133` | Session management |
 | `ue` | `10.60.0.1` | UE data-plane IP |
@@ -264,7 +264,7 @@ Fetch the session object by ID and confirm it is `AVAILABLE`:
 ```bash {"name":"get-qod-session","interactive":"false"}
 docker compose -f $COMPOSE_FILE -f $COMPOSE_OVERRIDE_FILE run --rm --no-deps af-client \
   --http2-prior-knowledge -sS \
-  "http://${AF_HOST:-af-core}:8080/quality-on-demand/v1/sessions/$SESSION_ID"
+  "http://${AF_HOST:-phine.af-core}:8080/quality-on-demand/v1/sessions/$SESSION_ID"
 ```
 
 Expected: a JSON object with `"qosStatus": "AVAILABLE"` and the `premium` profile parameters.
@@ -278,7 +278,7 @@ docker compose -f $COMPOSE_FILE -f $COMPOSE_OVERRIDE_FILE run --rm --no-deps af-
   --http2-prior-knowledge -sS -X POST \
   -H "content-type: application/json" \
   --data "@/requests/qod_retrieve_sessions.json" \
-  "http://${AF_HOST:-af-core}:8080/quality-on-demand/v1/retrieve-sessions"
+  "http://${AF_HOST:-phine.af-core}:8080/quality-on-demand/v1/retrieve-sessions"
 ```
 
 Expected: a JSON array containing the session created in step 3.1.
@@ -292,7 +292,7 @@ docker compose -f $COMPOSE_FILE -f $COMPOSE_OVERRIDE_FILE run --rm --no-deps af-
   --http2-prior-knowledge -sS -X POST \
   -H "content-type: application/json" \
   --data "@/requests/qod_session_extend_duration.json" \
-  "http://${AF_HOST:-af-core}:8080/quality-on-demand/v1/sessions/$SESSION_ID/extend"
+  "http://${AF_HOST:-phine.af-core}:8080/quality-on-demand/v1/sessions/$SESSION_ID/extend"
 ```
 
 Expected: a JSON object with the updated `duration` field.
@@ -320,7 +320,7 @@ af_client
   -> UPF
 ```
 
-In microservice mode, the AF path includes an extra hop through `af-pcf-handler` (`.140`) before the request reaches the PCF.
+In microservice mode, the AF path includes an extra hop through `phine.af-pcf-handler` (`.140`) before the request reaches the PCF.
 
 Things to look for:
 
@@ -440,7 +440,7 @@ Tear down the QoS policy by deleting the session. The AF signals the PCF to remo
 ```bash {"name":"delete-qod-session","interactive":"false"}
 docker compose -f $COMPOSE_FILE -f $COMPOSE_OVERRIDE_FILE run --rm --no-deps af-client \
   --http2-prior-knowledge -sS -X DELETE \
-  "http://${AF_HOST:-af-core}:8080/quality-on-demand/v1/sessions/$SESSION_ID"
+  "http://${AF_HOST:-phine.af-core}:8080/quality-on-demand/v1/sessions/$SESSION_ID"
 echo "Session $SESSION_ID deleted (HTTP 204 No Content — empty response body expected)"
 ```
 
@@ -449,7 +449,7 @@ Verify the session state after deletion. The AF immediately marks the session `U
 ```bash {"name":"verify-session-deleted","interactive":"false"}
 docker compose -f $COMPOSE_FILE -f $COMPOSE_OVERRIDE_FILE run --rm --no-deps af-client \
   --http2-prior-knowledge -sS \
-  "http://${AF_HOST:-af-core}:8080/quality-on-demand/v1/sessions/$SESSION_ID"
+  "http://${AF_HOST:-phine.af-core}:8080/quality-on-demand/v1/sessions/$SESSION_ID"
 echo "(expected: qosStatus=UNAVAILABLE, statusInfo=DELETE_REQUESTED)"
 ```
 

@@ -102,12 +102,12 @@ make install
 
 ```bash
 docker build -t pcf-handler .
-docker run -p 50055:50055 -v /path/to/config:/etc/oai/af/southbound pcf-handler
+docker run -p 50055:50055 -v /path/to/config:/etc/phine.af/southbound pcf-handler
 ```
 
 ## Configuration
 
-Configuration is done through YAML files. The default configuration file is located at `/etc/oai/af/southbound/pcf_handler.yaml`.
+Configuration is done through YAML files. The default configuration file is located at `/etc/phine.af/southbound/pcf_handler.yaml`.
 
 Example configuration:
 
@@ -129,7 +129,7 @@ pcf_handler:
   communication:
     server_address: "0.0.0.0"
     server_port: "50055"
-    core_address: "af-core"
+    core_address: "phine.af-core"
     core_port: "50051"
 ```
 

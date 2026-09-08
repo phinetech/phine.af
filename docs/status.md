@@ -8,29 +8,27 @@ This page summarises what appears to be implemented vs. not implemented based on
 - **Partially implemented**: Marked as partially implemented in the root architecture diagram.
 - **Not implemented**: Marked as not implemented in the root architecture diagram.
 
-## Northbound adapters
+## Northbound APIs
 
-| Adapter | Status (per diagram) | Notes |
-|---|---|---|
-| App-specific API | Partially implemented | The repo contains `northbound/api_component` which documents an HTTP/2 REST API component. |
-| TSN | Not implemented | TODO |
+| API | Status (per diagram) | Notes                                                       |
+|---|---|-------------------------------------------------------------|
+| App-specific API | Partially implemented | The repo contains `northbound/api_component` — an HTTP/2 REST API service. |
 | Quality on Demand (QoD) | Fully implemented | `AfOrchestrator` registers `qod_*` message handlers. |
-| Device Location | Not implemented | TODO |
-| Traffic Influence | Not implemented | TODO |
+| Device Location | Not implemented | Comming Soon |
+| TSN | Not implemented | Roadmap |
+| Traffic Influence | Not implemented | Roadmap |
 
 ## Southbound handlers
 
 | Handler | 3GPP reference point (per diagram) | Status (per diagram) | Notes |
 |---|---:|---|---|
 | PCF Handler | N5 | Fully implemented | The repo has a dedicated module under `southbound/pcf_handler`. |
-| NEF Handler | N33 | Not implemented | `AfOrchestrator` creates a NEF comm service entry, but details are TODO/unknown. |
-| BSF Handler | Nbsf | Not implemented | TODO |
-| TSCTSF Handler | N52 | Not implemented | TODO |
-| AMF Handler | Namf | Not implemented | TODO |
-| LMF Handler | Nlmf | Not implemented | TODO |
-| GMLC Handler | Ngmlc | Not implemented | TODO |
-| UDR Handler | Nudr | Not implemented | TODO |
+| NEF Handler | N33 | Not implemented | Roadmap. `AfOrchestrator` reserves a NEF communication service entry to make wiring straightforward once implemented. |
+| BSF Handler | Nbsf | Not implemented | Roadmap |
+| TSCTSF Handler | N52 | Not implemented | Roadmap |
+| AMF Handler | Namf | Not implemented | Roadmap |
+| LMF Handler | Nlmf | Not implemented | Roadmap |
+| GMLC Handler | Ngmlc | Not implemented | Roadmap |
+| UDR Handler | Nudr | Not implemented | Roadmap |
 
-<!---
-TODO: Replace “TODO/unknown” entries with concrete evidence from code once those components exist or are wired up.
--->
+Contributions welcome — see [add a southbound handler](development/add-southbound-handler.md).

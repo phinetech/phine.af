@@ -102,7 +102,7 @@ Follow these conventions when adding or updating Markdown documentation in this 
 Give each code block a descriptive, kebab-case `name`. This is the identifier used by the CLI and CI:
 
 ````markdown
-```bash {"name":"build-af-core","interactive":"false"}
+```bash {"name":"build-phine.af-core","interactive":"false"}
 docker compose build af_core
 ```
 ````

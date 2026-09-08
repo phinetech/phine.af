@@ -29,24 +29,24 @@ namespace southbound {
  * @brief PCF session state
  */
 enum class PcfSessionState {
-    CREATING,    // PCF session creation in progress
-    ACTIVE,      // PCF session is active
-    UPDATING,    // PCF session update in progress
-    DELETING,    // PCF session deletion in progress
-    TERMINATED   // PCF session has been terminated
+    CREATING,  // PCF session creation in progress
+    ACTIVE,    // PCF session is active
+    UPDATING,  // PCF session update in progress
+    DELETING,  // PCF session deletion in progress
+    TERMINATED // PCF session has been terminated
 };
 
 /**
  * @brief PCF session information
  */
 struct PcfSessionInfo {
-    std::string pcf_session_id;          // PCF application session ID
-    std::string qod_session_id;          // Corresponding QoD session ID
-    PcfSessionState state;                // Current PCF session state
+    std::string pcf_session_id; // PCF application session ID
+    std::string qod_session_id; // Corresponding QoD session ID
+    PcfSessionState state;      // Current PCF session state
     std::chrono::system_clock::time_point created_at;
     std::optional<std::string> pcf_notification_uri; // PCF notification endpoint
-    nlohmann::json last_request;         // Last request sent to PCF
-    nlohmann::json last_response;        // Last response from PCF
+    nlohmann::json last_request;                     // Last request sent to PCF
+    nlohmann::json last_response;                    // Last response from PCF
 };
 
 /**
@@ -77,26 +77,21 @@ public:
      * @param message Incoming request message
      * @return Response message
      */
-    af::communication::MessagePtr handle_qod_create_pcf_session(
-        const af::communication::MessagePtr& message);
-
+    af::communication::MessagePtr handle_qod_create_pcf_session(const af::communication::MessagePtr& message);
 
     /**
      * @brief Receive MessagePtr and convert to required model
      * @param message Incoming request message
      * @return Response message
      */
-    af::communication::MessagePtr handle_qod_update_pcf_session(
-        const af::communication::MessagePtr& message);
+    af::communication::MessagePtr handle_qod_update_pcf_session(const af::communication::MessagePtr& message);
 
     /**
      * @brief Receive MessagePtr and convert to required model
      * @param message Incoming request message
      * @return Response message
      */
-    af::communication::MessagePtr handle_qod_delete_pcf_session(
-        const af::communication::MessagePtr& message);
-
+    af::communication::MessagePtr handle_qod_delete_pcf_session(const af::communication::MessagePtr& message);
 
     // === PCF Session Management ===
 
@@ -105,24 +100,21 @@ public:
      * @param qod_session QoD session to create PCF session for
      * @return PCF request message or nullopt on failure
      */
-    std::optional<af::communication::MessagePtr> create_pcf_session(
-        const af::common::qod::QodSession& qod_session);
+    std::optional<af::communication::MessagePtr> create_pcf_session(const af::common::qod::QodSession& qod_session);
 
     /**
      * @brief Update PCF application session
      * @param qod_session Updated QoD session
      * @return PCF request message or nullopt on failure
      */
-    std::optional<af::communication::MessagePtr> update_pcf_session(
-        const af::common::qod::QodSession& qod_session);
+    std::optional<af::communication::MessagePtr> update_pcf_session(const af::common::qod::QodSession& qod_session);
 
     /**
      * @brief Delete PCF application session
      * @param qod_session QoD session to delete PCF session for
      * @return PCF request message or nullopt on failure
      */
-    std::optional<af::communication::MessagePtr> delete_pcf_session(
-        const af::common::qod::QodSession& qod_session);
+    std::optional<af::communication::MessagePtr> delete_pcf_session(const af::common::qod::QodSession& qod_session);
 
     // === PCF Response Handling ===
 
@@ -131,32 +123,29 @@ public:
      * @param message PCF response message
      * @return Processed result with PCF session ID and status
      */
-    std::pair<bool, std::string> handle_pcf_create_response(
-        const af::communication::MessagePtr& message);
+    std::pair<bool, std::string> handle_pcf_create_response(const af::communication::MessagePtr& message);
 
     /**
      * @brief Handle PCF update session response
      * @param message PCF response message
      * @return Success status
      */
-    bool handle_pcf_update_response(
-        const af::communication::MessagePtr& message);
+    bool handle_pcf_update_response(const af::communication::MessagePtr& message);
 
     /**
      * @brief Handle PCF delete session response
      * @param message PCF response message
      * @return Success status
      */
-    bool handle_pcf_delete_response(
-        const af::communication::MessagePtr& message);
+    bool handle_pcf_delete_response(const af::communication::MessagePtr& message);
 
     /**
      * @brief Handle PCF notification
      * @param message PCF notification message
      * @return QoD session ID and termination reason if applicable
      */
-    std::pair<std::optional<std::string>, std::optional<std::string>>
-        handle_pcf_notification(const af::communication::MessagePtr& message);
+    std::pair<std::optional<std::string>, std::optional<std::string>> handle_pcf_notification(
+        const af::communication::MessagePtr& message);
 
     // === Session Mapping ===
 
@@ -165,8 +154,7 @@ public:
      * @param qod_session_id QoD session ID
      * @return PCF session info or nullopt
      */
-    std::optional<PcfSessionInfo> get_pcf_session_info(
-        const std::string& qod_session_id);
+    std::optional<PcfSessionInfo> get_pcf_session_info(const std::string& qod_session_id);
 
     /**
      * @brief Get QoD session ID by PCF session ID
@@ -188,8 +176,7 @@ private:
      * @param qod_session QoD session
      * @return PCF request json or nullopt on failure
      */
-    nlohmann::json build_pcf_create_request(
-        const af::common::qod::QodSession& qod_session);
+    nlohmann::json build_pcf_create_request(const af::common::qod::QodSession& qod_session);
 
     /**
      * @brief Build PCF application session context
@@ -204,8 +191,7 @@ private:
      * @param mapping QoS profile mapping
      * @return JSON array of media components
      */
-    nlohmann::json build_media_components(
-        const af::common::qod::QodSession& qod_session);
+    nlohmann::json build_media_components(const af::common::qod::QodSession& qod_session);
 
     /**
      * @brief Build flow descriptions for PCF
@@ -227,9 +213,8 @@ private:
      * @param ue_supi Resolved SUPI if available
      * @return JSON representation of UE identification
      */
-    nlohmann::json translate_device_to_ue_id(
-        const std::optional<af::common::qod::QodDevice>& device,
-        const std::optional<Supi>& ue_supi);
+    nlohmann::json translate_device_to_ue_id(const std::optional<af::common::qod::QodDevice>& device,
+                                             const std::optional<Supi>& ue_supi);
 
     /**
      * @brief Build AF request data for PCF
@@ -248,8 +233,7 @@ private:
      * @param qod_session Complete QoD session (provides IPs and port specs)
      * @return JSON object of media sub-components keyed by flow number
      */
-    nlohmann::json map_ports_to_media_subcomponents(
-        const af::common::qod::QodSession& qod_session);
+    nlohmann::json map_ports_to_media_subcomponents(const af::common::qod::QodSession& qod_session);
 
     /**
      * @brief Store PCF session mapping
@@ -257,17 +241,15 @@ private:
      * @param pcf_session_id PCF session ID
      * @param state Initial state
      */
-    void store_session_mapping(const std::string& qod_session_id,
-                              const std::string& pcf_session_id,
-                              PcfSessionState state);
+    void store_session_mapping(const std::string& qod_session_id, const std::string& pcf_session_id,
+                               PcfSessionState state);
 
     /**
      * @brief Update PCF session state
      * @param pcf_session_id PCF session ID
      * @param state New state
      */
-    void update_session_state(const std::string& pcf_session_id,
-                             PcfSessionState state);
+    void update_session_state(const std::string& pcf_session_id, PcfSessionState state);
 
     /**
      * @brief Remove PCF session mapping
@@ -315,8 +297,6 @@ private:
 
     std::shared_ptr<PcfGateway> pcf_gateway_;
 
-
-
     // Session mappings
     std::unordered_map<std::string, PcfSessionInfo> qod_to_pcf_sessions_; // QoD ID -> PCF info
     std::unordered_map<std::string, std::string> pcf_to_qod_sessions_;    // PCF ID -> QoD ID
@@ -324,7 +304,7 @@ private:
 
     // AF identification for PCF
     std::string af_id_{"af_qod_service"};
-    std::string af_notification_uri_{"http://af-core:50051/qod/notifications"};
+    std::string af_notification_uri_{"http://phine.af-core:50051/qod/notifications"};
 
     // Logger
     std::shared_ptr<spdlog::logger> logger_;

@@ -26,7 +26,7 @@ void signalHandler(int signum) {
 
 // Parse command line arguments
 std::string parseConfigPath(int argc, char* argv[]) {
-    std::string config_path = "/etc/oai/af/af.yaml"; // Default path
+    std::string config_path = "/etc/phine.af/af.yaml"; // Default path
 
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];

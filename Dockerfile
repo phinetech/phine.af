@@ -210,7 +210,9 @@ FROM builder AS checks
 RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
     wget gnupg lsb-release software-properties-common ca-certificates python3 \
-    && wget -qO- https://apt.llvm.org/llvm.sh | bash -s -- 18 \
+    && wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /etc/apt/trusted.gpg.d/apt.llvm.org.gpg \
+    && echo "deb http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-18 main" > /etc/apt/sources.list.d/llvm-18.list \
+    && apt-get update \
     && apt-get install --yes --no-install-recommends clang-tidy-18 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -268,11 +270,11 @@ RUN ldconfig
 COPY --from=builder /app/build-output/bin/af /usr/local/bin/
 
 # Copy unified config
-COPY config/af.yaml /etc/oai/af/af.yaml
+COPY config/af.yaml /etc/phine.af/af.yaml
 
 # Create a non-root user
 RUN groupadd -r afuser && useradd -r -g afuser afuser && \
-    chown -R afuser:afuser /usr/local/bin/af /etc/oai/af
+    chown -R afuser:afuser /usr/local/bin/af /etc/phine.af
 
 WORKDIR /usr/local/bin
 RUN chmod +x ./af
@@ -282,4 +284,4 @@ USER afuser
 # Expose ports: AF Core gRPC (50051)
 EXPOSE 50051
 
-CMD ["/usr/local/bin/af", "--config", "/etc/oai/af/af.yaml"]
+CMD ["/usr/local/bin/af", "--config", "/etc/phine.af/af.yaml"]

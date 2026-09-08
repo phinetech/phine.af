@@ -23,8 +23,8 @@ namespace {
 using namespace phine::adapter;
 
 constexpr const char* kBundleConfigEnv = "PHINE_DEMO_QOD_ADAPTER_CONFIG";
-constexpr const char* kDefaultBundleConfigPath = "/etc/oai/af/demo_qod_adapter.yaml";
-constexpr const char* kFallbackAfConfigPath = "/etc/oai/af/af.yaml";
+constexpr const char* kDefaultBundleConfigPath = "/etc/phine.af/demo_qod_adapter.yaml";
+constexpr const char* kFallbackAfConfigPath = "/etc/phine.af/af.yaml";
 
 bool file_exists(const std::string& path) {
     std::ifstream stream(path);
@@ -47,7 +47,7 @@ std::pair<std::string, std::string> load_bundle_config_location() {
 }
 
 class BundledAdapterRuntime {
-   public:
+public:
     BundledAdapterRuntime() {
         worker_ = std::thread(&BundledAdapterRuntime::run, this);
     }
@@ -62,30 +62,26 @@ class BundledAdapterRuntime {
     BundledAdapterRuntime(const BundledAdapterRuntime&) = delete;
     BundledAdapterRuntime& operator=(const BundledAdapterRuntime&) = delete;
 
-   private:
+private:
     void run() {
         try {
-                auto [config_path, root_prefix] = load_bundle_config_location();
-                if (config_path.empty()) {
+            auto [config_path, root_prefix] = load_bundle_config_location();
+            if (config_path.empty()) {
                 spdlog::warn(
                     "[demo-qod-adapter] No bundled adapter config found. "
                     "Set {} or provide {}.",
-                    kBundleConfigEnv,
-                    kDefaultBundleConfigPath);
+                    kBundleConfigEnv, kDefaultBundleConfigPath);
                 return;
             }
 
-            spdlog::info("[demo-qod-adapter] Starting bundled adapter runtime using config {}",
-                         config_path);
+            spdlog::info("[demo-qod-adapter] Starting bundled adapter runtime using config {}", config_path);
 
-                const auto runtime_config = load_adapter_runtime_config(
-                    config_path,
-                    AdapterRuntimeDefaults{QodClientConfig{}, MonitorConfig{10, -1}},
-                    root_prefix);
+            const auto runtime_config = load_adapter_runtime_config(
+                config_path, AdapterRuntimeDefaults{QodClientConfig{}, MonitorConfig{10, -1}}, root_prefix);
 
-                const auto& client_config = runtime_config.client;
-                const auto& streams = runtime_config.streams;
-                const auto& monitor_config = runtime_config.monitor;
+            const auto& client_config = runtime_config.client;
+            const auto& streams = runtime_config.streams;
+            const auto& monitor_config = runtime_config.monitor;
 
             if (streams.empty()) {
                 spdlog::warn("[demo-qod-adapter] No streams configured. Bundled adapter will remain idle.");
@@ -108,12 +104,10 @@ class BundledAdapterRuntime {
             SessionManager manager(client);
             manager.create_all_sessions(streams);
 
-            for (int iteration = 0;
-                 !shutdown_requested_.load(std::memory_order_acquire) &&
-                 (monitor_config.iterations < 0 || iteration < monitor_config.iterations);
+            for (int iteration = 0; !shutdown_requested_.load(std::memory_order_acquire) &&
+                                    (monitor_config.iterations < 0 || iteration < monitor_config.iterations);
                  ++iteration) {
-                std::this_thread::sleep_for(
-                    std::chrono::seconds(monitor_config.interval_seconds));
+                std::this_thread::sleep_for(std::chrono::seconds(monitor_config.interval_seconds));
 
                 if (shutdown_requested_.load(std::memory_order_acquire)) {
                     break;
@@ -135,4 +129,4 @@ class BundledAdapterRuntime {
 
 BundledAdapterRuntime g_bundled_adapter_runtime;
 
-}  // namespace
+} // namespace

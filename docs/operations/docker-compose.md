@@ -11,7 +11,7 @@ Deployment selection is controlled by Compose profiles.
 - `free5gc`: 5G core network + UERANSIM
 - `afs`: separate `af_core` + `pcf_handler` + `api_component`
 - `af`: bundled `af` + `api_component`
-- `standalone-qod`: standalone `demo-qod-adapter`
+- `standalone-qod`: standalone `phine.af-demo-qod-adapter`
 - `demo-qod`: bundled `af_demo_qod` + `api_component`
 - `af-client`: helper Ubuntu container for manual testing
 
@@ -33,7 +33,7 @@ The bundled deployment keeps:
 - `af`: bundled AF Core + southbound PCF handler
 - `api_component`: standalone northbound HTTP/2 API
 
-In other words, “bundled” means **core + southbound** are packaged together. Northbound adapters are still deployed separately.
+In other words, "bundled" means **core + southbound** are packaged together. Northbound APIs are still deployed separately.
 
 
 <!---

@@ -1,6 +1,8 @@
 # FAQ
 
-<!---
-TODO: Populate FAQ entries based on recurring issues.
-No FAQ content exists in the repo at the time of writing.
--->
+This FAQ will grow as questions come in. For now, please check:
+
+- [Common errors](common-errors.md)
+- [Debugging](debugging.md)
+- Open a [Discussion](https://github.com/phinetech/phine.af/discussions) —
+  answered questions land here.

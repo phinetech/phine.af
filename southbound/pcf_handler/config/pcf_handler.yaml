@@ -18,5 +18,5 @@ pcf_handler:
       host: "0.0.0.0"
       port: 50055
     remote:
-      host: "af-core"
+      host: "phine.af-core"
       port: 50051

@@ -46,7 +46,7 @@ jobs:
     steps:
       - name: Checkout code
         if: ${{ !hashFiles('.git/HEAD') }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
           token: ${{ secrets.CI_GITHUB_TOKEN }}
@@ -125,7 +125,7 @@ jobs:
 
       - name: Upload ${{ matrix.tutorial.name }} logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ matrix.tutorial.artifact-name }}
           path: ${{ matrix.tutorial.log-path }}

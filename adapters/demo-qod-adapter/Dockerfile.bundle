@@ -173,18 +173,18 @@ RUN apt-get update && \
       libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY adapters/demo-qod-adapter/config.yaml /etc/oai/af/demo_qod_adapter.yaml
-COPY config/af.yaml /etc/oai/af/af.yaml
+COPY adapters/demo-qod-adapter/config.yaml /etc/phine.af/demo_qod_adapter.yaml
+COPY config/af.yaml /etc/phine.af/af.yaml
 
 RUN groupadd -r afuser && useradd -r -g afuser afuser && \
     chmod +x /usr/local/bin/af && \
-    chown -R afuser:afuser /usr/local/bin/af /etc/oai/af && \
+    chown -R afuser:afuser /usr/local/bin/af /etc/phine.af && \
     ldconfig
 
-ENV PHINE_DEMO_QOD_ADAPTER_CONFIG=/etc/oai/af/demo_qod_adapter.yaml
+ENV PHINE_DEMO_QOD_ADAPTER_CONFIG=/etc/phine.af/demo_qod_adapter.yaml
 
 USER afuser
 
 EXPOSE 50051
 
-CMD ["/usr/local/bin/af", "--config", "/etc/oai/af/af.yaml"]
+CMD ["/usr/local/bin/af", "--config", "/etc/phine.af/af.yaml"]

@@ -21,8 +21,10 @@ docker run --rm --network host -v ./common/protos:/var/protos/ fullstorydev/grpc
   af.proto.InternalCommunication/SendMessage
 ```
 
-<!---
-TODO: Document expected response schema for the above.
-We need to inspect the proto (`common/protos`) and/or AF core handlers to document response types.
-Sources: the command is from [README.md](../../README.md); handler wiring is in [af_core/src/af_orchestrator.cpp](../../af_core/src/af_orchestrator.cpp).
--->
+A successful invocation returns an `af.proto.InternalMessage` with a
+matching `correlation_id`, a `message_type` of `qod_create_session_response`,
+and a base64-encoded JSON payload matching the CAMARA QoD
+`CreateSession`/`SessionInfo` schema. See
+[`common/protos/message.proto`](../../common/protos/message.proto) for the
+envelope and [`af_core/src/qod/qod_session_manager.cpp`](../../af_core/src/qod/qod_session_manager.cpp)
+for the payload shape.

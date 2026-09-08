@@ -240,7 +240,9 @@ RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
     wget gnupg lsb-release software-properties-common ca-certificates python3 \
     libgtest-dev libgmock-dev \
-    && wget -qO- https://apt.llvm.org/llvm.sh | bash -s -- 18 \
+     && wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /etc/apt/trusted.gpg.d/apt.llvm.org.gpg \
+     && echo "deb http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-18 main" > /etc/apt/sources.list.d/llvm-18.list \
+     && apt-get update \
     && apt-get install --yes --no-install-recommends clang-tidy-18 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -358,11 +360,11 @@ RUN apt-get update && \
     libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY ./southbound/pcf_handler/config/pcf_handler.yaml /etc/oai/af/pcf_handler.yaml
+COPY ./southbound/pcf_handler/config/pcf_handler.yaml /etc/phine.af/pcf_handler.yaml
 
 # Create a non-root user
 RUN groupadd -r afpcfuser && useradd -r -g afpcfuser afpcfuser && \
-    chown -R afpcfuser:afpcfuser /usr/local/bin/pcf_server /etc/oai/af
+    chown -R afpcfuser:afpcfuser /usr/local/bin/pcf_server /etc/phine.af
 
 # Set working directory
 WORKDIR /usr/local/bin
@@ -377,4 +379,4 @@ USER afpcfuser
 EXPOSE 8080
 
 # Command to run
-CMD ["/usr/local/bin/pcf_server", "--config", "/etc/oai/af/pcf_handler.yaml"]
+CMD ["/usr/local/bin/pcf_server", "--config", "/etc/phine.af/pcf_handler.yaml"]
