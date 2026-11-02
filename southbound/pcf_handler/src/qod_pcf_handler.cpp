@@ -20,9 +20,7 @@
 namespace af {
 namespace southbound {
 
-QodPcfHandler::QodPcfHandler(const af::config::PcfHandlerConfig& config)
-    : config_(config) {
-
+QodPcfHandler::QodPcfHandler(const af::config::PcfHandlerConfig& config) : config_(config) {
     // Setup logger
     initializeLogger(config_.logging.level);
 
@@ -33,12 +31,10 @@ QodPcfHandler::QodPcfHandler(const af::config::PcfHandlerConfig& config)
             {"base_url", pcf_config.base_url},
             {"use_tls", pcf_config.use_tls ? "true" : "false"},
             {"timeout_ms", "5000"},
-            {"client_only", "true"}
-        };
+            {"client_only", "true"}};
 
         auto pcf_sbi_service = std::dynamic_pointer_cast<af::communication::http::HttpCommunicationService>(
-            af::communication::CommunicationFactory::create_service(
-                "http", "qod_pcf_sbi", pcf_sbi_config));
+            af::communication::CommunicationFactory::create_service("http", "qod_pcf_sbi", pcf_sbi_config));
 
         if (pcf_sbi_service) {
             pcf_gateway_ = std::make_shared<HttpPcfGateway>(pcf_sbi_service, pcf_config.api_version);
@@ -178,7 +174,6 @@ void QodPcfHandler::initializeLogger(spdlog::level::level_enum log_level) {
 // === Qod Handlers ===
 af::communication::MessagePtr QodPcfHandler::handle_qod_create_pcf_session(
     const af::communication::MessagePtr& message) {
-
     logger_->info("Handling QoD create PCF session request");
 
     // Parse incoming message to QodSession
@@ -207,9 +202,8 @@ af::communication::MessagePtr QodPcfHandler::handle_qod_create_pcf_session(
         // CRITICAL: Parse QoS profile mapping (bandwidth values, 5QI, etc.)
         if (json.contains("qos_profile_mapping") && !json["qos_profile_mapping"].is_null()) {
             af::common::qod::QosProfileMapping mapping;
-            auto parse_result = af::common::qod::QosProfileMapper::try_deserialize_qos_mapping(
-                json["qos_profile_mapping"],
-                mapping);
+            auto parse_result =
+                af::common::qod::QosProfileMapper::try_deserialize_qos_mapping(json["qos_profile_mapping"], mapping);
             auto validation_result = af::common::qod::QosProfileMapper::validate_qos_mapping(mapping);
 
             if (!parse_result.is_valid || !validation_result.is_valid) {
@@ -220,18 +214,13 @@ af::communication::MessagePtr QodPcfHandler::handle_qod_create_pcf_session(
                 af::utils::append_validation_errors(error_stream, validation_result);
 
                 return af::common::handlers::ServiceHandlerHelpers::create_error_response(
-                    400,
-                    "bad_request",
-                    error_stream.str(),
-                    message->correlation_id,
-                    logger_);
+                    400, "bad_request", error_stream.str(), message->correlation_id, logger_);
             }
 
             qod_session.qos_profile_mapping = mapping;
-            logger_->debug("Parsed QoS profile mapping - 5QI: {}, GBR: {}, GBR_DL: {}, MBR_DL: {}",
-                          mapping.fiveqi, mapping.is_gbr,
-                          mapping.guaranteed_downlink_rate.value_or("N/A"),
-                          mapping.max_downlink_rate.value_or("N/A"));
+            logger_->debug("Parsed QoS profile mapping - 5QI: {}, GBR: {}, GBR_DL: {}, MBR_DL: {}", mapping.fiveqi,
+                           mapping.is_gbr, mapping.guaranteed_downlink_rate.value_or("N/A"),
+                           mapping.max_downlink_rate.value_or("N/A"));
         } else {
             logger_->warn("QoS profile mapping not found in message for session: {}", qod_session.session_id);
         }
@@ -241,10 +230,7 @@ af::communication::MessagePtr QodPcfHandler::handle_qod_create_pcf_session(
         auto pcf_msg_opt = create_pcf_session(qod_session);
         if (!pcf_msg_opt) {
             return af::common::handlers::ServiceHandlerHelpers::create_error_response(
-                500,
-                "pcf_request_creation_failed",
-                "Failed to create PCF session request",
-                message->correlation_id,
+                500, "pcf_request_creation_failed", "Failed to create PCF session request", message->correlation_id,
                 logger_);
         }
         return *pcf_msg_opt;
@@ -253,18 +239,13 @@ af::communication::MessagePtr QodPcfHandler::handle_qod_create_pcf_session(
         logger_->error("Error parsing QoD create request: {}", e.what());
 
         // Return error response
-        return af::common::handlers::ServiceHandlerHelpers::create_error_response(
-            400,
-            "bad_request",
-            e.what(),
-            message->correlation_id,
-            logger_);
+        return af::common::handlers::ServiceHandlerHelpers::create_error_response(400, "bad_request", e.what(),
+                                                                                  message->correlation_id, logger_);
     }
 }
 
 af::communication::MessagePtr QodPcfHandler::handle_qod_update_pcf_session(
     const af::communication::MessagePtr& message) {
-
     logger_->info("Handling QoD update PCF session request");
 
     // Parse incoming message to QodSession
@@ -294,9 +275,8 @@ af::communication::MessagePtr QodPcfHandler::handle_qod_update_pcf_session(
         // CRITICAL: Parse QoS profile mapping (bandwidth values, 5QI, etc.)
         if (json.contains("qos_profile_mapping") && !json["qos_profile_mapping"].is_null()) {
             af::common::qod::QosProfileMapping mapping;
-            auto parse_result = af::common::qod::QosProfileMapper::try_deserialize_qos_mapping(
-                json["qos_profile_mapping"],
-                mapping);
+            auto parse_result =
+                af::common::qod::QosProfileMapper::try_deserialize_qos_mapping(json["qos_profile_mapping"], mapping);
             auto validation_result = af::common::qod::QosProfileMapper::validate_qos_mapping(mapping);
 
             if (!parse_result.is_valid || !validation_result.is_valid) {
@@ -307,18 +287,13 @@ af::communication::MessagePtr QodPcfHandler::handle_qod_update_pcf_session(
                 af::utils::append_validation_errors(error_stream, validation_result);
 
                 return af::common::handlers::ServiceHandlerHelpers::create_error_response(
-                    400,
-                    "bad_request",
-                    error_stream.str(),
-                    message->correlation_id,
-                    logger_);
+                    400, "bad_request", error_stream.str(), message->correlation_id, logger_);
             }
 
             qod_session.qos_profile_mapping = mapping;
             logger_->debug("Parsed QoS profile mapping for update - 5QI: {}, GBR: {}, GBR_DL: {}, MBR_DL: {}",
-                          mapping.fiveqi, mapping.is_gbr,
-                          mapping.guaranteed_downlink_rate.value_or("N/A"),
-                          mapping.max_downlink_rate.value_or("N/A"));
+                           mapping.fiveqi, mapping.is_gbr, mapping.guaranteed_downlink_rate.value_or("N/A"),
+                           mapping.max_downlink_rate.value_or("N/A"));
         } else {
             logger_->warn("QoS profile mapping not found in update message for session: {}", qod_session.session_id);
         }
@@ -329,11 +304,8 @@ af::communication::MessagePtr QodPcfHandler::handle_qod_update_pcf_session(
         auto pcf_msg_opt = update_pcf_session(qod_session);
         if (!pcf_msg_opt) {
             return af::common::handlers::ServiceHandlerHelpers::create_error_response(
-                500,
-                "pcf_request_creation_failed",
-                "Failed to create PCF session update request",
-                message->correlation_id,
-                logger_);
+                500, "pcf_request_creation_failed", "Failed to create PCF session update request",
+                message->correlation_id, logger_);
         }
         return *pcf_msg_opt;
 
@@ -341,18 +313,13 @@ af::communication::MessagePtr QodPcfHandler::handle_qod_update_pcf_session(
         logger_->error("Error parsing QoD update request: {}", e.what());
 
         // Return error response
-        return af::common::handlers::ServiceHandlerHelpers::create_error_response(
-            400,
-            "bad_request",
-            e.what(),
-            message->correlation_id,
-            logger_);
+        return af::common::handlers::ServiceHandlerHelpers::create_error_response(400, "bad_request", e.what(),
+                                                                                  message->correlation_id, logger_);
     }
 }
 
 af::communication::MessagePtr QodPcfHandler::handle_qod_delete_pcf_session(
     const af::communication::MessagePtr& message) {
-
     logger_->info("Handling QoD delete PCF session request");
 
     // Parse incoming message to get session ID
@@ -376,11 +343,8 @@ af::communication::MessagePtr QodPcfHandler::handle_qod_delete_pcf_session(
         auto pcf_msg_opt = delete_pcf_session(qod_session);
         if (!pcf_msg_opt) {
             return af::common::handlers::ServiceHandlerHelpers::create_error_response(
-                500,
-                "pcf_request_creation_failed",
-                "Failed to create PCF session delete request",
-                message->correlation_id,
-                logger_);
+                500, "pcf_request_creation_failed", "Failed to create PCF session delete request",
+                message->correlation_id, logger_);
         }
         return *pcf_msg_opt;
 
@@ -388,12 +352,8 @@ af::communication::MessagePtr QodPcfHandler::handle_qod_delete_pcf_session(
         logger_->error("Error parsing QoD delete request: {}", e.what());
 
         // Return error response
-        return af::common::handlers::ServiceHandlerHelpers::create_error_response(
-            400,
-            "bad_request",
-            e.what(),
-            message->correlation_id,
-            logger_);
+        return af::common::handlers::ServiceHandlerHelpers::create_error_response(400, "bad_request", e.what(),
+                                                                                  message->correlation_id, logger_);
     }
 }
 
@@ -401,7 +361,6 @@ af::communication::MessagePtr QodPcfHandler::handle_qod_delete_pcf_session(
 
 std::optional<af::communication::MessagePtr> QodPcfHandler::create_pcf_session(
     const af::common::qod::QodSession& qod_session) {
-
     logger_->info("Creating PCF session for QoD session: {}", qod_session.session_id);
 
     try {
@@ -417,10 +376,7 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::create_pcf_session(
                 logger_->error("Validation error: {}", err);
             }
             return af::common::handlers::ServiceHandlerHelpers::create_error_response(
-                400,
-                "pcf_request_invalid",
-                "PCF create app session request validation failed",
-                qod_session.session_id,
+                400, "pcf_request_invalid", "PCF create app session request validation failed", qod_session.session_id,
                 logger_);
         }
 
@@ -429,10 +385,7 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::create_pcf_session(
         if (!success) {
             logger_->error("Failed to send create app session request to PCF");
             return af::common::handlers::ServiceHandlerHelpers::create_error_response(
-                502,
-                "pcf_request_failed",
-                "Failed to send create app session request to PCF",
-                qod_session.session_id,
+                502, "pcf_request_failed", "Failed to send create app session request to PCF", qod_session.session_id,
                 logger_);
         }
         logger_->info("PCF create app session request sent successfully");
@@ -440,14 +393,11 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::create_pcf_session(
 
         // Get appSessionId from response header Loacation field
         // Format is {apiRoot}/npcf-policyauthorization/v1/app-sessions/{appSessionId}
-        if (!response.contains("headers") || (!response["headers"].contains("Location") && !response["headers"].contains("location"))) {
+        if (!response.contains("headers") ||
+            (!response["headers"].contains("Location") && !response["headers"].contains("location"))) {
             logger_->error("PCF response missing Location header");
             return af::common::handlers::ServiceHandlerHelpers::create_error_response(
-                502,
-                "pcf_response_invalid",
-                "PCF response missing Location header",
-                qod_session.session_id,
-                logger_);
+                502, "pcf_response_invalid", "PCF response missing Location header", qod_session.session_id, logger_);
         }
 
         std::string location = response["headers"].value("Location", response["headers"].value("location", ""));
@@ -461,11 +411,8 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::create_pcf_session(
         if (app_sessions_pos == std::string::npos) {
             logger_->error("PCF Location header missing '/app-sessions/' pattern: {}", location);
             return af::common::handlers::ServiceHandlerHelpers::create_error_response(
-                502,
-                "pcf_response_invalid",
-                "PCF Location header missing '/app-sessions/' pattern",
-                qod_session.session_id,
-                logger_);
+                502, "pcf_response_invalid", "PCF Location header missing '/app-sessions/' pattern",
+                qod_session.session_id, logger_);
         }
 
         // Extract app session ID (everything after /app-sessions/)
@@ -476,36 +423,27 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::create_pcf_session(
         if (app_session_id.empty()) {
             logger_->error("PCF Location header contains empty app session ID: {}", location);
             return af::common::handlers::ServiceHandlerHelpers::create_error_response(
-                502,
-                "pcf_response_invalid",
-                "PCF Location header contains empty app session ID",
-                qod_session.session_id,
-                logger_);
+                502, "pcf_response_invalid", "PCF Location header contains empty app session ID",
+                qod_session.session_id, logger_);
         }
         logger_->info("Extracted appSessionId from PCF response: {}", app_session_id);
-
 
         std::string pcf_session_id = app_session_id; // Use app_session_id as pcf_session_id
 
         // Store mapping
-        store_session_mapping(qod_session.session_id, pcf_session_id,
-                            PcfSessionState::CREATING);
+        store_session_mapping(qod_session.session_id, pcf_session_id, PcfSessionState::CREATING);
 
         // The interation is synchronous send pcf_qod_session_created
         nlohmann::json response_json;
         response_json["pcf_session_id"] = pcf_session_id;
         auto msg = af::common::handlers::ServiceHandlerHelpers::create_success_response(
-            response_json,
-            200,
-            qod_session.session_id,
-            logger_);
+            response_json, 200, qod_session.session_id, logger_);
         msg->message_type = "pcf_qod_session_created";
 
         // Store request for debugging
         {
             std::lock_guard<std::mutex> lock(sessions_mutex_);
-            if (auto it = qod_to_pcf_sessions_.find(qod_session.session_id);
-                it != qod_to_pcf_sessions_.end()) {
+            if (auto it = qod_to_pcf_sessions_.find(qod_session.session_id); it != qod_to_pcf_sessions_.end()) {
                 it->second.last_request = pcf_request;
             }
         }
@@ -513,8 +451,7 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::create_pcf_session(
         logger_->debug("PCF create request: {}", pcf_request.dump());
 
         return msg;
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         logger_->error("Error creating PCF session request: {}", e.what());
         return std::nullopt;
     }
@@ -522,7 +459,6 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::create_pcf_session(
 
 std::optional<af::communication::MessagePtr> QodPcfHandler::update_pcf_session(
     const af::common::qod::QodSession& qod_session) {
-
     logger_->info("Updating PCF session for QoD session: {}", qod_session.session_id);
 
     // Get PCF session info
@@ -554,15 +490,11 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::update_pcf_session(
             }
         }
 
-
         auto [success, response] = pcf_gateway_->update_app_session(pcf_info.pcf_session_id, pcf_request);
         if (!success) {
             logger_->error("Failed to send update app session request to PCF");
             return af::common::handlers::ServiceHandlerHelpers::create_error_response(
-                502,
-                "pcf_request_failed",
-                "Failed to send update app session request to PCF",
-                qod_session.session_id,
+                502, "pcf_request_failed", "Failed to send update app session request to PCF", qod_session.session_id,
                 logger_);
         }
         logger_->info("PCF update app session request sent successfully");
@@ -575,17 +507,13 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::update_pcf_session(
         nlohmann::json response_json;
         response_json["pcf_session_id"] = pcf_info.pcf_session_id;
         auto msg = af::common::handlers::ServiceHandlerHelpers::create_success_response(
-            response_json,
-            200,
-            qod_session.session_id,
-            logger_);
+            response_json, 200, qod_session.session_id, logger_);
         msg->message_type = "pcf_update_app_session";
 
         // Store request
         {
             std::lock_guard<std::mutex> lock(sessions_mutex_);
-            if (auto it = qod_to_pcf_sessions_.find(qod_session.session_id);
-                it != qod_to_pcf_sessions_.end()) {
+            if (auto it = qod_to_pcf_sessions_.find(qod_session.session_id); it != qod_to_pcf_sessions_.end()) {
                 it->second.last_request = pcf_request;
             }
         }
@@ -593,8 +521,7 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::update_pcf_session(
         logger_->debug("PCF update request: {}", pcf_request.dump());
 
         return msg;
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         logger_->error("Error creating PCF update request: {}", e.what());
         return std::nullopt;
     }
@@ -602,7 +529,6 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::update_pcf_session(
 
 std::optional<af::communication::MessagePtr> QodPcfHandler::delete_pcf_session(
     const af::common::qod::QodSession& qod_session) {
-
     logger_->info("Deleting PCF session for QoD session: {}", qod_session.session_id);
 
     // Get PCF session info
@@ -617,17 +543,14 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::delete_pcf_session(
         // Build PCF delete request
         nlohmann::json pcf_request = nlohmann::json::object();
         pcf_request["events"] = nlohmann::json::array();
-        pcf_request["events"].push_back({ {"event", "QOS_NOTIF"} });
+        pcf_request["events"].push_back({{"event", "QOS_NOTIF"}});
         pcf_request["notifUri"] = af_notification_uri_ + "/" + qod_session.session_id;
 
         bool success = pcf_gateway_->delete_app_session(pcf_info.pcf_session_id, pcf_request);
         if (!success) {
             logger_->error("Failed to send delete app session request to PCF");
             return af::common::handlers::ServiceHandlerHelpers::create_error_response(
-                502,
-                "pcf_request_failed",
-                "Failed to send delete app session request to PCF",
-                qod_session.session_id,
+                502, "pcf_request_failed", "Failed to send delete app session request to PCF", qod_session.session_id,
                 logger_);
         }
         logger_->info("PCF delete app session request sent successfully");
@@ -639,17 +562,13 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::delete_pcf_session(
         nlohmann::json response_json;
         response_json["pcf_session_id"] = pcf_info.pcf_session_id;
         auto msg = af::common::handlers::ServiceHandlerHelpers::create_success_response(
-            response_json,
-            200,
-            qod_session.session_id,
-            logger_);
+            response_json, 200, qod_session.session_id, logger_);
         msg->message_type = "pcf_delete_app_session";
 
         logger_->debug("PCF delete request: {}", pcf_request.dump());
 
         return msg;
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         logger_->error("Error creating PCF delete request: {}", e.what());
         return std::nullopt;
     }
@@ -657,9 +576,7 @@ std::optional<af::communication::MessagePtr> QodPcfHandler::delete_pcf_session(
 
 // === PCF Response Handling ===
 
-std::pair<bool, std::string> QodPcfHandler::handle_pcf_create_response(
-    const af::communication::MessagePtr& message) {
-
+std::pair<bool, std::string> QodPcfHandler::handle_pcf_create_response(const af::communication::MessagePtr& message) {
     logger_->info("Handling PCF create response");
 
     try {
@@ -686,8 +603,7 @@ std::pair<bool, std::string> QodPcfHandler::handle_pcf_create_response(
             // Store response
             {
                 std::lock_guard<std::mutex> lock(sessions_mutex_);
-                if (auto it = qod_to_pcf_sessions_.find(qod_session_id);
-                    it != qod_to_pcf_sessions_.end()) {
+                if (auto it = qod_to_pcf_sessions_.find(qod_session_id); it != qod_to_pcf_sessions_.end()) {
                     it->second.last_response = response_json;
                     it->second.pcf_session_id = pcf_session_id;
                 }
@@ -695,8 +611,7 @@ std::pair<bool, std::string> QodPcfHandler::handle_pcf_create_response(
 
             logger_->info("PCF session created successfully: {}", pcf_session_id);
             return {true, pcf_session_id};
-        }
-        else if (message->message_type == "pcf_error") {
+        } else if (message->message_type == "pcf_error") {
             // Error response
             std::string error_msg = response_json.value("message", "Unknown PCF error");
             std::string error_code = response_json.value("code", "UNKNOWN");
@@ -707,21 +622,17 @@ std::pair<bool, std::string> QodPcfHandler::handle_pcf_create_response(
             remove_session_mapping(qod_session_id);
 
             return {false, error_msg};
-        }
-        else {
+        } else {
             logger_->error("Unexpected PCF response type: {}", message->message_type);
             return {false, "Unexpected response type"};
         }
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         logger_->error("Error handling PCF create response: {}", e.what());
         return {false, std::string("Exception: ") + e.what()};
     }
 }
 
-bool QodPcfHandler::handle_pcf_update_response(
-    const af::communication::MessagePtr& message) {
-
+bool QodPcfHandler::handle_pcf_update_response(const af::communication::MessagePtr& message) {
     logger_->info("Handling PCF update response");
 
     try {
@@ -739,8 +650,7 @@ bool QodPcfHandler::handle_pcf_update_response(
                 // Store response
                 {
                     std::lock_guard<std::mutex> lock(sessions_mutex_);
-                    if (auto it = qod_to_pcf_sessions_.find(qod_session_id);
-                        it != qod_to_pcf_sessions_.end()) {
+                    if (auto it = qod_to_pcf_sessions_.find(qod_session_id); it != qod_to_pcf_sessions_.end()) {
                         it->second.last_response = response_json;
                     }
                 }
@@ -748,21 +658,17 @@ bool QodPcfHandler::handle_pcf_update_response(
 
             logger_->info("PCF session updated successfully");
             return true;
-        }
-        else {
+        } else {
             logger_->error("PCF update failed");
             return false;
         }
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         logger_->error("Error handling PCF update response: {}", e.what());
         return false;
     }
 }
 
-bool QodPcfHandler::handle_pcf_delete_response(
-    const af::communication::MessagePtr& message) {
-
+bool QodPcfHandler::handle_pcf_delete_response(const af::communication::MessagePtr& message) {
     logger_->info("Handling PCF delete response");
 
     try {
@@ -773,21 +679,18 @@ bool QodPcfHandler::handle_pcf_delete_response(
             remove_session_mapping(qod_session_id);
             logger_->info("PCF session deleted successfully");
             return true;
-        }
-        else {
+        } else {
             logger_->error("PCF delete failed");
             return false;
         }
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         logger_->error("Error handling PCF delete response: {}", e.what());
         return false;
     }
 }
 
-std::pair<std::optional<std::string>, std::optional<std::string>>
-QodPcfHandler::handle_pcf_notification(const af::communication::MessagePtr& message) {
-
+std::pair<std::optional<std::string>, std::optional<std::string>> QodPcfHandler::handle_pcf_notification(
+    const af::communication::MessagePtr& message) {
     logger_->info("Handling PCF notification");
 
     try {
@@ -817,13 +720,11 @@ QodPcfHandler::handle_pcf_notification(const af::communication::MessagePtr& mess
             // QoS cannot be guaranteed
             logger_->warn("PCF QoS notification for QoD session {}", qod_session_id);
             return {qod_session_id, "QOS_NOTIF"};
-        }
-        else {
+        } else {
             logger_->debug("Unhandled PCF notification type: {}", event_type);
             return {std::nullopt, std::nullopt};
         }
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         logger_->error("Error handling PCF notification: {}", e.what());
         return {std::nullopt, std::nullopt};
     }
@@ -831,9 +732,7 @@ QodPcfHandler::handle_pcf_notification(const af::communication::MessagePtr& mess
 
 // === Session Mapping ===
 
-std::optional<PcfSessionInfo> QodPcfHandler::get_pcf_session_info(
-    const std::string& qod_session_id) {
-
+std::optional<PcfSessionInfo> QodPcfHandler::get_pcf_session_info(const std::string& qod_session_id) {
     std::lock_guard<std::mutex> lock(sessions_mutex_);
 
     auto it = qod_to_pcf_sessions_.find(qod_session_id);
@@ -954,8 +853,7 @@ nlohmann::json QodPcfHandler::build_app_session_context(const af::common::qod::Q
     return context;
 }
 
-nlohmann::json QodPcfHandler::build_media_components(
-    const af::common::qod::QodSession& qod_session) {
+nlohmann::json QodPcfHandler::build_media_components(const af::common::qod::QodSession& qod_session) {
     // TODO: Support multiple media components if needed
 
     nlohmann::json med_comps;
@@ -1075,12 +973,12 @@ nlohmann::json QodPcfHandler::build_media_components(
     // Packet loss requirements - typical values based on 5QI
     if (mapping.fiveqi == 1 || mapping.fiveqi == 2) {
         // Voice/Video - stricter loss requirements
-        med_comp["desMaxLoss"] = 1.0; // 1% max loss
+        med_comp["desMaxLoss"] = 1.0;         // 1% max loss
         med_comp["maxPacketLossRateDl"] = 10; // 10^-2 (1%)
         med_comp["maxPacketLossRateUl"] = 10; // 10^-2 (1%)
     } else if (mapping.fiveqi == 3 || mapping.fiveqi == 4) {
         // Real-time gaming
-        med_comp["desMaxLoss"] = 0.1; // 0.1% max loss
+        med_comp["desMaxLoss"] = 0.1;        // 0.1% max loss
         med_comp["maxPacketLossRateDl"] = 3; // 10^-3 (0.1%)
         med_comp["maxPacketLossRateUl"] = 3; // 10^-3 (0.1%)
     }
@@ -1103,7 +1001,7 @@ nlohmann::json QodPcfHandler::build_media_components(
 
 // Import shared flow description utilities into this translation unit
 using af::southbound::flow_utils::collect_port_specs;
-using af::southbound::flow_utils::format_flow_description;
+using af::southbound::flow_utils::make_flow_description_pair;
 
 nlohmann::json QodPcfHandler::build_flow_descriptions(const af::common::qod::QodSession& qod_session) {
     nlohmann::json flows = nlohmann::json::array();
@@ -1144,31 +1042,36 @@ nlohmann::json QodPcfHandler::build_flow_descriptions(const af::common::qod::Qod
     }
 
     // Generate bidirectional flow descriptions for all port combinations.
-    // Each combination produces an uplink (out) and downlink (in) flow.
+    // Each combination produces an uplink ("in") and a downlink ("out") flow;
+    // make_flow_description_pair() owns that encoding.
     if (!src_port_specs.empty() && !dst_port_specs.empty()) {
         // Both device and server ports specified
         for (const auto& sp : src_port_specs) {
             for (const auto& dp : dst_port_specs) {
-                flows.push_back(format_flow_description("out", src_ip, sp, dst_ip, dp));
-                flows.push_back(format_flow_description("in", dst_ip, dp, src_ip, sp));
+                const auto [ul, dl] = make_flow_description_pair(src_ip, sp, dst_ip, dp);
+                flows.push_back(ul);
+                flows.push_back(dl);
             }
         }
     } else if (!src_port_specs.empty()) {
         // Only device ports specified
         for (const auto& sp : src_port_specs) {
-            flows.push_back(format_flow_description("out", src_ip, sp, dst_ip, ""));
-            flows.push_back(format_flow_description("in", dst_ip, "", src_ip, sp));
+            const auto [ul, dl] = make_flow_description_pair(src_ip, sp, dst_ip, "");
+            flows.push_back(ul);
+            flows.push_back(dl);
         }
     } else if (!dst_port_specs.empty()) {
         // Only server ports specified
         for (const auto& dp : dst_port_specs) {
-            flows.push_back(format_flow_description("out", src_ip, "", dst_ip, dp));
-            flows.push_back(format_flow_description("in", dst_ip, dp, src_ip, ""));
+            const auto [ul, dl] = make_flow_description_pair(src_ip, "", dst_ip, dp);
+            flows.push_back(ul);
+            flows.push_back(dl);
         }
     } else {
         // No ports specified — generic bidirectional flow
-        flows.push_back(format_flow_description("out", src_ip, "", dst_ip, ""));
-        flows.push_back(format_flow_description("in", dst_ip, "", src_ip, ""));
+        const auto [ul, dl] = make_flow_description_pair(src_ip, "", dst_ip, "");
+        flows.push_back(ul);
+        flows.push_back(dl);
     }
 
     return flows;
@@ -1179,7 +1082,7 @@ nlohmann::json QodPcfHandler::build_subscription_info(const std::string& qod_ses
 
     // Events to subscribe to
     event_subscription["events"] = nlohmann::json::array();
-    event_subscription["events"].push_back({ {"event", "QOS_NOTIF"} });
+    event_subscription["events"].push_back({{"event", "QOS_NOTIF"}});
     // TODO: add more events as needed
 
     // Notification URI
@@ -1191,10 +1094,8 @@ nlohmann::json QodPcfHandler::build_subscription_info(const std::string& qod_ses
     return event_subscription;
 }
 
-nlohmann::json QodPcfHandler::translate_device_to_ue_id(
-    const std::optional<af::common::qod::QodDevice>& device,
-    const std::optional<Supi>& ue_supi) {
-
+nlohmann::json QodPcfHandler::translate_device_to_ue_id(const std::optional<af::common::qod::QodDevice>& device,
+                                                        const std::optional<Supi>& ue_supi) {
     nlohmann::json ue_id;
 
     // SUPI has highest priority
@@ -1226,9 +1127,7 @@ nlohmann::json QodPcfHandler::build_af_request_data(const af::common::qod::QodSe
     return af_req_data;
 }
 
-nlohmann::json QodPcfHandler::map_ports_to_media_subcomponents(
-    const af::common::qod::QodSession& qod_session) {
-
+nlohmann::json QodPcfHandler::map_ports_to_media_subcomponents(const af::common::qod::QodSession& qod_session) {
     nlohmann::json med_sub_comps = nlohmann::json::object();
     int flow_number = 1;
 
@@ -1254,17 +1153,21 @@ nlohmann::json QodPcfHandler::map_ports_to_media_subcomponents(
     // Helper: create separate MediaSubComponents for uplink and downlink
     /*
      * Seperate the flow descriptions into distinct MediaSubComponents for uplink and downlink traffic.
-     * This is because the SMF doesn't seem to handle bidirectional flow descriptions within a single MediaSubComponent correctly.
-     * It appears to only create PDR with first flow description (uplink) and ignore the second (downlink) when both are in the same sub-component.
+     * This is because the SMF doesn't seem to handle bidirectional flow descriptions within a single MediaSubComponent
+     * correctly. It appears to only create PDR with first flow description (uplink) and ignore the second (downlink)
+     * when both are in the same sub-component.
      */
-    auto add_subcomp_pair = [&](const std::string& src_port_spec,
-                                const std::string& dst_port_spec) {
+    auto add_subcomp_pair = [&](const std::string& src_port_spec, const std::string& dst_port_spec) {
+        // Direction tokens come from make_flow_description_pair(), which carries the
+        // TS 29.514 / TS 29.214 encoding rules and the reason they matter.
+        const auto [uplink_desc, downlink_desc] =
+            make_flow_description_pair(src_ip, src_port_spec, dst_ip, dst_port_spec);
+
         // Uplink MediaSubComponent (UE -> network)
         nlohmann::json uplink_sub_comp;
         uplink_sub_comp["fNum"] = flow_number;
         nlohmann::json uplink_flow_descs = nlohmann::json::array();
-        uplink_flow_descs.push_back(
-            format_flow_description("out", src_ip, src_port_spec, dst_ip, dst_port_spec));
+        uplink_flow_descs.push_back(uplink_desc);
         uplink_sub_comp["fDescs"] = uplink_flow_descs;
         uplink_sub_comp["fStatus"] = "ENABLED";
         uplink_sub_comp["flowUsage"] = "NO_INFO";
@@ -1275,8 +1178,7 @@ nlohmann::json QodPcfHandler::map_ports_to_media_subcomponents(
         nlohmann::json downlink_sub_comp;
         downlink_sub_comp["fNum"] = flow_number;
         nlohmann::json downlink_flow_descs = nlohmann::json::array();
-        downlink_flow_descs.push_back(
-            format_flow_description("out", dst_ip, dst_port_spec, src_ip, src_port_spec));
+        downlink_flow_descs.push_back(downlink_desc);
         downlink_sub_comp["fDescs"] = downlink_flow_descs;
         downlink_sub_comp["fStatus"] = "ENABLED";
         downlink_sub_comp["flowUsage"] = "NO_INFO";
@@ -1291,8 +1193,7 @@ nlohmann::json QodPcfHandler::map_ports_to_media_subcomponents(
     if (qod_session.device_ports && !qod_session.device_ports->is_empty()) {
         src_port_specs = collect_port_specs(*qod_session.device_ports);
     }
-    if (qod_session.application_server_ports &&
-        !qod_session.application_server_ports->is_empty()) {
+    if (qod_session.application_server_ports && !qod_session.application_server_ports->is_empty()) {
         dst_port_specs = collect_port_specs(*qod_session.application_server_ports);
     }
 
@@ -1319,8 +1220,7 @@ nlohmann::json QodPcfHandler::map_ports_to_media_subcomponents(
     return med_sub_comps;
 }
 
-void QodPcfHandler::store_session_mapping(const std::string& qod_session_id,
-                                          const std::string& pcf_session_id,
+void QodPcfHandler::store_session_mapping(const std::string& qod_session_id, const std::string& pcf_session_id,
                                           PcfSessionState state) {
     std::lock_guard<std::mutex> lock(sessions_mutex_);
 
@@ -1336,8 +1236,7 @@ void QodPcfHandler::store_session_mapping(const std::string& qod_session_id,
     logger_->debug("Stored session mapping: QoD {} -> PCF {}", qod_session_id, pcf_session_id);
 }
 
-void QodPcfHandler::update_session_state(const std::string& pcf_session_id,
-                                         PcfSessionState state) {
+void QodPcfHandler::update_session_state(const std::string& pcf_session_id, PcfSessionState state) {
     std::lock_guard<std::mutex> lock(sessions_mutex_);
 
     auto pcf_it = pcf_to_qod_sessions_.find(pcf_session_id);
@@ -1345,8 +1244,7 @@ void QodPcfHandler::update_session_state(const std::string& pcf_session_id,
         auto qod_it = qod_to_pcf_sessions_.find(pcf_it->second);
         if (qod_it != qod_to_pcf_sessions_.end()) {
             qod_it->second.state = state;
-            logger_->debug("Updated PCF session {} state to {}", pcf_session_id,
-                          static_cast<int>(state));
+            logger_->debug("Updated PCF session {} state to {}", pcf_session_id, static_cast<int>(state));
         }
     }
 }
@@ -1470,8 +1368,7 @@ std::optional<af::common::qod::SinkCredential> QodPcfHandler::parse_sink_credent
             std::tm tm = {};
             std::stringstream ss(time_str);
             ss >> std::get_time(&tm, "%Y-%m-%dT%H:%M:%S");
-            credential.access_token_expires_utc =
-                std::chrono::system_clock::from_time_t(std::mktime(&tm));
+            credential.access_token_expires_utc = std::chrono::system_clock::from_time_t(std::mktime(&tm));
         }
 
         if (json.contains("accessTokenType")) {
@@ -1490,8 +1387,6 @@ std::optional<af::common::qod::SinkCredential> QodPcfHandler::parse_sink_credent
 
     return credential;
 }
-
-
 
 } // namespace southbound
 } // namespace af

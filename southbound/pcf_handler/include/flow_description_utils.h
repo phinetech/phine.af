@@ -20,6 +20,7 @@
 #pragma once
 
 #include <string>
+#include <utility>
 #include <vector>
 #include <models/qod/qod_session.h>
 
@@ -37,9 +38,7 @@ namespace flow_utils {
  * @param ports Port specification containing individual ports and/or ranges
  * @return Vector of formatted port spec strings
  */
-inline std::vector<std::string> collect_port_specs(
-    const af::common::qod::PortsSpec& ports) {
-
+inline std::vector<std::string> collect_port_specs(const af::common::qod::PortsSpec& ports) {
     std::vector<std::string> specs;
     specs.reserve(ports.ports.size() + ports.ranges.size());
 
@@ -50,8 +49,7 @@ inline std::vector<std::string> collect_port_specs(
         if (range.from == range.to) {
             specs.push_back(std::to_string(range.from));
         } else {
-            specs.push_back(
-                std::to_string(range.from) + "-" + std::to_string(range.to));
+            specs.push_back(std::to_string(range.from) + "-" + std::to_string(range.to));
         }
     }
     return specs;
@@ -64,20 +62,21 @@ inline std::vector<std::string> collect_port_specs(
  * used in TS 29.214/29.514.  The protocol is always "ip" (any protocol)
  * because the CAMARA QoD API does not expose protocol selection.
  *
- * @param direction "in" (downlink, toward UE) or "out" (uplink, from UE)
+ * @param direction "out" (downlink, toward UE) or "in" (uplink, from UE)
  * @param src_ip    Source IP address or "any"
  * @param src_port  Source port spec string; empty means any port
  * @param dst_ip    Destination IP address or "any"
  * @param dst_port  Destination port spec string; empty means any port
  * @return Formatted IPFilterRule string
  */
-inline std::string format_flow_description(
-    const std::string& direction,
-    const std::string& src_ip,
-    const std::string& src_port,
-    const std::string& dst_ip,
-    const std::string& dst_port) {
-
+// The IPFilterRule grammar is positional, so the address/port fields cannot be
+// reordered or given distinct types without inventing a parallel vocabulary.
+// Production code goes through make_flow_description_pair() below, which fixes
+// the argument order in one place.
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+inline std::string format_flow_description(const std::string& direction, const std::string& src_ip,
+                                           const std::string& src_port, const std::string& dst_ip,
+                                           const std::string& dst_port) {
     std::string flow = "permit " + direction + " ip from " + src_ip;
     if (!src_port.empty()) {
         flow += " " + src_port;
@@ -87,6 +86,40 @@ inline std::string format_flow_description(
         flow += " " + dst_port;
     }
     return flow;
+}
+
+/**
+ * @brief Build the uplink/downlink IPFilterRule pair for one port combination.
+ *
+ * On N5 a flow description is encoded per TS 29.514 clause 5.6.3.2, which
+ * defers to TS 29.214 clause 5.3.8: the direction "in" refers to uplink IP
+ * flows and "out" to downlink IP flows, and each description is written from
+ * the sender's point of view.  An uplink filter therefore runs UE -> server
+ * and a downlink filter server -> UE.
+ *
+ * Do not reuse this encoding for N7: there (TS 29.212 clause 5.4.2) the
+ * direction is always "out", the UE end is the destination, and uplink vs
+ * downlink travels in a separate "flowDirection" attribute.
+ *
+ * Centralised here so the handler and its tests cannot drift apart; emitting
+ * "out" for the uplink made a PCF see no uplink SDF, authorize an uplink MBR
+ * of 0 and reject any uplink GBR the same request asked for.
+ *
+ * @param ue_ip       UE / device IP address or "any"
+ * @param ue_port     UE port spec string; empty means any port
+ * @param server_ip   Application server IP address or "any"
+ * @param server_port Application server port spec string; empty means any port
+ * @return {uplink description, downlink description}
+ */
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+inline std::pair<std::string, std::string> make_flow_description_pair(const std::string& ue_ip,
+                                                                      const std::string& ue_port,
+                                                                      const std::string& server_ip,
+                                                                      const std::string& server_port) {
+    return {
+        format_flow_description("in", ue_ip, ue_port, server_ip, server_port),
+        format_flow_description("out", server_ip, server_port, ue_ip, ue_port),
+    };
 }
 
 } // namespace flow_utils

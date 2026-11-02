@@ -14,8 +14,8 @@
 #include "flow_description_utils.h"
 
 using namespace af::southbound::flow_utils;
-using af::common::qod::PortsSpec;
 using af::common::qod::PortRange;
+using af::common::qod::PortsSpec;
 
 // ===========================================================================
 // format_flow_description tests
@@ -23,27 +23,27 @@ using af::common::qod::PortRange;
 
 class FormatFlowDescriptionTest : public ::testing::Test {};
 
-TEST_F(FormatFlowDescriptionTest, UplinkNoPorts) {
+TEST_F(FormatFlowDescriptionTest, DownlinkNoPorts) {
     auto result = format_flow_description("out", "192.168.1.1", "", "10.0.0.1", "");
     EXPECT_EQ(result, "permit out ip from 192.168.1.1 to 10.0.0.1");
 }
 
-TEST_F(FormatFlowDescriptionTest, DownlinkNoPorts) {
+TEST_F(FormatFlowDescriptionTest, UplinkNoPorts) {
     auto result = format_flow_description("in", "10.0.0.1", "", "192.168.1.1", "");
     EXPECT_EQ(result, "permit in ip from 10.0.0.1 to 192.168.1.1");
 }
 
-TEST_F(FormatFlowDescriptionTest, UplinkWithSinglePorts) {
+TEST_F(FormatFlowDescriptionTest, DownlinkWithSinglePorts) {
     auto result = format_flow_description("out", "192.168.1.1", "5000", "10.0.0.1", "8080");
     EXPECT_EQ(result, "permit out ip from 192.168.1.1 5000 to 10.0.0.1 8080");
 }
 
-TEST_F(FormatFlowDescriptionTest, DownlinkWithSinglePorts) {
+TEST_F(FormatFlowDescriptionTest, UplinkWithSinglePorts) {
     auto result = format_flow_description("in", "10.0.0.1", "8080", "192.168.1.1", "5000");
     EXPECT_EQ(result, "permit in ip from 10.0.0.1 8080 to 192.168.1.1 5000");
 }
 
-TEST_F(FormatFlowDescriptionTest, UplinkWithPortRanges) {
+TEST_F(FormatFlowDescriptionTest, DownlinkWithPortRanges) {
     auto result = format_flow_description("out", "192.168.1.1", "5000-5100", "10.0.0.1", "8080-8090");
     EXPECT_EQ(result, "permit out ip from 192.168.1.1 5000-5100 to 10.0.0.1 8080-8090");
 }
@@ -73,10 +73,8 @@ TEST_F(FormatFlowDescriptionTest, ProtocolIsAlwaysIp) {
 }
 
 TEST_F(FormatFlowDescriptionTest, Ipv6Addresses) {
-    auto result = format_flow_description(
-        "out", "2001:db8:85a3::1", "5000", "2001:db8:1::1", "8080");
-    EXPECT_EQ(result,
-        "permit out ip from 2001:db8:85a3::1 5000 to 2001:db8:1::1 8080");
+    auto result = format_flow_description("out", "2001:db8:85a3::1", "5000", "2001:db8:1::1", "8080");
+    EXPECT_EQ(result, "permit out ip from 2001:db8:85a3::1 5000 to 2001:db8:1::1 8080");
 }
 
 // ===========================================================================
@@ -170,51 +168,44 @@ TEST_F(CollectPortSpecsTest, FullPortRange) {
 
 class FlowDescriptionIntegrationTest : public ::testing::Test {
 protected:
-    // Simulates what build_flow_descriptions / map_ports_to_media_subcomponents
-    // do with various port configurations, using the shared utility functions.
+    // Exercises the same make_flow_description_pair() that
+    // map_ports_to_media_subcomponents() and build_flow_descriptions() use, so a
+    // direction regression in the handler fails here instead of passing against a
+    // private copy of the pairing logic.
 
     struct FlowInput {
-        std::string src_ip = "192.168.1.100";
-        std::string dst_ip = "10.0.0.1";
+        std::string ue_ip = "192.168.1.100";
+        std::string server_ip = "10.0.0.1";
         std::optional<PortsSpec> device_ports;
         std::optional<PortsSpec> server_ports;
     };
 
-    // Generates pairs of (uplink, downlink) flow descriptions
+    // Returns flows ordered (uplink, downlink) per port combination.
     std::vector<std::string> generate_flows(const FlowInput& input) {
         std::vector<std::string> flows;
-        std::vector<std::string> src_specs;
-        std::vector<std::string> dst_specs;
+        std::vector<std::string> ue_specs;
+        std::vector<std::string> server_specs;
 
         if (input.device_ports && !input.device_ports->is_empty()) {
-            src_specs = collect_port_specs(*input.device_ports);
+            ue_specs = collect_port_specs(*input.device_ports);
         }
         if (input.server_ports && !input.server_ports->is_empty()) {
-            dst_specs = collect_port_specs(*input.server_ports);
+            server_specs = collect_port_specs(*input.server_ports);
+        }
+        if (ue_specs.empty()) {
+            ue_specs.emplace_back("");
+        }
+        if (server_specs.empty()) {
+            server_specs.emplace_back("");
         }
 
-        if (!src_specs.empty() && !dst_specs.empty()) {
-            for (const auto& sp : src_specs) {
-                for (const auto& dp : dst_specs) {
-                    flows.push_back(format_flow_description("out", input.src_ip, sp, input.dst_ip, dp));
-                    flows.push_back(format_flow_description("in", input.dst_ip, dp, input.src_ip, sp));
-                }
+        for (const auto& up : ue_specs) {
+            for (const auto& sp : server_specs) {
+                auto [uplink, downlink] = make_flow_description_pair(input.ue_ip, up, input.server_ip, sp);
+                flows.push_back(std::move(uplink));
+                flows.push_back(std::move(downlink));
             }
-        } else if (!src_specs.empty()) {
-            for (const auto& sp : src_specs) {
-                flows.push_back(format_flow_description("out", input.src_ip, sp, input.dst_ip, ""));
-                flows.push_back(format_flow_description("in", input.dst_ip, "", input.src_ip, sp));
-            }
-        } else if (!dst_specs.empty()) {
-            for (const auto& dp : dst_specs) {
-                flows.push_back(format_flow_description("out", input.src_ip, "", input.dst_ip, dp));
-                flows.push_back(format_flow_description("in", input.dst_ip, dp, input.src_ip, ""));
-            }
-        } else {
-            flows.push_back(format_flow_description("out", input.src_ip, "", input.dst_ip, ""));
-            flows.push_back(format_flow_description("in", input.dst_ip, "", input.src_ip, ""));
         }
-
         return flows;
     }
 };
@@ -223,8 +214,8 @@ TEST_F(FlowDescriptionIntegrationTest, NoPorts_GenericBidirectionalFlow) {
     FlowInput input;
     auto flows = generate_flows(input);
     ASSERT_EQ(flows.size(), 2u);
-    EXPECT_EQ(flows[0], "permit out ip from 192.168.1.100 to 10.0.0.1");
-    EXPECT_EQ(flows[1], "permit in ip from 10.0.0.1 to 192.168.1.100");
+    EXPECT_EQ(flows[0], "permit in ip from 192.168.1.100 to 10.0.0.1");
+    EXPECT_EQ(flows[1], "permit out ip from 10.0.0.1 to 192.168.1.100");
 }
 
 TEST_F(FlowDescriptionIntegrationTest, SinglePortBothSides) {
@@ -237,8 +228,8 @@ TEST_F(FlowDescriptionIntegrationTest, SinglePortBothSides) {
 
     auto flows = generate_flows(input);
     ASSERT_EQ(flows.size(), 2u);
-    EXPECT_EQ(flows[0], "permit out ip from 192.168.1.100 5000 to 10.0.0.1 8080");
-    EXPECT_EQ(flows[1], "permit in ip from 10.0.0.1 8080 to 192.168.1.100 5000");
+    EXPECT_EQ(flows[0], "permit in ip from 192.168.1.100 5000 to 10.0.0.1 8080");
+    EXPECT_EQ(flows[1], "permit out ip from 10.0.0.1 8080 to 192.168.1.100 5000");
 }
 
 TEST_F(FlowDescriptionIntegrationTest, PortRangeBothSides) {
@@ -251,8 +242,8 @@ TEST_F(FlowDescriptionIntegrationTest, PortRangeBothSides) {
 
     auto flows = generate_flows(input);
     ASSERT_EQ(flows.size(), 2u);
-    EXPECT_EQ(flows[0], "permit out ip from 192.168.1.100 5000-5100 to 10.0.0.1 8080-8090");
-    EXPECT_EQ(flows[1], "permit in ip from 10.0.0.1 8080-8090 to 192.168.1.100 5000-5100");
+    EXPECT_EQ(flows[0], "permit in ip from 192.168.1.100 5000-5100 to 10.0.0.1 8080-8090");
+    EXPECT_EQ(flows[1], "permit out ip from 10.0.0.1 8080-8090 to 192.168.1.100 5000-5100");
 }
 
 TEST_F(FlowDescriptionIntegrationTest, MultiplePortsBothSides_CrossProduct) {
@@ -266,14 +257,14 @@ TEST_F(FlowDescriptionIntegrationTest, MultiplePortsBothSides_CrossProduct) {
     auto flows = generate_flows(input);
     // 2 device ports × 2 server ports × 2 directions = 8 flows
     ASSERT_EQ(flows.size(), 8u);
-    EXPECT_EQ(flows[0], "permit out ip from 192.168.1.100 5000 to 10.0.0.1 8080");
-    EXPECT_EQ(flows[1], "permit in ip from 10.0.0.1 8080 to 192.168.1.100 5000");
-    EXPECT_EQ(flows[2], "permit out ip from 192.168.1.100 5000 to 10.0.0.1 8081");
-    EXPECT_EQ(flows[3], "permit in ip from 10.0.0.1 8081 to 192.168.1.100 5000");
-    EXPECT_EQ(flows[4], "permit out ip from 192.168.1.100 5001 to 10.0.0.1 8080");
-    EXPECT_EQ(flows[5], "permit in ip from 10.0.0.1 8080 to 192.168.1.100 5001");
-    EXPECT_EQ(flows[6], "permit out ip from 192.168.1.100 5001 to 10.0.0.1 8081");
-    EXPECT_EQ(flows[7], "permit in ip from 10.0.0.1 8081 to 192.168.1.100 5001");
+    EXPECT_EQ(flows[0], "permit in ip from 192.168.1.100 5000 to 10.0.0.1 8080");
+    EXPECT_EQ(flows[1], "permit out ip from 10.0.0.1 8080 to 192.168.1.100 5000");
+    EXPECT_EQ(flows[2], "permit in ip from 192.168.1.100 5000 to 10.0.0.1 8081");
+    EXPECT_EQ(flows[3], "permit out ip from 10.0.0.1 8081 to 192.168.1.100 5000");
+    EXPECT_EQ(flows[4], "permit in ip from 192.168.1.100 5001 to 10.0.0.1 8080");
+    EXPECT_EQ(flows[5], "permit out ip from 10.0.0.1 8080 to 192.168.1.100 5001");
+    EXPECT_EQ(flows[6], "permit in ip from 192.168.1.100 5001 to 10.0.0.1 8081");
+    EXPECT_EQ(flows[7], "permit out ip from 10.0.0.1 8081 to 192.168.1.100 5001");
 }
 
 TEST_F(FlowDescriptionIntegrationTest, MixedPortsAndRanges) {
@@ -288,10 +279,10 @@ TEST_F(FlowDescriptionIntegrationTest, MixedPortsAndRanges) {
     auto flows = generate_flows(input);
     // 2 device specs (1 port + 1 range) × 1 server port × 2 directions = 4 flows
     ASSERT_EQ(flows.size(), 4u);
-    EXPECT_EQ(flows[0], "permit out ip from 192.168.1.100 5000 to 10.0.0.1 8080");
-    EXPECT_EQ(flows[1], "permit in ip from 10.0.0.1 8080 to 192.168.1.100 5000");
-    EXPECT_EQ(flows[2], "permit out ip from 192.168.1.100 6000-6100 to 10.0.0.1 8080");
-    EXPECT_EQ(flows[3], "permit in ip from 10.0.0.1 8080 to 192.168.1.100 6000-6100");
+    EXPECT_EQ(flows[0], "permit in ip from 192.168.1.100 5000 to 10.0.0.1 8080");
+    EXPECT_EQ(flows[1], "permit out ip from 10.0.0.1 8080 to 192.168.1.100 5000");
+    EXPECT_EQ(flows[2], "permit in ip from 192.168.1.100 6000-6100 to 10.0.0.1 8080");
+    EXPECT_EQ(flows[3], "permit out ip from 10.0.0.1 8080 to 192.168.1.100 6000-6100");
 }
 
 TEST_F(FlowDescriptionIntegrationTest, OnlyDevicePorts) {
@@ -302,8 +293,8 @@ TEST_F(FlowDescriptionIntegrationTest, OnlyDevicePorts) {
 
     auto flows = generate_flows(input);
     ASSERT_EQ(flows.size(), 2u);
-    EXPECT_EQ(flows[0], "permit out ip from 192.168.1.100 5000 to 10.0.0.1");
-    EXPECT_EQ(flows[1], "permit in ip from 10.0.0.1 to 192.168.1.100 5000");
+    EXPECT_EQ(flows[0], "permit in ip from 192.168.1.100 5000 to 10.0.0.1");
+    EXPECT_EQ(flows[1], "permit out ip from 10.0.0.1 to 192.168.1.100 5000");
 }
 
 TEST_F(FlowDescriptionIntegrationTest, OnlyServerPorts) {
@@ -314,8 +305,8 @@ TEST_F(FlowDescriptionIntegrationTest, OnlyServerPorts) {
 
     auto flows = generate_flows(input);
     ASSERT_EQ(flows.size(), 2u);
-    EXPECT_EQ(flows[0], "permit out ip from 192.168.1.100 to 10.0.0.1 8080");
-    EXPECT_EQ(flows[1], "permit in ip from 10.0.0.1 8080 to 192.168.1.100");
+    EXPECT_EQ(flows[0], "permit in ip from 192.168.1.100 to 10.0.0.1 8080");
+    EXPECT_EQ(flows[1], "permit out ip from 10.0.0.1 8080 to 192.168.1.100");
 }
 
 TEST_F(FlowDescriptionIntegrationTest, OnlyDevicePortRange) {
@@ -326,8 +317,8 @@ TEST_F(FlowDescriptionIntegrationTest, OnlyDevicePortRange) {
 
     auto flows = generate_flows(input);
     ASSERT_EQ(flows.size(), 2u);
-    EXPECT_EQ(flows[0], "permit out ip from 192.168.1.100 5000-5100 to 10.0.0.1");
-    EXPECT_EQ(flows[1], "permit in ip from 10.0.0.1 to 192.168.1.100 5000-5100");
+    EXPECT_EQ(flows[0], "permit in ip from 192.168.1.100 5000-5100 to 10.0.0.1");
+    EXPECT_EQ(flows[1], "permit out ip from 10.0.0.1 to 192.168.1.100 5000-5100");
 }
 
 TEST_F(FlowDescriptionIntegrationTest, OnlyServerPortRange) {
@@ -338,8 +329,8 @@ TEST_F(FlowDescriptionIntegrationTest, OnlyServerPortRange) {
 
     auto flows = generate_flows(input);
     ASSERT_EQ(flows.size(), 2u);
-    EXPECT_EQ(flows[0], "permit out ip from 192.168.1.100 to 10.0.0.1 8080-8090");
-    EXPECT_EQ(flows[1], "permit in ip from 10.0.0.1 8080-8090 to 192.168.1.100");
+    EXPECT_EQ(flows[0], "permit in ip from 192.168.1.100 to 10.0.0.1 8080-8090");
+    EXPECT_EQ(flows[1], "permit out ip from 10.0.0.1 8080-8090 to 192.168.1.100");
 }
 
 TEST_F(FlowDescriptionIntegrationTest, MultiplePortRangesBothSides) {
@@ -353,10 +344,10 @@ TEST_F(FlowDescriptionIntegrationTest, MultiplePortRangesBothSides) {
     auto flows = generate_flows(input);
     // 2 device ranges × 1 server range × 2 directions = 4 flows
     ASSERT_EQ(flows.size(), 4u);
-    EXPECT_EQ(flows[0], "permit out ip from 192.168.1.100 5000-5100 to 10.0.0.1 8080-8090");
-    EXPECT_EQ(flows[1], "permit in ip from 10.0.0.1 8080-8090 to 192.168.1.100 5000-5100");
-    EXPECT_EQ(flows[2], "permit out ip from 192.168.1.100 6000-6100 to 10.0.0.1 8080-8090");
-    EXPECT_EQ(flows[3], "permit in ip from 10.0.0.1 8080-8090 to 192.168.1.100 6000-6100");
+    EXPECT_EQ(flows[0], "permit in ip from 192.168.1.100 5000-5100 to 10.0.0.1 8080-8090");
+    EXPECT_EQ(flows[1], "permit out ip from 10.0.0.1 8080-8090 to 192.168.1.100 5000-5100");
+    EXPECT_EQ(flows[2], "permit in ip from 192.168.1.100 6000-6100 to 10.0.0.1 8080-8090");
+    EXPECT_EQ(flows[3], "permit out ip from 10.0.0.1 8080-8090 to 192.168.1.100 6000-6100");
 }
 
 // ===========================================================================
