@@ -37,7 +37,6 @@ jobs:
         uses: actions/checkout@v5
         with:
           submodules: recursive
-          token: ${{ secrets.CI_GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: Check for relevant changes
