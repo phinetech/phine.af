@@ -69,6 +69,11 @@ inline std::vector<std::string> collect_port_specs(const af::common::qod::PortsS
  * @param dst_port  Destination port spec string; empty means any port
  * @return Formatted IPFilterRule string
  */
+// The IPFilterRule grammar is positional, so the address/port fields cannot be
+// reordered or given distinct types without inventing a parallel vocabulary.
+// Production code goes through make_flow_description_pair() below, which fixes
+// the argument order in one place.
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 inline std::string format_flow_description(const std::string& direction, const std::string& src_ip,
                                            const std::string& src_port, const std::string& dst_ip,
                                            const std::string& dst_port) {
@@ -106,6 +111,7 @@ inline std::string format_flow_description(const std::string& direction, const s
  * @param server_port Application server port spec string; empty means any port
  * @return {uplink description, downlink description}
  */
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 inline std::pair<std::string, std::string> make_flow_description_pair(const std::string& ue_ip,
                                                                       const std::string& ue_port,
                                                                       const std::string& server_ip,
