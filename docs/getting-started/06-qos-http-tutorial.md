@@ -464,7 +464,7 @@ docker logs smf 2>&1 | grep -i "Remove PCCRule" | tail -10
 
 Expected output: lines such as `Remove PCCRule[PccRuleId-N]` timestamped at the moment you deleted the session, confirming the SMF received the PCF notification and removed the AF-specific GBR rules from the PDU session.
 
-> **Note — known OAI-UPF limitation:** On DELETE, the SMF tells the UPF to remove the QoD rules (PDRs, FARs and QERs), and the UPF does remove them. But it keeps the traffic-control (TC/HTB) class that it created for the QoD request, so the 10 Mbps limit stays active. A second `iperf3` run right after DELETE therefore still shows about 9.4 Mbps. The limit only goes away when the UE detaches and its PDU session is deleted. The SMF side of the teardown is correct; only the UPF cleanup is missing.
+> **Note — OAI-UPF data-plane cleanup:** When the SMF sends a PFCP `Session Modification Request` to remove the AF PDRs, FARs and QERs, the OAI-UPF removes those PDRs, FARs and QERs but does **not** destroy the associated TC/HTB class or update the `m_qos_enabling` eBPF map. The GBR rate shaper installed at session creation therefore persists on the data plane until the entire PFCP session is deleted (e.g., at UE detach). As a result, a second `iperf3` run immediately after DELETE will show the same receiver rate (~9.43 Mbps for `premium`) as during the active session. This is a known OAI-UPF limitation — the control-plane teardown is complete and correct; only the data-plane cleanup is deferred.
 
 ### Verify QoS is Released (iperf3 — informational)
 
