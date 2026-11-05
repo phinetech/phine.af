@@ -149,7 +149,9 @@ services:
     <<: *free5gc-nf
     profiles: [free5gc]
     container_name: smf
-    image: ${FREE5GC_SMF_IMAGE:-free5gc/smf:v4.1.0}
+    # free5gc SMF built from main @79962af (2026-10-30), pinned by digest. Unlike v4.1.0, it doesn't
+    # re-send every URR on each PFCP Session Modification, and it sends Remove QER on DELETE.
+    image: ${FREE5GC_SMF_IMAGE:-free5gc/smf@sha256:77a4e5599057806a2f2c9636d2b9c22f237ee440123b979260181038edc09e1e}
     command: ./smf -c ./config/smfcfg.yaml -u ./config/uerouting.yaml
     volumes:
       - ./free5gc/config/smfcfg.yaml:/free5gc/config/smfcfg.yaml
@@ -203,29 +205,6 @@ services:
     depends_on:
       - db
       - free5gc-nrf
-
-  free5gc-chf:
-    <<: *free5gc-nf
-    profiles: [free5gc]
-    container_name: chf
-    image: ${FREE5GC_CHF_IMAGE:-free5gc/chf:v4.1.0}
-    command: ./chf -c ./config/chfcfg.yaml
-    volumes:
-      - ./free5gc/config/chfcfg.yaml:/free5gc/config/chfcfg.yaml
-      - ./cert:/free5gc/cert
-    environment:
-      <<: *free5gc-default-env
-      DB_URI: mongodb://db/free5gc
-      GIN_MODE: release
-    networks:
-      public_net:
-        ipv4_address: 192.168.70.150
-        aliases:
-          - chf.free5gc.org
-    depends_on:
-      - db
-      - free5gc-nrf
-      - free5gc-webui
 
   free5gc-tngf:
     <<: *free5gc-defaults
