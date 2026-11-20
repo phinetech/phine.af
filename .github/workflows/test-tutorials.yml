@@ -11,7 +11,13 @@ env:
 jobs:
   tutorials:
     name: Run ${{ matrix.tutorial.name }}
-    runs-on: ubuntu-latest
+    # Pinned to 22.04 because these tutorials build the out-of-tree gtp5g kernel
+    # module. GitHub bumped the ubuntu-24.04 image from kernel 6.17 to 7.0 on
+    # 2026-10-30, and 7.0 changed setup_udp_tunnel_sock()'s second argument from
+    # struct socket* to struct sock*, which no gtp5g release compiles against
+    # (free5gc/gtp5g#183). 22.04 is the last image still on a 6.x kernel.
+    # Revert to ubuntu-latest once free5gc/gtp5g#184 is merged and released.
+    runs-on: ubuntu-22.04
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -49,7 +55,6 @@ jobs:
         uses: actions/checkout@v5
         with:
           submodules: recursive
-          token: ${{ secrets.CI_GITHUB_TOKEN }}
 
       - name: Free disk space
         run: |
