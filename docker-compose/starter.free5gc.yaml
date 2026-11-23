@@ -56,7 +56,7 @@ services:
   free5gc-nrf:
     <<: *free5gc-nf
     container_name: nrf
-    image: ${FREE5GC_NRF_IMAGE:-free5gc/nrf:v4.1.0}
+    image: ${FREE5GC_NRF_IMAGE:-free5gc/nrf:v4.3.0}
     command: ./nrf -c ./config/nrfcfg.yaml
     volumes:
       - ./free5gc/config/nrfcfg.yaml:/free5gc/config/nrfcfg.yaml
@@ -76,7 +76,7 @@ services:
   free5gc-amf:
     <<: *free5gc-nf
     container_name: amf
-    image: ${FREE5GC_AMF_IMAGE:-free5gc/amf:v4.1.0}
+    image: ${FREE5GC_AMF_IMAGE:-free5gc/amf:v4.3.0}
     command: ./amf -c ./config/amfcfg.yaml
     volumes:
       - ./free5gc/config/amfcfg.yaml:/free5gc/config/amfcfg.yaml
@@ -93,7 +93,7 @@ services:
   free5gc-ausf:
     <<: *free5gc-nf
     container_name: ausf
-    image: ${FREE5GC_AUSF_IMAGE:-free5gc/ausf:v4.1.0}
+    image: ${FREE5GC_AUSF_IMAGE:-free5gc/ausf:v4.3.0}
     command: ./ausf -c ./config/ausfcfg.yaml
     volumes:
       - ./free5gc/config/ausfcfg.yaml:/free5gc/config/ausfcfg.yaml
@@ -109,7 +109,7 @@ services:
   free5gc-nssf:
     <<: *free5gc-nf
     container_name: nssf
-    image: ${FREE5GC_NSSF_IMAGE:-free5gc/nssf:v4.1.0}
+    image: ${FREE5GC_NSSF_IMAGE:-free5gc/nssf:v4.3.0}
     command: ./nssf -c ./config/nssfcfg.yaml
     volumes:
       - ./free5gc/config/nssfcfg.yaml:/free5gc/config/nssfcfg.yaml
@@ -125,7 +125,10 @@ services:
   free5gc-pcf:
     <<: *free5gc-nf
     container_name: pcf
-    image: ${FREE5GC_PCF_IMAGE:-phinetech/free5gc-pcf:latest}
+    # Upstream PCF still encodes bit rates as floats (e.g. "10240.000000 Kbps"); only an SMF
+    # with free5gc/smf#193 (v4.3.0+) parses them. With an older SMF the QERs get zero MBR/GBR
+    # (free5gc/free5gc#827), so don't override this PCF and the SMF independently.
+    image: ${FREE5GC_PCF_IMAGE:-free5gc/pcf:v4.3.0}
     command: ./pcf -c ./config/pcfcfg.yaml
     volumes:
       - ./free5gc/config/pcfcfg.yaml:/free5gc/config/pcfcfg.yaml
@@ -141,9 +144,10 @@ services:
   free5gc-smf:
     <<: *free5gc-nf
     container_name: smf
-    # free5gc SMF built from main @79962af (2026-10-30), pinned by digest. Unlike v4.1.0, it doesn't
-    # re-send every URR on each PFCP Session Modification, and it sends Remove QER on DELETE.
-    image: ${FREE5GC_SMF_IMAGE:-free5gc/smf@sha256:77a4e5599057806a2f2c9636d2b9c22f237ee440123b979260181038edc09e1e}
+    # v4.3.0 no longer re-sends every URR on each PFCP Session Modification. It still doesn't
+    # send Remove QER on DELETE (fixed on free5gc main, not yet in a release), so the AF QERs
+    # stay on the UPF until the PDU session is released.
+    image: ${FREE5GC_SMF_IMAGE:-free5gc/smf:v4.3.0}
     command: ./smf -c ./config/smfcfg.yaml -u ./config/uerouting.yaml
     volumes:
       - ./free5gc/config/smfcfg.yaml:/free5gc/config/smfcfg.yaml
@@ -161,7 +165,7 @@ services:
   free5gc-udm:
     <<: *free5gc-nf
     container_name: udm
-    image: ${FREE5GC_UDM_IMAGE:-free5gc/udm:v4.1.0}
+    image: ${FREE5GC_UDM_IMAGE:-free5gc/udm:v4.3.0}
     command: ./udm -c ./config/udmcfg.yaml
     volumes:
       - ./free5gc/config/udmcfg.yaml:/free5gc/config/udmcfg.yaml
@@ -178,7 +182,7 @@ services:
   free5gc-udr:
     <<: *free5gc-nf
     container_name: udr
-    image: ${FREE5GC_UDR_IMAGE:-free5gc/udr:v4.1.0}
+    image: ${FREE5GC_UDR_IMAGE:-free5gc/udr:v4.3.0}
     command: ./udr -c ./config/udrcfg.yaml
     volumes:
       - ./free5gc/config/udrcfg.yaml:/free5gc/config/udrcfg.yaml
@@ -199,7 +203,7 @@ services:
   free5gc-tngf:
     <<: *free5gc-defaults
     container_name: tngf
-    image: ${FREE5GC_TNGF_IMAGE:-free5gc/tngf:v4.1.0}
+    image: ${FREE5GC_TNGF_IMAGE:-free5gc/tngf:v4.3.0}
     command: ./tngf -c ./config/tngfcfg.yaml
     volumes:
       - ./free5gc/config/tngfcfg.yaml:/free5gc/config/tngfcfg.yaml
@@ -218,7 +222,7 @@ services:
   free5gc-nef:
     <<: *free5gc-nf
     container_name: nef
-    image: ${FREE5GC_NEF_IMAGE:-free5gc/nef:v4.1.0}
+    image: ${FREE5GC_NEF_IMAGE:-free5gc/nef:v4.3.0}
     command: ./nef -c ./config/nefcfg.yaml
     volumes:
       - ./free5gc/config/nefcfg.yaml:/free5gc/config/nefcfg.yaml
@@ -235,7 +239,7 @@ services:
   free5gc-webui:
     <<: *free5gc-defaults
     container_name: webui
-    image: ${FREE5GC_WEBUI_IMAGE:-free5gc/webui:v4.1.0}
+    image: ${FREE5GC_WEBUI_IMAGE:-free5gc/webui:v4.3.0}
     command: ./webui -c ./config/webuicfg.yaml
     expose:
       - "2121"
